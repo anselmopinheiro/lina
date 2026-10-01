@@ -2173,7 +2173,10 @@ export default class LinaPlugin extends Plugin {
       const activePolicy = this.getCanonicalExclusionPolicy();
       const manifestHash = status.manifest?.exclusionPolicyHash;
       if (activePolicy && manifestHash !== activePolicy.policyHash) {
-        const provenance = this.getOwnershipGate().getProvenance();
+        const gate = this.getOwnershipGate();
+        const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : undefined;
+        if (typeof gate.acquireFence === "function" && !fenceToken) return;
+        const provenance = gate.getProvenance();
         const pathExclusions = this.getIndexPathExclusions();
         const excludedContentContains = this.getExcludedContentTerms();
         await persistAndActivateTextIndexCandidate(
@@ -2202,7 +2205,8 @@ export default class LinaPlugin extends Plugin {
             this.app,
             this.indexedChunks,
             activePolicy,
-            provenance
+            provenance,
+            fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : undefined
           );
         } catch (purgeError) {
           console.warn("Lina: failed to purge orphan embedding records:", purgeError);
@@ -2225,12 +2229,16 @@ export default class LinaPlugin extends Plugin {
 
     try {
       const activePolicy = this.getCanonicalExclusionPolicy();
-      const provenance = this.getOwnershipGate().getProvenance();
+      const gate = this.getOwnershipGate();
+      const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : undefined;
+      if (typeof gate.acquireFence === "function" && !fenceToken) return;
+      const provenance = gate.getProvenance();
       await purgeOrphanEmbeddingRecords(
         this.app,
         this.indexedChunks,
         activePolicy,
-        provenance
+        provenance,
+        fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : undefined
       );
       try {
         await this.getBinaryEmbeddingCopyController().check(true);
@@ -2897,7 +2905,15 @@ export default class LinaPlugin extends Plugin {
     onPhase?.("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress?.(this.L.statusValidatingEmbeddingsProvider);
 
-    const provenance = await this.getOwnershipGate().evaluateProvenance();
+    const ownershipGate = this.getOwnershipGate();
+    const hasFenceSupport = typeof ownershipGate.acquireFence === "function";
+    const fenceToken = hasFenceSupport ? await ownershipGate.acquireFence() : undefined;
+    if (hasFenceSupport && !fenceToken) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+    const provenance = fenceToken
+      ? ownershipGate.getProvenance()
+      : await ownershipGate.evaluateProvenance();
 
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
@@ -2911,6 +2927,7 @@ export default class LinaPlugin extends Plugin {
       abortSignal,
       operationId: operationId === undefined ? undefined : String(operationId),
       provenance,
+      ...(fenceToken ? { fence: { assertCurrent: () => ownershipGate.assertFence(fenceToken) } } : {}),
       onProgress: (progress) => {
         onPhase?.("generating", this.L.statusGeneratingEmbeddings);
         onEmbeddingProgress?.(progress);

@@ -6,6 +6,8 @@ import {
 } from "../../src/device/ownershipGate";
 import {
   claimInitialOwnership,
+  getOwnershipPath,
+  readOwnership,
   saveOwnership,
   type OwnershipManifest,
 } from "../../src/device/deviceOwnership";
@@ -101,6 +103,32 @@ describe("ownershipGate (Phase D2.2)", () => {
       expect(decision.status).toBe("unclaimed-ownership");
     });
 
+    it.each([
+      ["empty", "", "invalid"],
+      ["truncated", '{"schemaVersion":', "invalid"],
+      ["invalid JSON", "not-json", "invalid"],
+      ["future schema", JSON.stringify({ schemaVersion: 2 }), "unsupported-schema"],
+    ])("never auto-claims an existing %s ownership manifest", async (_name, content, expectedStatus) => {
+      const adapter = new FakeAdapter({ [getOwnershipPath()]: content });
+      const result = await readOwnership(adapter);
+      expect(result.status).toBe(expectedStatus);
+
+      const decision = await evaluateOwnershipGate(adapter, localDeviceId, "producer", undefined, {
+        autoClaimIfUnclaimed: true,
+      });
+
+      expect(decision.authorized).toBe(false);
+      expect(adapter.getFile(getOwnershipPath())).toBe(content);
+    });
+
+    it("fails closed when the ownership manifest cannot be read", async () => {
+      const adapter = new FakeAdapter({ [getOwnershipPath()]: "{}" }, { simulateReadError: true });
+      const decision = await evaluateOwnershipGate(adapter, localDeviceId, "producer", undefined, {
+        autoClaimIfUnclaimed: true,
+      });
+      expect(decision).toMatchObject({ authorized: false, status: "ownership-unreadable" });
+    });
+
     it("rejects invalid local device ID", async () => {
       const adapter = new FakeAdapter();
       const decision = await evaluateOwnershipGate(adapter, "invalid-id", "producer");
@@ -172,6 +200,43 @@ describe("ownershipGate (Phase D2.2)", () => {
       expect(decision.status).toBe("authorized");
       expect(adapter.hasFile(".lina/ownership.json")).toBe(true);
       expect(gate.isAuthorizedSync()).toBe(true);
+    });
+
+    it("rejects a fence when authority changes after operation start", async () => {
+      const adapter = new FakeAdapter();
+      await claimInitialOwnership(adapter, localDeviceId);
+      const gate = new OwnershipGate(adapter, () => localDeviceId, () => "producer", true);
+      const token = await gate.acquireFence();
+      expect(token).toMatchObject({ producerDeviceId: localDeviceId, epoch: 1 });
+
+      await saveOwnership(adapter, {
+        schemaVersion: 1,
+        activeProducerId: remoteDeviceId,
+        epoch: 2,
+        acquiredAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+        reason: "manual-transfer",
+      });
+
+      expect(token && await gate.assertFence(token)).toBe(false);
+    });
+
+    it("rejects a fence when the same producer advances to a new epoch", async () => {
+      const adapter = new FakeAdapter();
+      await claimInitialOwnership(adapter, localDeviceId);
+      const gate = new OwnershipGate(adapter, () => localDeviceId, () => "producer", true);
+      const token = await gate.acquireFence();
+
+      await saveOwnership(adapter, {
+        schemaVersion: 1,
+        activeProducerId: localDeviceId,
+        epoch: 2,
+        acquiredAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+        reason: "manual-transfer",
+      });
+
+      expect(token && await gate.assertFence(token)).toBe(false);
     });
   });
 });

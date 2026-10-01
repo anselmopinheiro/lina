@@ -1041,6 +1041,45 @@ describe("canonical embedding publication and rollback", () => {
   });
 });
 
+describe("embedding ownership fencing", () => {
+  it("does not create a checkpoint after its operation fence is revoked", async () => {
+    const adapter = new FakeAdapter();
+    const metadata = makeMetadata();
+    const records = [makeRecord(makeChunk("A"))];
+
+    let checks = 0;
+    await expect(writeEmbeddingCheckpoint(
+      makeApp(adapter) as never,
+      metadata,
+      records,
+      undefined,
+      undefined,
+      { assertCurrent: async () => ++checks < 2 },
+    )).rejects.toThrow("Ownership fence rejected");
+
+    expect(checks).toBeGreaterThanOrEqual(2);
+    expect(adapter.hasFile(files.checkpoint)).toBe(false);
+    expect(adapter.hasFile(files.checkpointMetadata)).toBe(false);
+  });
+
+  it("does not publish a canonical pair after its operation fence is revoked", async () => {
+    const adapter = new FakeAdapter();
+    seedTextManifest(adapter);
+
+    let checks = 0;
+    const result = await publishCanonicalEmbeddings(
+      makeApp(adapter) as never,
+      [makeRecord(makeChunk("A"))],
+      { ...publicationInfo(), fence: { assertCurrent: async () => ++checks < 2 } },
+    );
+
+    expect(result.success).toBe(false);
+    expect(checks).toBeGreaterThanOrEqual(2);
+    expect(adapter.hasFile(files.canonicalEmbeddings)).toBe(false);
+    expect(JSON.parse(adapter.getFile(files.canonicalManifest) ?? "{}")).toMatchObject({ indexType: "text" });
+  });
+});
+
 describe("known embedding artifact recovery and coordination", () => {
   afterEach(() => {
     vi.restoreAllMocks();

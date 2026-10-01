@@ -13,7 +13,7 @@ import { isValidDeviceId } from "./deviceIdentity";
 import { DeviceRole } from "./deviceRole";
 import {
   claimInitialOwnership,
-  loadOwnership,
+  readOwnership,
   OwnershipDataAdapter,
   OwnershipManifest,
 } from "./deviceOwnership";
@@ -29,6 +29,9 @@ export type OwnershipGateStatus =
   | "not-producer-role"
   | "standby-producer"
   | "unclaimed-ownership"
+  | "invalid-ownership"
+  | "unsupported-ownership-schema"
+  | "ownership-unreadable"
   | "epoch-mismatch"
   | "invalid-device-id";
 
@@ -42,6 +45,12 @@ export interface OwnershipGateDecision {
 
 export interface EvaluateOwnershipGateOptions {
   readonly autoClaimIfUnclaimed?: boolean;
+}
+
+/** Immutable authority acquired by one operation and rechecked at each durable write boundary. */
+export interface OwnershipFenceToken {
+  readonly producerDeviceId: string;
+  readonly epoch: number;
 }
 
 /**
@@ -73,14 +82,25 @@ export async function evaluateOwnershipGate(
     };
   }
 
-  let manifest: OwnershipManifest | null = await loadOwnership(adapter);
+  const readResult = await readOwnership(adapter);
+  if (readResult.status === "invalid") {
+    return { authorized: false, status: "invalid-ownership", reason: `Ownership manifest is invalid (${readResult.reason}).` };
+  }
+  if (readResult.status === "unsupported-schema") {
+    return { authorized: false, status: "unsupported-ownership-schema", reason: "Ownership manifest uses an unsupported future schema." };
+  }
+  if (readResult.status === "unreadable") {
+    return { authorized: false, status: "ownership-unreadable", reason: "Ownership manifest could not be read safely." };
+  }
 
-  if (!manifest) {
+  let manifest: OwnershipManifest | null = readResult.status === "valid" ? readResult.manifest : null;
+  if (readResult.status === "missing") {
     if (options?.autoClaimIfUnclaimed) {
       try {
         manifest = await claimInitialOwnership(adapter, normalizedId);
       } catch {
-        manifest = await loadOwnership(adapter);
+        const afterClaim = await readOwnership(adapter);
+        manifest = afterClaim.status === "valid" ? afterClaim.manifest : null;
       }
     }
 
@@ -93,39 +113,50 @@ export async function evaluateOwnershipGate(
     }
   }
 
-  if (manifest.activeProducerId !== normalizedId) {
+  const resolvedManifest = manifest;
+  if (!resolvedManifest) {
     return {
       authorized: false,
-      status: "standby-producer",
-      activeProducerId: manifest.activeProducerId ?? undefined,
-      epoch: manifest.epoch,
-      reason: manifest.activeProducerId
-        ? `Device is in standby mode. Active producer is "${manifest.activeProducerId}" at epoch ${manifest.epoch}.`
-        : `Ownership has been relinquished at epoch ${manifest.epoch}. No active producer.`,
+      status: "unclaimed-ownership",
+      reason: "No active ownership manifest exists in .lina/ownership.json.",
     };
   }
 
-  if (expectedEpoch !== undefined && manifest.epoch !== expectedEpoch) {
+  if (resolvedManifest.activeProducerId !== normalizedId) {
+    return {
+      authorized: false,
+      status: "standby-producer",
+      activeProducerId: resolvedManifest.activeProducerId ?? undefined,
+      epoch: resolvedManifest.epoch,
+      reason: resolvedManifest.activeProducerId
+        ? `Device is in standby mode. Active producer is "${resolvedManifest.activeProducerId}" at epoch ${resolvedManifest.epoch}.`
+        : `Ownership has been relinquished at epoch ${resolvedManifest.epoch}. No active producer.`,
+    };
+  }
+
+  if (expectedEpoch !== undefined && resolvedManifest.epoch !== expectedEpoch) {
     return {
       authorized: false,
       status: "epoch-mismatch",
-      activeProducerId: manifest.activeProducerId ?? undefined,
-      epoch: manifest.epoch,
-      reason: `Ownership epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${manifest.epoch}.`,
+      activeProducerId: resolvedManifest.activeProducerId ?? undefined,
+      epoch: resolvedManifest.epoch,
+      reason: `Ownership epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${resolvedManifest.epoch}.`,
     };
   }
 
   return {
     authorized: true,
     status: "authorized",
-    activeProducerId: manifest.activeProducerId,
-    epoch: manifest.epoch,
+    activeProducerId: resolvedManifest.activeProducerId,
+    epoch: resolvedManifest.epoch,
   };
 }
 
 export interface IOwnershipGate {
   canPublish(): Promise<boolean>;
   evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision>;
+  acquireFence(): Promise<OwnershipFenceToken | undefined>;
+  assertFence(token: OwnershipFenceToken): Promise<boolean>;
   isAuthorizedSync(): boolean;
   isStandbyProducerSync(): boolean;
   getLastDecision(): OwnershipGateDecision | null;
@@ -176,6 +207,28 @@ export class OwnershipGate implements IOwnershipGate {
     return decision.authorized;
   }
 
+  async acquireFence(): Promise<OwnershipFenceToken | undefined> {
+    const decision = await this.evaluate();
+    if (!decision.authorized || !decision.activeProducerId || !decision.epoch) {
+      return undefined;
+    }
+    return { producerDeviceId: decision.activeProducerId, epoch: decision.epoch };
+  }
+
+  async assertFence(token: OwnershipFenceToken): Promise<boolean> {
+    const decision = this.adapter
+      ? await evaluateOwnershipGate(
+        this.adapter,
+        this.getDeviceId(),
+        this.getRole(),
+        token.epoch,
+        { autoClaimIfUnclaimed: false }
+      )
+      : { authorized: true, status: "authorized" as const, activeProducerId: token.producerDeviceId, epoch: token.epoch };
+    this.lastDecision = decision;
+    return decision.authorized && decision.activeProducerId === token.producerDeviceId && decision.epoch === token.epoch;
+  }
+
   isAuthorizedSync(): boolean {
     if (!this.adapter) {
       return true;
@@ -183,9 +236,7 @@ export class OwnershipGate implements IOwnershipGate {
     if (this.getRole() !== "producer") {
       return false;
     }
-    if (this.lastDecision === null) {
-      return true;
-    }
+    if (this.lastDecision === null) return true;
     return this.lastDecision.authorized;
   }
 

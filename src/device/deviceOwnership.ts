@@ -57,6 +57,20 @@ export interface OwnershipDataAdapter {
 }
 
 /**
+ * Explicit result of reading the shared ownership authority.  `loadOwnership`
+ * is retained for read-only compatibility, but mutation and authorization
+ * paths must not collapse an unreadable or invalid existing file into an
+ * unclaimed vault.
+ */
+export type OwnershipReadResult =
+  | { readonly status: "missing" }
+  | { readonly status: "valid"; readonly manifest: OwnershipManifest }
+  | {
+    readonly status: "invalid" | "unsupported-schema" | "unreadable";
+    readonly reason: "empty" | "invalid-json" | "invalid-manifest" | "unsupported-schema" | "read-failed";
+  };
+
+/**
  * Computes the normalized canonical vault file path for the ownership manifest.
  */
 export function getOwnershipPath(): string {
@@ -142,32 +156,55 @@ async function ensureOwnershipDirectory(adapter: OwnershipDataAdapter): Promise<
 }
 
 /**
- * Loads and validates the ownership manifest from `.lina/ownership.json`.
- * Returns `null` if the file does not exist, is empty, contains invalid JSON, or fails schema validation.
+ * Reads and classifies `.lina/ownership.json` without conflating absence with
+ * invalid or unreadable authority.
  */
-export async function loadOwnership(adapter: OwnershipDataAdapter): Promise<OwnershipManifest | null> {
+export async function readOwnership(adapter: OwnershipDataAdapter): Promise<OwnershipReadResult> {
   const filePath = getOwnershipPath();
 
   try {
     const exists = await adapter.exists(filePath);
     if (!exists) {
-      return null;
+      return { status: "missing" };
     }
 
-    const rawContent = await adapter.read(filePath);
+    let rawContent: string;
+    try {
+      rawContent = await adapter.read(filePath);
+    } catch {
+      return { status: "unreadable", reason: "read-failed" };
+    }
     if (!rawContent || rawContent.trim().length === 0) {
-      return null;
+      return { status: "invalid", reason: "empty" };
     }
 
-    const parsed: unknown = JSON.parse(rawContent);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      return { status: "invalid", reason: "invalid-json" };
+    }
     if (isOwnershipManifest(parsed)) {
-      return parsed;
+      return { status: "valid", manifest: parsed };
     }
 
-    return null;
+    if (isRecord(parsed) && typeof parsed.schemaVersion === "number" && parsed.schemaVersion > OWNERSHIP_SCHEMA_VERSION) {
+      return { status: "unsupported-schema", reason: "unsupported-schema" };
+    }
+    return { status: "invalid", reason: "invalid-manifest" };
   } catch {
-    return null;
+    return { status: "unreadable", reason: "read-failed" };
   }
+}
+
+/**
+ * Compatibility reader for consumers that only need a valid manifest.  New
+ * authorization or mutation paths must use `readOwnership` to preserve the
+ * distinction between absent and indeterminate authority.
+ */
+export async function loadOwnership(adapter: OwnershipDataAdapter): Promise<OwnershipManifest | null> {
+  const result = await readOwnership(adapter);
+  return result.status === "valid" ? result.manifest : null;
 }
 
 /**
@@ -242,11 +279,14 @@ export async function claimInitialOwnership(
     throw new Error(`Cannot claim initial ownership with invalid deviceId: "${deviceId}"`);
   }
 
-  const existing = await loadOwnership(adapter);
-  if (existing) {
+  const existing = await readOwnership(adapter);
+  if (existing.status === "valid") {
     throw new Error(
-      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.activeProducerId}" at epoch ${existing.epoch}.`
+      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.manifest.activeProducerId}" at epoch ${existing.manifest.epoch}.`
     );
+  }
+  if (existing.status !== "missing") {
+    throw new Error(`Cannot claim initial ownership: ownership state is ${existing.status} (${existing.reason}).`);
   }
 
   const now = new Date().toISOString();
@@ -283,7 +323,11 @@ export async function transferOwnership(
     throw new Error(`Cannot transfer ownership to invalid deviceId: "${newProducerId}"`);
   }
 
-  const current = await loadOwnership(adapter);
+  const currentResult = await readOwnership(adapter);
+  if (currentResult.status !== "missing" && currentResult.status !== "valid") {
+    throw new Error(`Cannot transfer ownership: ownership state is ${currentResult.status} (${currentResult.reason}).`);
+  }
+  const current = currentResult.status === "valid" ? currentResult.manifest : null;
 
   if (current && expectedCurrentEpoch !== undefined && current.epoch !== expectedCurrentEpoch) {
     throw new Error(
@@ -329,10 +373,11 @@ export async function relinquishOwnership(
     throw new Error(`Cannot relinquish ownership with invalid deviceId: "${currentProducerId}"`);
   }
 
-  const current = await loadOwnership(adapter);
-  if (!current) {
+  const currentResult = await readOwnership(adapter);
+  if (currentResult.status !== "valid") {
     throw new Error("Cannot relinquish ownership: no ownership manifest exists.");
   }
+  const current = currentResult.manifest;
 
   if (current.activeProducerId !== normalizedId) {
     throw new Error(

@@ -288,6 +288,8 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 
 
 
+* Fase LINA-15A concluída: ownership fencing durável para embeddings. A leitura de `.lina/ownership.json` distingue manifestos ausentes de estados inválidos, futuros ou ilegíveis; só o estado realmente ausente pode seguir para claim inicial. Operações de embeddings capturam `producerDeviceId + epoch` e voltam a prová-los antes de recovery mutável, checkpoint, publicação canónica, atualização de manifesto e purge destrutivo. Sem prova atual de autoridade, não há escrita nem publicação; a atomicidade e rollback existentes mantêm-se.
+
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
 * **Role != Ownership**: O papel `producer` expressa capacidade e intenção operacional; a autoridade de publicação pertence exclusivamente ao nó com `activeProducerId` no manifesto `.lina/ownership.json`. Múltiplos Produtores coexistem com segurança como Active Producer e Standby Producer.

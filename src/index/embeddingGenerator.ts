@@ -24,6 +24,7 @@ import {
   EmbeddingCheckpointMetadata,
   EmbeddingPersistenceDiagnostic,
   type EmbeddingPersistenceRetryOptions,
+  type EmbeddingWriteFence,
   EmbeddingRecord,
   loadEmbeddingCheckpoint,
   publishCanonicalEmbeddings,
@@ -91,6 +92,8 @@ export interface GenerateEmbeddingsOptions {
   persistenceRetryOptions?: EmbeddingPersistenceRetryOptions;
   onDiagnostic?: (details: EmbeddingGenerationDiagnosticEvent) => void;
   provenance?: ArtifactProvenance;
+  /** Revalidates the operation's ownership epoch before durable mutations. */
+  fence?: EmbeddingWriteFence;
 }
 
 export interface EmbeddingResult {
@@ -908,6 +911,7 @@ async function publishPlannedEmbeddingRecords(
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
     provenance: options.provenance,
+    fence: options.fence,
   }, options.onDiagnostic, options.persistenceRetryOptions);
 
   if (!publication.success) {
@@ -981,7 +985,14 @@ export async function generateEmbeddingsForChunks(
     return buildFailureResult(totalChunks, 0, totalChunks, configError, "validation-failed");
   }
 
-  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
+  const recovery = await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic, options.fence);
+  if (recovery.warnings.includes("ownership-fence-rejected")) {
+    const ownershipError = operationError("persistence", "Ownership authority was lost before embedding recovery.", {
+      provider,
+      requestCount: 0,
+    });
+    return buildFailureResult(totalChunks, 0, totalChunks, ownershipError, "generation-failed");
+  }
   const { identity: publishedIdentity } = await readPublishedEmbeddingIdentity(app);
   const canonicalFile = await readCanonicalEmbeddingFileState(app);
   const checkpointLoad = await loadEmbeddingCheckpoint(app, {
@@ -1327,6 +1338,7 @@ export async function generateEmbeddingsForChunks(
           [...checkpointRecords, ...newRecords, ...generatedRecords],
           options.onDiagnostic,
           options.persistenceRetryOptions,
+          options.fence,
         );
       } catch (error) {
         checkpointWriteError = error instanceof Error ? error.message : String(error);
@@ -1480,6 +1492,7 @@ export async function generateEmbeddingsForChunks(
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
     provenance: options.provenance,
+    fence: options.fence,
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {

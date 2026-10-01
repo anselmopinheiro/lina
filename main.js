@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T21:10:10.812Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T15:09:00.789Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -7767,25 +7767,42 @@ async function ensureOwnershipDirectory(adapter) {
   } catch (e) {
   }
 }
-async function loadOwnership(adapter) {
+async function readOwnership(adapter) {
   const filePath = getOwnershipPath();
   try {
     const exists = await adapter.exists(filePath);
     if (!exists) {
-      return null;
+      return { status: "missing" };
     }
-    const rawContent = await adapter.read(filePath);
+    let rawContent;
+    try {
+      rawContent = await adapter.read(filePath);
+    } catch (e) {
+      return { status: "unreadable", reason: "read-failed" };
+    }
     if (!rawContent || rawContent.trim().length === 0) {
-      return null;
+      return { status: "invalid", reason: "empty" };
     }
-    const parsed = JSON.parse(rawContent);
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch (e) {
+      return { status: "invalid", reason: "invalid-json" };
+    }
     if (isOwnershipManifest(parsed)) {
-      return parsed;
+      return { status: "valid", manifest: parsed };
     }
-    return null;
+    if (isRecord5(parsed) && typeof parsed.schemaVersion === "number" && parsed.schemaVersion > OWNERSHIP_SCHEMA_VERSION) {
+      return { status: "unsupported-schema", reason: "unsupported-schema" };
+    }
+    return { status: "invalid", reason: "invalid-manifest" };
   } catch (e) {
-    return null;
+    return { status: "unreadable", reason: "read-failed" };
   }
+}
+async function loadOwnership(adapter) {
+  const result = await readOwnership(adapter);
+  return result.status === "valid" ? result.manifest : null;
 }
 async function saveOwnership(adapter, manifest) {
   if (!isOwnershipManifest(manifest)) {
@@ -7836,11 +7853,14 @@ async function claimInitialOwnership(adapter, deviceId) {
   if (!isValidDeviceId(normalizedId)) {
     throw new Error(`Cannot claim initial ownership with invalid deviceId: "${deviceId}"`);
   }
-  const existing = await loadOwnership(adapter);
-  if (existing) {
+  const existing = await readOwnership(adapter);
+  if (existing.status === "valid") {
     throw new Error(
-      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.activeProducerId}" at epoch ${existing.epoch}.`
+      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.manifest.activeProducerId}" at epoch ${existing.manifest.epoch}.`
     );
+  }
+  if (existing.status !== "missing") {
+    throw new Error(`Cannot claim initial ownership: ownership state is ${existing.status} (${existing.reason}).`);
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const manifest = {
@@ -7859,10 +7879,11 @@ async function relinquishOwnership(adapter, currentProducerId, expectedCurrentEp
   if (!isValidDeviceId(normalizedId)) {
     throw new Error(`Cannot relinquish ownership with invalid deviceId: "${currentProducerId}"`);
   }
-  const current = await loadOwnership(adapter);
-  if (!current) {
+  const currentResult = await readOwnership(adapter);
+  if (currentResult.status !== "valid") {
     throw new Error("Cannot relinquish ownership: no ownership manifest exists.");
   }
+  const current = currentResult.manifest;
   if (current.activeProducerId !== normalizedId) {
     throw new Error(
       `Cannot relinquish ownership: device "${normalizedId}" is not the active producer (current active producer is "${current.activeProducerId}").`
@@ -12390,6 +12411,11 @@ var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
 var PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/checkpoints", ".lina/producer/staging", ".lina/producer/backups"];
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 var EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150];
+async function assertWriteFence(fence) {
+  if (fence && !await fence.assertCurrent()) {
+    throw new Error("Ownership fence rejected the embedding write.");
+  }
+}
 function createEmbeddingPublicationId() {
   return `emb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
@@ -12671,10 +12697,16 @@ async function completeInterruptedFirstPublication(app) {
   await removeIfExists2(app, files.manifestPublishBackup);
   return true;
 }
-async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic) {
+async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic, fence) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const warnings = [];
   onDiagnostic == null ? void 0 : onDiagnostic({ stage: "recovery", result: "started" });
+  try {
+    await assertWriteFence(fence);
+  } catch (error) {
+    onDiagnostic == null ? void 0 : onDiagnostic({ stage: "recovery", result: "skipped", reason: errorMessage(error) });
+    return { warnings: ["ownership-fence-rejected"] };
+  }
   const publicationBackupExistsAtStart = await fileExists(app, files.embeddingsPublishBackup) || await fileExists(app, files.manifestPublishBackup);
   if (!publicationBackupExistsAtStart) {
     try {
@@ -12769,7 +12801,7 @@ async function readRecoverableEmbeddingCheckpointRecords(app, identity) {
   );
   return validation.valid ? (_a = validation.records) != null ? _a : [] : [];
 }
-async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, retryOptions) {
+async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, retryOptions, fence) {
   var _a, _b, _c;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -12790,6 +12822,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
   let metadataBackedUp = false;
   onDiagnostic == null ? void 0 : onDiagnostic({ stage: "checkpoint", result: "started", records: sortedRecords.length });
   try {
+    await assertWriteFence(fence);
     await adapter.write(files.checkpointTemporary, jsonlContent);
     const temporaryContent = await adapter.read(files.checkpointTemporary);
     const temporaryValidation = parseEmbeddingRecords(
@@ -12815,6 +12848,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
       await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadata, files.checkpointMetadataBackup, retryOptions);
       metadataBackedUp = true;
     }
+    await assertWriteFence(fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.checkpointTemporary, files.checkpoint, retryOptions);
     checkpointPublished = true;
     const publishedContent = await adapter.read(files.checkpoint);
@@ -12826,6 +12860,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
     if (!publishedValidation.valid) {
       throw new Error(`Checkpoint publication validation failed: ${(_b = publishedValidation.reason) != null ? _b : "unknown"}`);
     }
+    await assertWriteFence(fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataTemporary, files.checkpointMetadata, retryOptions);
     metadataPublished = true;
     const pairValidation = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata, {
@@ -12920,6 +12955,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
   let manifestPublished = false;
   onDiagnostic == null ? void 0 : onDiagnostic({ stage: "publication", result: "started", records: sortedRecords.length });
   try {
+    await assertWriteFence(info.fence);
     if (sortedRecords.length === 0 || info.dimensions <= 0) {
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
@@ -12960,9 +12996,11 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
     await removeIfExists2(app, files.embeddingsPublishBackup);
     await removeIfExists2(app, files.manifestPublishBackup);
     if (await fileExists(app, files.canonicalEmbeddings)) {
+      await assertWriteFence(info.fence);
       await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
       embeddingsBackedUp = true;
     }
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings, retryOptions);
     embeddingsPublished = true;
     const publishedEmbeddings = await adapter.read(files.canonicalEmbeddings);
@@ -12974,8 +13012,10 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
     if (!publishedEmbeddingsValidation.valid) {
       throw new Error(`Canonical embeddings validation failed: ${(_e = publishedEmbeddingsValidation.reason) != null ? _e : "unknown"}`);
     }
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup, retryOptions);
     manifestBackedUp = true;
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest, retryOptions);
     manifestPublished = true;
     const canonicalValidation = await validateCanonicalFiles(app);
@@ -13044,7 +13084,7 @@ async function removeEmbeddingCheckpoint(app, onDiagnostic) {
   });
   return warnings;
 }
-async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, provenance) {
+async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, provenance, fence) {
   var _a;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const embeddingsExist = await fileExists(app, files.canonicalEmbeddings);
@@ -13100,12 +13140,13 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
       prefixMode: isRecord13(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.prefixMode === "string" ? manifestValue.embeddingInput.prefixMode : "none",
       provenance: provenance != null ? provenance : isValidArtifactProvenance(manifestValue.embeddings.provenance) ? manifestValue.embeddings.provenance : void 0
     };
-    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, info);
+    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, { ...info, fence });
     if (!pubResult.success) {
       throw new Error(`Failed to publish reconciled canonical embeddings: ${(_a = pubResult.error) != null ? _a : "unknown"}`);
     }
     return { purgedCount, remainingCount: remainingRecords.length };
   }
+  await assertWriteFence(fence);
   await removeIfExists2(app, files.canonicalEmbeddings);
   const nextManifest = {
     ...manifestValue,
@@ -13114,6 +13155,7 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
   };
   delete nextManifest.embeddings;
   delete nextManifest.embeddingInput;
+  await assertWriteFence(fence);
   await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
   await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
   return { purgedCount, remainingCount: 0 };
@@ -13849,7 +13891,8 @@ async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefix
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
-    provenance: options.provenance
+    provenance: options.provenance,
+    fence: options.fence
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
@@ -13909,7 +13952,14 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     });
     return buildFailureResult(totalChunks, 0, totalChunks, configError, "validation-failed");
   }
-  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
+  const recovery = await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic, options.fence);
+  if (recovery.warnings.includes("ownership-fence-rejected")) {
+    const ownershipError = operationError("persistence", "Ownership authority was lost before embedding recovery.", {
+      provider,
+      requestCount: 0
+    });
+    return buildFailureResult(totalChunks, 0, totalChunks, ownershipError, "generation-failed");
+  }
   const { identity: publishedIdentity } = await readPublishedEmbeddingIdentity(app);
   const canonicalFile = await readCanonicalEmbeddingFileState(app);
   const checkpointLoad = await loadEmbeddingCheckpoint(app, {
@@ -14219,7 +14269,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
           checkpointMetadata,
           [...checkpointRecords, ...newRecords, ...generatedRecords],
           options.onDiagnostic,
-          options.persistenceRetryOptions
+          options.persistenceRetryOptions,
+          options.fence
         );
       } catch (error) {
         checkpointWriteError = error instanceof Error ? error.message : String(error);
@@ -14357,7 +14408,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
-    provenance: options.provenance
+    provenance: options.provenance,
+    fence: options.fence
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
@@ -26631,13 +26683,24 @@ async function evaluateOwnershipGate(adapter, localDeviceId, localRole, expected
       reason: localRole ? `Device role is "${localRole}"; only configured producers may hold active ownership.` : "Device role is unassigned; unassigned devices cannot publish shared artifacts."
     };
   }
-  let manifest = await loadOwnership(adapter);
-  if (!manifest) {
+  const readResult = await readOwnership(adapter);
+  if (readResult.status === "invalid") {
+    return { authorized: false, status: "invalid-ownership", reason: `Ownership manifest is invalid (${readResult.reason}).` };
+  }
+  if (readResult.status === "unsupported-schema") {
+    return { authorized: false, status: "unsupported-ownership-schema", reason: "Ownership manifest uses an unsupported future schema." };
+  }
+  if (readResult.status === "unreadable") {
+    return { authorized: false, status: "ownership-unreadable", reason: "Ownership manifest could not be read safely." };
+  }
+  let manifest = readResult.status === "valid" ? readResult.manifest : null;
+  if (readResult.status === "missing") {
     if (options == null ? void 0 : options.autoClaimIfUnclaimed) {
       try {
         manifest = await claimInitialOwnership(adapter, normalizedId);
       } catch (e) {
-        manifest = await loadOwnership(adapter);
+        const afterClaim = await readOwnership(adapter);
+        manifest = afterClaim.status === "valid" ? afterClaim.manifest : null;
       }
     }
     if (!manifest) {
@@ -26648,29 +26711,37 @@ async function evaluateOwnershipGate(adapter, localDeviceId, localRole, expected
       };
     }
   }
-  if (manifest.activeProducerId !== normalizedId) {
+  const resolvedManifest = manifest;
+  if (!resolvedManifest) {
+    return {
+      authorized: false,
+      status: "unclaimed-ownership",
+      reason: "No active ownership manifest exists in .lina/ownership.json."
+    };
+  }
+  if (resolvedManifest.activeProducerId !== normalizedId) {
     return {
       authorized: false,
       status: "standby-producer",
-      activeProducerId: (_a = manifest.activeProducerId) != null ? _a : void 0,
-      epoch: manifest.epoch,
-      reason: manifest.activeProducerId ? `Device is in standby mode. Active producer is "${manifest.activeProducerId}" at epoch ${manifest.epoch}.` : `Ownership has been relinquished at epoch ${manifest.epoch}. No active producer.`
+      activeProducerId: (_a = resolvedManifest.activeProducerId) != null ? _a : void 0,
+      epoch: resolvedManifest.epoch,
+      reason: resolvedManifest.activeProducerId ? `Device is in standby mode. Active producer is "${resolvedManifest.activeProducerId}" at epoch ${resolvedManifest.epoch}.` : `Ownership has been relinquished at epoch ${resolvedManifest.epoch}. No active producer.`
     };
   }
-  if (expectedEpoch !== void 0 && manifest.epoch !== expectedEpoch) {
+  if (expectedEpoch !== void 0 && resolvedManifest.epoch !== expectedEpoch) {
     return {
       authorized: false,
       status: "epoch-mismatch",
-      activeProducerId: (_b = manifest.activeProducerId) != null ? _b : void 0,
-      epoch: manifest.epoch,
-      reason: `Ownership epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${manifest.epoch}.`
+      activeProducerId: (_b = resolvedManifest.activeProducerId) != null ? _b : void 0,
+      epoch: resolvedManifest.epoch,
+      reason: `Ownership epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${resolvedManifest.epoch}.`
     };
   }
   return {
     authorized: true,
     status: "authorized",
-    activeProducerId: manifest.activeProducerId,
-    epoch: manifest.epoch
+    activeProducerId: resolvedManifest.activeProducerId,
+    epoch: resolvedManifest.epoch
   };
 }
 var OwnershipGate = class {
@@ -26707,6 +26778,24 @@ var OwnershipGate = class {
     const decision = await this.evaluate();
     return decision.authorized;
   }
+  async acquireFence() {
+    const decision = await this.evaluate();
+    if (!decision.authorized || !decision.activeProducerId || !decision.epoch) {
+      return void 0;
+    }
+    return { producerDeviceId: decision.activeProducerId, epoch: decision.epoch };
+  }
+  async assertFence(token) {
+    const decision = this.adapter ? await evaluateOwnershipGate(
+      this.adapter,
+      this.getDeviceId(),
+      this.getRole(),
+      token.epoch,
+      { autoClaimIfUnclaimed: false }
+    ) : { authorized: true, status: "authorized", activeProducerId: token.producerDeviceId, epoch: token.epoch };
+    this.lastDecision = decision;
+    return decision.authorized && decision.activeProducerId === token.producerDeviceId && decision.epoch === token.epoch;
+  }
   isAuthorizedSync() {
     if (!this.adapter) {
       return true;
@@ -26714,9 +26803,7 @@ var OwnershipGate = class {
     if (this.getRole() !== "producer") {
       return false;
     }
-    if (this.lastDecision === null) {
-      return true;
-    }
+    if (this.lastDecision === null) return true;
     return this.lastDecision.authorized;
   }
   isStandbyProducerSync() {
@@ -28460,7 +28547,10 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       const activePolicy = this.getCanonicalExclusionPolicy();
       const manifestHash = (_b = status.manifest) == null ? void 0 : _b.exclusionPolicyHash;
       if (activePolicy && manifestHash !== activePolicy.policyHash) {
-        const provenance = this.getOwnershipGate().getProvenance();
+        const gate = this.getOwnershipGate();
+        const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : void 0;
+        if (typeof gate.acquireFence === "function" && !fenceToken) return;
+        const provenance = gate.getProvenance();
         const pathExclusions = this.getIndexPathExclusions();
         const excludedContentContains2 = this.getExcludedContentTerms();
         await persistAndActivateTextIndexCandidate(
@@ -28492,7 +28582,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
             this.app,
             this.indexedChunks,
             activePolicy,
-            provenance
+            provenance,
+            fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : void 0
           );
         } catch (purgeError) {
           console.warn("Lina: failed to purge orphan embedding records:", purgeError);
@@ -28513,12 +28604,16 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     });
     try {
       const activePolicy = this.getCanonicalExclusionPolicy();
-      const provenance = this.getOwnershipGate().getProvenance();
+      const gate = this.getOwnershipGate();
+      const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : void 0;
+      if (typeof gate.acquireFence === "function" && !fenceToken) return;
+      const provenance = gate.getProvenance();
       await purgeOrphanEmbeddingRecords(
         this.app,
         this.indexedChunks,
         activePolicy,
-        provenance
+        provenance,
+        fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : void 0
       );
       try {
         await this.getBinaryEmbeddingCopyController().check(true);
@@ -29080,7 +29175,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     let recoveryCompleted = false;
     onPhase == null ? void 0 : onPhase("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress == null ? void 0 : onProgress(this.L.statusValidatingEmbeddingsProvider);
-    const provenance = await this.getOwnershipGate().evaluateProvenance();
+    const ownershipGate = this.getOwnershipGate();
+    const hasFenceSupport = typeof ownershipGate.acquireFence === "function";
+    const fenceToken = hasFenceSupport ? await ownershipGate.acquireFence() : void 0;
+    if (hasFenceSupport && !fenceToken) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+    const provenance = fenceToken ? ownershipGate.getProvenance() : await ownershipGate.evaluateProvenance();
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -29093,6 +29194,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       abortSignal,
       operationId: operationId === void 0 ? void 0 : String(operationId),
       provenance,
+      ...fenceToken ? { fence: { assertCurrent: () => ownershipGate.assertFence(fenceToken) } } : {},
       onProgress: (progress) => {
         onPhase == null ? void 0 : onPhase("generating", this.L.statusGeneratingEmbeddings);
         onEmbeddingProgress == null ? void 0 : onEmbeddingProgress(progress);

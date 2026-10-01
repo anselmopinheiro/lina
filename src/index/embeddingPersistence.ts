@@ -38,6 +38,22 @@ export interface EmbeddingPersistenceRetryOptions {
   readonly sleep?: (delayMs: number) => Promise<void>;
 }
 
+/**
+ * Operation-owned authorization proof. It is injected by the host and must
+ * revalidate the device/epoch pair against current ownership before a shared
+ * artifact is changed. Persistence deliberately owns no second authority
+ * model.
+ */
+export interface EmbeddingWriteFence {
+  assertCurrent(): Promise<boolean>;
+}
+
+async function assertWriteFence(fence: EmbeddingWriteFence | undefined): Promise<void> {
+  if (fence && !await fence.assertCurrent()) {
+    throw new Error("Ownership fence rejected the embedding write.");
+  }
+}
+
 interface EmbeddingPersistenceRenameAdapter {
   rename(oldPath: string, newPath: string): Promise<void>;
 }
@@ -83,6 +99,7 @@ export interface EmbeddingPublicationInfo {
   inputVersion: number;
   prefixMode: string;
   provenance?: ArtifactProvenance;
+  fence?: EmbeddingWriteFence;
 }
 
 function createEmbeddingPublicationId(): string {
@@ -522,11 +539,18 @@ async function completeInterruptedFirstPublication(app: App): Promise<boolean> {
 
 export async function recoverEmbeddingPersistenceArtifacts(
   app: App,
-  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback
+  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback,
+  fence?: EmbeddingWriteFence
 ): Promise<{ warnings: string[] }> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const warnings: string[] = [];
   onDiagnostic?.({ stage: "recovery", result: "started" });
+  try {
+    await assertWriteFence(fence);
+  } catch (error) {
+    onDiagnostic?.({ stage: "recovery", result: "skipped", reason: errorMessage(error) });
+    return { warnings: ["ownership-fence-rejected"] };
+  }
 
   const publicationBackupExistsAtStart = await fileExists(app, files.embeddingsPublishBackup)
     || await fileExists(app, files.manifestPublishBackup);
@@ -657,6 +681,7 @@ export async function writeEmbeddingCheckpoint(
   records: EmbeddingRecord[],
   onDiagnostic?: EmbeddingPersistenceDiagnosticCallback,
   retryOptions?: EmbeddingPersistenceRetryOptions,
+  fence?: EmbeddingWriteFence,
 ): Promise<EmbeddingCheckpointMetadata> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -678,6 +703,7 @@ export async function writeEmbeddingCheckpoint(
 
   onDiagnostic?.({ stage: "checkpoint", result: "started", records: sortedRecords.length });
   try {
+    await assertWriteFence(fence);
     await adapter.write(files.checkpointTemporary, jsonlContent);
     const temporaryContent = await adapter.read(files.checkpointTemporary);
     const temporaryValidation = parseEmbeddingRecords(
@@ -706,6 +732,7 @@ export async function writeEmbeddingCheckpoint(
       metadataBackedUp = true;
     }
 
+    await assertWriteFence(fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.checkpointTemporary, files.checkpoint, retryOptions);
     checkpointPublished = true;
     const publishedContent = await adapter.read(files.checkpoint);
@@ -718,6 +745,7 @@ export async function writeEmbeddingCheckpoint(
       throw new Error(`Checkpoint publication validation failed: ${publishedValidation.reason ?? "unknown"}`);
     }
 
+    await assertWriteFence(fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataTemporary, files.checkpointMetadata, retryOptions);
     metadataPublished = true;
     const pairValidation = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata, {
@@ -827,6 +855,7 @@ export async function publishCanonicalEmbeddings(
 
   onDiagnostic?.({ stage: "publication", result: "started", records: sortedRecords.length });
   try {
+    await assertWriteFence(info.fence);
     if (sortedRecords.length === 0 || info.dimensions <= 0) {
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
@@ -872,9 +901,11 @@ export async function publishCanonicalEmbeddings(
     await removeIfExists(app, files.embeddingsPublishBackup);
     await removeIfExists(app, files.manifestPublishBackup);
     if (await fileExists(app, files.canonicalEmbeddings)) {
-      await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
+    await assertWriteFence(info.fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
       embeddingsBackedUp = true;
     }
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings, retryOptions);
     embeddingsPublished = true;
 
@@ -888,8 +919,10 @@ export async function publishCanonicalEmbeddings(
       throw new Error(`Canonical embeddings validation failed: ${publishedEmbeddingsValidation.reason ?? "unknown"}`);
     }
 
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup, retryOptions);
     manifestBackedUp = true;
+    await assertWriteFence(info.fence);
     await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest, retryOptions);
     manifestPublished = true;
 
@@ -994,7 +1027,8 @@ export async function purgeOrphanEmbeddingRecords(
     | ExclusionPolicyRules
     | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
     | null,
-  provenance?: ArtifactProvenance
+  provenance?: ArtifactProvenance,
+  fence?: EmbeddingWriteFence
 ): Promise<PurgeOrphanEmbeddingsResult> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const embeddingsExist = await fileExists(app, files.canonicalEmbeddings);
@@ -1067,7 +1101,7 @@ export async function purgeOrphanEmbeddingRecords(
         : undefined),
     };
 
-    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, info);
+    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, { ...info, fence });
     if (!pubResult.success) {
       throw new Error(`Failed to publish reconciled canonical embeddings: ${pubResult.error ?? "unknown"}`);
     }
@@ -1075,6 +1109,7 @@ export async function purgeOrphanEmbeddingRecords(
   }
 
   // All records were purged
+  await assertWriteFence(fence);
   await removeIfExists(app, files.canonicalEmbeddings);
   const nextManifest: Record<string, unknown> = {
     ...manifestValue,
@@ -1083,6 +1118,7 @@ export async function purgeOrphanEmbeddingRecords(
   };
   delete nextManifest.embeddings;
   delete nextManifest.embeddingInput;
+  await assertWriteFence(fence);
   await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
   await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
 

@@ -701,6 +701,14 @@ Phase D2.5.8 consolidates the completed active producer ownership architecture t
 
 ---
 
+### 7.10 Durable Embedding Write Fencing (LINA-15A)
+
+Embeddings use the active producer identity **and** epoch as an operation-owned fencing token. An operation acquires `{ producerDeviceId, epoch }` only after a valid ownership evaluation. Before every durable embedding boundary—recovery promotion, checkpoint publication, canonical embeddings rename, manifest rename, and destructive purge—the persistence boundary re-reads ownership through the injected gate and requires the same active device and epoch.
+
+Failure to prove current authority is a no-write result: no automatic claim, no promotion, no binary handoff, and existing canonical artifacts remain subject to the established rollback rules. Atomic staging/rename protects file coherence; the ownership fence separately protects publication authority.
+
+The ownership reader distinguishes `missing` from `invalid`, `unsupported-schema`, and `unreadable`. Only a genuinely missing manifest may enter the explicit initial-claim flow. An empty, truncated, malformed, future-schema, or unreadable existing manifest is indeterminate authority and blocks all mutation.
+
 ## 8. Implementation Roadmap (Phases D2.1 – D2.5)
 
 The Active Producer Ownership architecture progresses across the following focused sub-phases:
