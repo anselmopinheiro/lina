@@ -289,6 +289,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 
 
 * Fase LINA-15A concluída: ownership fencing durável para embeddings. A leitura de `.lina/ownership.json` distingue manifestos ausentes de estados inválidos, futuros ou ilegíveis; só o estado realmente ausente pode seguir para claim inicial. Operações de embeddings capturam `producerDeviceId + epoch` e voltam a prová-los antes de recovery mutável, checkpoint, publicação canónica, atualização de manifesto e purge destrutivo. Sem prova atual de autoridade, não há escrita nem publicação; a atomicidade e rollback existentes mantêm-se.
+* Fase LINA-DOC-001 concluída: auditoria e consolidação documental integral do repositório Lina. Inventário de 152 ficheiros Markdown, estabelecimento da hierarquia de autoridade documental, confirmação estrita do branch oficial `master`, eliminação de ambiguidades entre baseline LINA-14 e auditoria pós-LINA-14, consolidação do roadmap LINA-15 (LINA-15A concluída, LINA-15B a LINA-15I abertas), catalogação de documentos históricos e criação do índice unificado em `docs/INDEX.md`. Repositório validado e pronto para o arranque da Fase LINA-15B.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
@@ -413,7 +414,7 @@ A enumeração do vault é aceitável no Lina porque é funcionalmente necessár
 - Dados locais pequenos (perfil de IA ativo, chaves API, configuração por dispositivo) devem ser persistidos como campos em `LinaSettings` e `DEFAULT_SETTINGS`, guardados via `loadData()`/`saveData()` no ficheiro `data.json` do plugin. Este ficheiro é sincronizável entre dispositivos. Se for necessário lidar com configurações por dispositivo que NÃO devem sincronizar, deve ser desenvolvido um mecanismo adequado com um identificador de dispositivo.
 
 ### Leitura Obrigatória
-Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
+Antes de qualquer alteração no código ou arquitetura, é **obrigatória** a consulta da hierarquia documental oficial em **[docs/INDEX.md](docs/INDEX.md)**, do `AGENTS.md` e das especificações normativas relevantes em `docs/architecture/` para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
 
 ### Entrada contextual e slash commands
 Na vista lateral, texto sem barra deve continuar a executar pesquisa normal. Entradas começadas por `/` são comandos explícitos em inglês e não devem disparar pesquisa acidental. Slash commands que enviem conteúdo a providers de IA devem limitar o contexto ao texto selecionado ou à nota atual, respeitar exclusões configuradas e nunca modificar notas sem confirmação explícita.

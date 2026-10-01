@@ -1,5 +1,10 @@
 # Lina 0.2.x --- Automation Engine and Architecture Foundation
 
+> [!NOTE]
+> **Estado Documental: HISTÓRICO / SUPERSEDED**
+> Este documento representa o planeamento histórico da série 0.2.x. O roadmap oficial e vigente do projeto encontra-se em:
+> ➔ **[docs/roadmap.md](roadmap.md)**.
+
 ## Objective
 
 Lina 0.2.x evolves the existing search foundation into an automatic and

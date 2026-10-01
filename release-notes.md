@@ -1,5 +1,10 @@
 # Lina 0.2.1 — Simplified Settings, Local-First Search and Improved AI Transparency
 
+> [!NOTE]
+> **Estado Documental: HISTÓRICO**
+> Este ficheiro contém as notas de lançamento históricas da versão 0.2.1. O registo completo e atualizado de todas as versões encontra-se em:
+> ➔ **[CHANGELOG.md](CHANGELOG.md)**.
+
 Lina 0.2.1 introduces a simplified settings experience, formalizes the Desktop Producer and Mobile Companion multi-device architecture, expands AI provider support with OpenRouter, and establishes clearer privacy and API cost transparency.
 
 ---

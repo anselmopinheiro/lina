@@ -1,7 +1,11 @@
 # Lina Architecture — EmbeddingWorker
 
-**Status:** Active Execution Architecture (Lina 0.2)
+**Status:** Arquitetura de Execução (Lina 0.2 / atualizada em LINA-14 e LINA-15A)
 **Scope:** `EmbeddingWorker` orchestration ownership, execution lifecycle, dependency port contracts, single-flight locking, cancellation, capability gating, relationship with `MaintenanceEngine` & `EmbeddingScheduler`, and downstream `BinaryWorker` handoff.
+
+> [!NOTE]
+> **Evolução Arquitetural (LINA-14 / LINA-15A):**
+> Os gates de início e orquestração do `EmbeddingWorker` foram consolidados através de `evaluateOperationStartGate` e `deriveEmbeddingWritePathDecision` ([LINA-14 Baseline](LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md)). A autoridade de escrita durável é protegida por Monotonic Epoch Fencing na persistência ([LINA-15A](../audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md)).
 
 ---
 

@@ -1,7 +1,14 @@
 # Lina Storage Architecture Audit — Persistence Inventory & Boundaries
 
-**Status:** Consolidated Architecture Reference (Phases A–C Completed)  
+**Status:** Auditoria Histórica de Persistência (Fases A–C / 0.2.x)
 **Scope:** Complete inventory of persisted state, `data.json` schema, `.lina/devices/` state, `app.secretStorage`, `.lina/index/` artifacts, storage boundaries, concurrency risks, and lifecycle.
+
+> [!NOTE]
+> **Documento de Auditoria Histórica:**
+> Este documento regista o inventário da fase inicial de transição de armazenamento. As capacidades marcadas como *Future* foram subsequentemente implementadas nas especificações normativas:
+> - **[sync-foundations.md](sync-foundations.md)** (Fundações de sincronização e partições)
+> - **[producer-ownership.md](producer-ownership.md)** (Active Producer Ownership e Monotonic Epoch Fencing)
+> - **[device-scoped-state.md](device-scoped-state.md)** (Estado persistido por dispositivo)
 
 ---
 

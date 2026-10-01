@@ -1,10 +1,15 @@
 # Arquitetura de Referência: Embedding Lifecycle Baseline
 
-**Iniciativa:** LINA-14 — Embedding Lifecycle Consolidation  
-**Estado:** `LINA-14 — CONCLUÍDA`  
-**Data de Fecho:** 2026-09-30  
-**Documento:** `docs/architecture/LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md`  
-**Referência Canónica:** Obrigatória para todo o desenvolvimento futuro que interaja com Embeddings, Pesquisa Semântica, Agendamento e Sincronização.
+**Iniciativa:** LINA-14 — Embedding Lifecycle Consolidation
+**Estado da Fase LINA-14:** `CONCLUÍDA` (2026-09-30)
+**Evolução e Hardening:** LINA-15 (LINA-15A concluída; LINA-15B a LINA-15I no roadmap)
+**Documento:** `docs/architecture/LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md`
+**Referência Canónica:** Obrigatória para todo o desenvolvimento que interaja com Embeddings, Pesquisa Semântica, Agendamento e Sincronização.
+
+> [!NOTE]
+> **Adenda Contextual LINA-15 (2026-10-01):**
+> A arquitetura de separação pura de estado factual (`EmbeddingLifecycleSnapshot`) e decisão operacional (`deriveEmbeddingWritePathDecision`) estabelecida na LINA-14 permanece a **especificação normativa canónica**.
+> A auditoria global subsequente ([LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md](../audits/architecture/LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md)) catalogou 26 findings (F-01 a F-26). A fase **LINA-15A** resolveu F-01 e F-02 através de Monotonic Epoch Fencing em persistência durável (`assertCurrent()`). O trabalho subsequente do subsistema de embeddings segue rigorosamente o roadmap LINA-15 (LINA-15B a LINA-15I).
 
 ---
 

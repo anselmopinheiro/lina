@@ -1,5 +1,10 @@
 # Embedding Update Lifecycle Architecture (Lina 0.2.2)
 
+> [!NOTE]
+> **Estado Documental: HISTÓRICO / SUPERSEDED**
+> Este documento descreve o modelo original da versão 0.2.2. O modelo de decisão do ciclo de vida de embeddings foi consolidado na **Iniciativa LINA-14** e formalizado na especificação normativa:
+> ➔ **[LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md](LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md)** e **[LINA-14-WRITE-PATH-DECISIONS-001.md](LINA-14-WRITE-PATH-DECISIONS-001.md)**.
+
 ## Overview
 
 Lina 0.2.2 establishes a safe, transparent, resilient, and user-controlled architecture for vector embedding updates across Desktop Producer and Mobile Companion devices.
