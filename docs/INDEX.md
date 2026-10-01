@@ -65,8 +65,8 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 | Fase | Título / Âmbito | Estado | Ficheiro de Referência |
 |---|---|---|---|
 | **LINA-15A** | Ownership Fencing & Epoch Hardening | **CONCLUÍDA** (commit `0d9580d`) | `docs/audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md` |
-| **LINA-15B** | Reconciliação Plano ↔ Lifecycle | **ABERTA / PRÓXIMA FASE** | Finding F-03 na auditoria global pós-LINA-14 |
-| **LINA-15C** | Estado de Escrita para Canónicos Grandes | ABERTA | Finding F-04 na auditoria global pós-LINA-14 |
+| **LINA-15B** | Reconciliação Plano ↔ Lifecycle | **CONCLUÍDA** | `docs/audits/architecture/LINA-15B-IMPLEMENT-UPDATEPLAN-LIFECYCLE-001.md` |
+| **LINA-15C** | Estado de Escrita para Canónicos Grandes | **ABERTA / PRÓXIMA FASE** | Finding F-04 na auditoria global pós-LINA-14 |
 | **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | ABERTA | Findings F-06, F-07 na auditoria global pós-LINA-14 |
 | **LINA-15E** | Sidebar UI & Limpeza de Código Morto | ABERTA | Findings F-05, F-20, F-21, F-25 na auditoria global pós-LINA-14 |
 | **LINA-15F** | Persistência, Recuperação e Validação | ABERTA | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 |

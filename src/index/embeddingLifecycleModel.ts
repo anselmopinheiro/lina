@@ -201,6 +201,8 @@ export interface ClassifyEmbeddingWorkInput {
   readonly obsoleteToDropCount?: number;
   readonly requiresPublication?: boolean;
   readonly isExternalProvider?: boolean;
+  readonly planMode?: "initial-build" | "incremental" | "full-rebuild" | "indeterminate";
+  readonly planReasons?: readonly string[];
 }
 
 export interface ResolveEmbeddingLifecycleInput {
@@ -391,6 +393,8 @@ export function classifyEmbeddingWork(input: ClassifyEmbeddingWorkInput): Embedd
     obsoleteToDropCount = 0,
     requiresPublication = false,
     isExternalProvider = false,
+    planMode,
+    planReasons,
   } = input;
 
   const cost: EmbeddingWorkCost = isExternalProvider ? "external" : "local";
@@ -404,20 +408,20 @@ export function classifyEmbeddingWork(input: ClassifyEmbeddingWorkInput): Embedd
     recoverableCheckpoint: recoverableCheckpointCount,
   };
 
-  // 1. Canonical unreadable / indeterminate
-  if (canonicalReadability === "unreadable") {
+  // 1. Explicit plan mode indeterminate OR canonical unreadable
+  if (planMode === "indeterminate" || canonicalReadability === "unreadable") {
     return {
       kind: "indeterminate",
       updateRequired: false,
       severity: "none",
       cost: "none",
-      reasons: ["canonical-unreadable"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-unreadable"],
       counts,
     };
   }
 
   // 2. Canonical does not exist or is empty
-  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty") {
+  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty" || planMode === "initial-build") {
     if (totalChunks === 0) {
       return {
         kind: "none",
@@ -434,12 +438,24 @@ export function classifyEmbeddingWork(input: ClassifyEmbeddingWorkInput): Embedd
       updateRequired: true,
       severity: "action",
       cost,
-      reasons: ["canonical-missing-or-empty"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-missing-or-empty"],
       counts,
     };
   }
 
-  // 3. Identity Incompatibility (Target Identity vs Published Identity)
+  // 3. Explicit plan mode full-rebuild OR Identity Incompatibility
+  if (planMode === "full-rebuild") {
+    return {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost,
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["full-rebuild-required"],
+      counts,
+    };
+  }
+
   if (publishedIdentity && targetIdentity) {
     const identityCheck = compareEmbeddingIdentity(publishedIdentity, targetIdentity);
     if (!identityCheck.compatible) {
@@ -464,7 +480,7 @@ export function classifyEmbeddingWork(input: ClassifyEmbeddingWorkInput): Embedd
       updateRequired: true,
       severity: "action",
       cost,
-      reasons: ["chunks-need-generation"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["chunks-need-generation"],
       counts,
     };
   }
@@ -527,35 +543,7 @@ export function resolveEmbeddingLifecycle(
   const isStandby = deviceRole === "producer" && !isActiveProducer;
   const isUnassigned = deviceRole === "unassigned";
 
-  // 1. Evaluate Read Compatibility
-  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
-  const readCompatible = identityComparison.compatible;
-  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
-
-  const effectiveMode: "full" | "text-only" | "unavailable" =
-    upstreamTextIndex === "missing" || upstreamTextIndex === "invalid"
-      ? "unavailable"
-      : semanticAvailable
-      ? "full"
-      : "text-only";
-
-  const readRegion: EmbeddingLifecycleSnapshot["read"] = {
-    semanticAvailable,
-    effectiveMode,
-    compatibility: {
-      status: !publishedIdentity && !deviceIdentity
-        ? "none"
-        : readCompatible
-        ? "compatible"
-        : "incompatible",
-      reasons: identityComparison.reasons,
-      published: publishedIdentity ?? undefined,
-      device: deviceIdentity ?? undefined,
-    },
-    source: activeSource,
-  };
-
-  // 2. Evaluate Write Region
+  // 2. Evaluate Write Region First to Check Work Mode
   const defaultWork: EmbeddingWorkAssessment = {
     kind: "none",
     updateRequired: false,
@@ -577,6 +565,37 @@ export function resolveEmbeddingLifecycle(
     severity: writeApplicable ? effectiveWork.severity : "none",
     cost: writeApplicable ? effectiveWork.cost : "none",
     applicable: writeApplicable,
+  };
+
+  // 1. Evaluate Read Compatibility
+  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
+  const workDemandsFullRebuild = effectiveWork.mode === "full-rebuild";
+  const readCompatible = identityComparison.compatible && !workDemandsFullRebuild;
+  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
+
+  const effectiveMode: "full" | "text-only" | "unavailable" =
+    upstreamTextIndex === "missing" || upstreamTextIndex === "invalid"
+      ? "unavailable"
+      : semanticAvailable
+      ? "full"
+      : "text-only";
+
+  const readRegion: EmbeddingLifecycleSnapshot["read"] = {
+    semanticAvailable,
+    effectiveMode,
+    compatibility: {
+      status: !publishedIdentity && !deviceIdentity
+        ? "none"
+        : readCompatible
+        ? "compatible"
+        : "incompatible",
+      reasons: workDemandsFullRebuild && identityComparison.reasons.length === 0
+        ? (effectiveWork.reasons as readonly IdentityMismatchReason[])
+        : identityComparison.reasons,
+      published: publishedIdentity ?? undefined,
+      device: deviceIdentity ?? undefined,
+    },
+    source: activeSource,
   };
 
   // 3. Evaluate Process Region

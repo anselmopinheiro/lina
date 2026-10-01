@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T15:09:00.789Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T20:43:37.991Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -10764,7 +10764,9 @@ function classifyEmbeddingWork(input) {
     missingCount = 0,
     obsoleteToDropCount = 0,
     requiresPublication = false,
-    isExternalProvider = false
+    isExternalProvider = false,
+    planMode,
+    planReasons
   } = input;
   const cost = isExternalProvider ? "external" : "local";
   const counts = {
@@ -10776,17 +10778,17 @@ function classifyEmbeddingWork(input) {
     reusableCanonical: reusableCanonicalCount,
     recoverableCheckpoint: recoverableCheckpointCount
   };
-  if (canonicalReadability === "unreadable") {
+  if (planMode === "indeterminate" || canonicalReadability === "unreadable") {
     return {
       kind: "indeterminate",
       updateRequired: false,
       severity: "none",
       cost: "none",
-      reasons: ["canonical-unreadable"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-unreadable"],
       counts
     };
   }
-  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty") {
+  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty" || planMode === "initial-build") {
     if (totalChunks === 0) {
       return {
         kind: "none",
@@ -10803,7 +10805,18 @@ function classifyEmbeddingWork(input) {
       updateRequired: true,
       severity: "action",
       cost,
-      reasons: ["canonical-missing-or-empty"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-missing-or-empty"],
+      counts
+    };
+  }
+  if (planMode === "full-rebuild") {
+    return {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost,
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["full-rebuild-required"],
       counts
     };
   }
@@ -10829,7 +10842,7 @@ function classifyEmbeddingWork(input) {
       updateRequired: true,
       severity: "action",
       cost,
-      reasons: ["chunks-need-generation"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["chunks-need-generation"],
       counts
     };
   }
@@ -10881,21 +10894,6 @@ function resolveEmbeddingLifecycle(input) {
   const isCompanion = deviceRole === "companion";
   const isStandby = deviceRole === "producer" && !isActiveProducer;
   const isUnassigned = deviceRole === "unassigned";
-  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
-  const readCompatible = identityComparison.compatible;
-  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
-  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
-  const readRegion = {
-    semanticAvailable,
-    effectiveMode,
-    compatibility: {
-      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
-      reasons: identityComparison.reasons,
-      published: publishedIdentity != null ? publishedIdentity : void 0,
-      device: deviceIdentity != null ? deviceIdentity : void 0
-    },
-    source: activeSource
-  };
   const defaultWork = {
     kind: "none",
     updateRequired: false,
@@ -10912,6 +10910,22 @@ function resolveEmbeddingLifecycle(input) {
     severity: writeApplicable ? effectiveWork.severity : "none",
     cost: writeApplicable ? effectiveWork.cost : "none",
     applicable: writeApplicable
+  };
+  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
+  const workDemandsFullRebuild = effectiveWork.mode === "full-rebuild";
+  const readCompatible = identityComparison.compatible && !workDemandsFullRebuild;
+  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
+  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  const readRegion = {
+    semanticAvailable,
+    effectiveMode,
+    compatibility: {
+      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
+      reasons: workDemandsFullRebuild && identityComparison.reasons.length === 0 ? effectiveWork.reasons : identityComparison.reasons,
+      published: publishedIdentity != null ? publishedIdentity : void 0,
+      device: deviceIdentity != null ? deviceIdentity : void 0
+    },
+    source: activeSource
   };
   let processPhase = "idle";
   let cancellable = false;
@@ -11085,7 +11099,9 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       missingCount: inputs.updatePlan.missingCount,
       obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
       requiresPublication: inputs.updatePlan.requiresPublication,
-      isExternalProvider: (_A = inputs.isExternalProvider) != null ? _A : false
+      isExternalProvider: (_A = inputs.isExternalProvider) != null ? _A : false,
+      planMode: inputs.updatePlan.mode,
+      planReasons: inputs.updatePlan.reasons
     });
   }
   const history = {
@@ -15573,20 +15589,20 @@ function isIndeterminateWorkSummary(safeSummary) {
   return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable");
 }
 function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V;
   const targetIdentity = {
     provider: (_d = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider) != null ? _d : "ollama",
     model: (_h = (_g = (_f = (_e = safeSummary.updatePlan) == null ? void 0 : _e.targetIdentity) == null ? void 0 : _f.model) != null ? _g : safeSummary.model) != null ? _h : "nomic-embed-text",
     dimensions: (_l = (_k = (_j = (_i = safeSummary.updatePlan) == null ? void 0 : _i.targetIdentity) == null ? void 0 : _j.dimensions) != null ? _k : safeSummary.dimensions) != null ? _l : 768,
-    inputVersion: 1,
-    prefixMode: (_q = (_p = (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.prefixMode) != null ? _o : safeSummary.manifestPrefixMode) != null ? _p : safeSummary.expectedPrefixMode) != null ? _q : "none"
+    inputVersion: (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.inputVersion) != null ? _o : 1,
+    prefixMode: (_t = (_s = (_r = (_q = (_p = safeSummary.updatePlan) == null ? void 0 : _p.targetIdentity) == null ? void 0 : _q.prefixMode) != null ? _r : safeSummary.manifestPrefixMode) != null ? _s : safeSummary.expectedPrefixMode) != null ? _t : "none"
   };
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: (_u = (_t = (_s = (_r = safeSummary.updatePlan) == null ? void 0 : _r.targetIdentity) == null ? void 0 : _s.dimensions) != null ? _t : safeSummary.dimensions) != null ? _u : 768,
+    dimensions: (_x = (_w = safeSummary.dimensions) != null ? _w : (_v = (_u = safeSummary.updatePlan) == null ? void 0 : _u.targetIdentity) == null ? void 0 : _v.dimensions) != null ? _x : 768,
     inputVersion: 1,
-    prefixMode: (_z = (_y = (_v = safeSummary.manifestPrefixMode) != null ? _v : safeSummary.expectedPrefixMode) != null ? _y : (_x = (_w = safeSummary.updatePlan) == null ? void 0 : _w.targetIdentity) == null ? void 0 : _x.prefixMode) != null ? _z : "none"
+    prefixMode: (_C = (_B = (_y = safeSummary.manifestPrefixMode) != null ? _y : safeSummary.expectedPrefixMode) != null ? _B : (_A = (_z = safeSummary.updatePlan) == null ? void 0 : _z.targetIdentity) == null ? void 0 : _A.prefixMode) != null ? _C : "none"
   } : void 0;
   const defaultProducerRuntime = {
     deviceId: "local-device",
@@ -15605,7 +15621,7 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_A = safeSummary.exists) != null ? _A : true,
+      exists: (_D = safeSummary.exists) != null ? _D : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15616,29 +15632,29 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       effectiveMode: "full"
     }
   };
-  const deviceRuntimeState = (_C = (_B = safeSummary.deviceRuntimeState) != null ? _B : customDeviceRuntime) != null ? _C : defaultProducerRuntime;
+  const deviceRuntimeState = (_F = (_E = safeSummary.deviceRuntimeState) != null ? _E : customDeviceRuntime) != null ? _F : defaultProducerRuntime;
   const isExternalProvider = !getEmbeddingProviderCapability(targetIdentity.provider).isLocal;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
     isExternalProvider,
-    updatePlan: (_Q = safeSummary.updatePlan) != null ? _Q : {
+    updatePlan: (_T = safeSummary.updatePlan) != null ? _T : {
       mode: "incremental",
-      totalChunks: (_D = safeSummary.totalChunks) != null ? _D : 0,
-      missingCount: (_E = safeSummary.missingCount) != null ? _E : 0,
-      staleToReplaceCount: (_F = safeSummary.staleCount) != null ? _F : 0,
-      obsoleteToDropCount: (_G = safeSummary.obsoleteCount) != null ? _G : 0,
-      toGenerateCount: ((_H = safeSummary.missingCount) != null ? _H : 0) + ((_I = safeSummary.staleCount) != null ? _I : 0),
-      reusableCanonicalCount: (_J = safeSummary.validCount) != null ? _J : 0,
-      recoverableCheckpointCount: (_K = safeSummary.recoverableCheckpointCount) != null ? _K : 0,
-      requiresPublication: ((_L = safeSummary.missingCount) != null ? _L : 0) > 0 || ((_M = safeSummary.staleCount) != null ? _M : 0) > 0 || ((_N = safeSummary.obsoleteCount) != null ? _N : 0) > 0 || ((_O = safeSummary.duplicateRecordCount) != null ? _O : 0) > 0 || ((_P = safeSummary.invalidRecordCount) != null ? _P : 0) > 0,
+      totalChunks: (_G = safeSummary.totalChunks) != null ? _G : 0,
+      missingCount: (_H = safeSummary.missingCount) != null ? _H : 0,
+      staleToReplaceCount: (_I = safeSummary.staleCount) != null ? _I : 0,
+      obsoleteToDropCount: (_J = safeSummary.obsoleteCount) != null ? _J : 0,
+      toGenerateCount: ((_K = safeSummary.missingCount) != null ? _K : 0) + ((_L = safeSummary.staleCount) != null ? _L : 0),
+      reusableCanonicalCount: (_M = safeSummary.validCount) != null ? _M : 0,
+      recoverableCheckpointCount: (_N = safeSummary.recoverableCheckpointCount) != null ? _N : 0,
+      requiresPublication: ((_O = safeSummary.missingCount) != null ? _O : 0) > 0 || ((_P = safeSummary.staleCount) != null ? _P : 0) > 0 || ((_Q = safeSummary.obsoleteCount) != null ? _Q : 0) > 0 || ((_R = safeSummary.duplicateRecordCount) != null ? _R : 0) > 0 || ((_S = safeSummary.invalidRecordCount) != null ? _S : 0) > 0,
       reasons: [],
       targetIdentity
     },
     publishedIdentity,
-    canonicalExists: (_R = safeSummary.exists) != null ? _R : true,
-    canonicalReadability: (_S = safeSummary.canonicalReadability) != null ? _S : "readable",
+    canonicalExists: (_U = safeSummary.exists) != null ? _U : true,
+    canonicalReadability: (_V = safeSummary.canonicalReadability) != null ? _V : "readable",
     upstreamTextIndex: "ready",
     operationState: operationState2 != null ? operationState2 : void 0
   });

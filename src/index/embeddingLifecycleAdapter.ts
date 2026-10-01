@@ -147,6 +147,8 @@ export function adaptCurrentStateToLifecycleSnapshot(
       obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
       requiresPublication: inputs.updatePlan.requiresPublication,
       isExternalProvider: inputs.isExternalProvider ?? false,
+      planMode: inputs.updatePlan.mode,
+      planReasons: inputs.updatePlan.reasons,
     });
   }
 

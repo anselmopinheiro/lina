@@ -159,14 +159,14 @@ export function buildEmbeddingWorkLifecycleSnapshot(
     provider: safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider ?? "ollama",
     model: safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model ?? "nomic-embed-text",
     dimensions: safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions ?? 768,
-    inputVersion: 1,
+    inputVersion: safeSummary.updatePlan?.targetIdentity?.inputVersion ?? 1,
     prefixMode: (safeSummary.updatePlan?.targetIdentity?.prefixMode ?? safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
   };
 
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions ?? 768,
+    dimensions: safeSummary.dimensions ?? safeSummary.updatePlan?.targetIdentity?.dimensions ?? 768,
     inputVersion: 1,
     prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? safeSummary.updatePlan?.targetIdentity?.prefixMode ?? "none") as EmbeddingInputPrefixMode,
   } : undefined;
