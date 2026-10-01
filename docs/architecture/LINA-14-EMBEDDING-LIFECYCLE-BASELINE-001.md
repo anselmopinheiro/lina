@@ -8,8 +8,8 @@
 
 > [!NOTE]
 > **Adenda Contextual LINA-15 (2026-10-01):**
-> A arquitetura de separação pura de estado factual (`EmbeddingLifecycleSnapshot`) e decisão operacional (`deriveEmbeddingWritePathDecision`) estabelecida na LINA-14 permanece a **especificação normativa canónica**.
-> A auditoria global subsequente ([LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md](../audits/architecture/LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md)) catalogou 26 findings (F-01 a F-26). A fase **LINA-15A** resolveu F-01 e F-02 através de Monotonic Epoch Fencing em persistência durável (`assertCurrent()`). O trabalho subsequente do subsistema de embeddings segue rigorosamente o roadmap LINA-15 (LINA-15B a LINA-15I).
+> O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do lifecycle e a base normativa para as decisões operacionais através de `deriveEmbeddingWritePathDecision()`.
+> A auditoria global subsequente ([LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md](../audits/architecture/LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md)) catalogou 26 findings (F-01 a F-26). A fase **LINA-15A** resolveu F-01 e F-02 através de Monotonic Epoch Fencing em persistência durável (`assertCurrent()`). A eliminação de produtores ou sintetizadores paralelos de snapshots em runtime permanece dívida técnica em aberto na fase **LINA-15D**. O roadmap LINA-15 (LINA-15B a LINA-15I) guia a resolução dos restantes findings.
 
 ---
 
@@ -137,7 +137,7 @@ O `EmbeddingLifecycleSnapshot.primary` classifica o estado do subsistema em 12 v
 
 ## 6. Invariantes Arquiteturais Congeladas
 
-1. **Fonte Única de Verdade:** É estritamente proibido aos consumidores reconstruir estados, contagens ou decisões fora do `EmbeddingLifecycleSnapshot`.
+1. **Modelo Canónico Normativo:** O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do lifecycle. É estritamente proibido aos consumidores reconstruir regras de negócio, contagens ad-hoc ou decisões fora deste modelo e da função `deriveEmbeddingWritePathDecision()`. A eliminação definitiva de todos os produtores/sintetizadores paralelos de snapshots em runtime constitui dívida técnica mapeada na LINA-15D.
 2. **Zero Silent Fallback:** Estados de erro, incompatibilidade ou indeterminação nunca são transformados silenciosamente em "sem trabalho" ou "sucesso".
 3. **Producer Only Write:** Apenas o Active Producer autorizado no manifesto `.lina/ownership.json` pode executar geração, atualização ou publicação física de embeddings.
 4. **Companion Isolation:** Dispositivos Companion consomem exclusivamente artefactos sincronizados, executam pesquisas semânticas locais quando compatíveis, e nunca executam workers pesados nem agendam escrita.

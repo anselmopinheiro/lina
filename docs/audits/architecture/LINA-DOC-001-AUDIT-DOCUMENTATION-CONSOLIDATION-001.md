@@ -134,7 +134,7 @@ Para eliminar ambiguidades em decisões de desenvolvimento futuro, estabelece-se
 - **Documento B:** `docs/audits/architecture/LINA-14F5-IMPLEMENT-SHADOW-INFRASTRUCTURE-REMOVAL-001.md` e código fonte em `src/index/`.
 - **Conflito:** Risco de agentes tentarem reintroduzir tipos legados ou comparadores shadow.
 - **Evidência:** `EmbeddingWorkflowState` foi completamente removido em LINA-14F.4-B3; a infraestrutura de comparação shadow foi eliminada em LINA-14F.5 (`2f1bfd8`). `grep` no código confirma 0 ocorrências de `EmbeddingWorkflowState` em `src/`.
-- **Decisão Canónica:** `EmbeddingWorkflowState` e comparadores shadow estão **definitivamente eliminados**. A única fonte de estado de ciclo de vida é `EmbeddingLifecycleSnapshot`.
+- **Decisão Canónica:** `EmbeddingWorkflowState` e comparadores shadow estão **definitivamente eliminados**. O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do lifecycle. As decisões operacionais devem derivar deste modelo através de `deriveEmbeddingWritePathDecision()`. A eliminação de todos os produtores ou sintetizadores paralelos de snapshots em runtime permanece trabalho aberto da LINA-15D.
 
 ---
 
@@ -167,7 +167,7 @@ Para eliminar qualquer ambiguidade em fases futuras (LINA-15B em diante), consol
 ### 5.1 `EmbeddingLifecycleSnapshot`
 - **Definição:** `src/index/embeddingLifecycleModel.ts`
 - **Teste:** `tests/index/embeddingLifecycleModel.test.ts`
-- **Regra:** Estrutura imutável, determinística e pura, sem I/O. Descreve 12 estados primários (`primary`), com 4 regiões ortogonais (`read`, `write`, `process`, `history`) e flags de capacidade (`capability`).
+- **Regra:** O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do lifecycle e a base normativa para as decisões operacionais. Estrutura imutável, determinística e pura, sem I/O. Descreve 12 estados primários (`primary`), com 4 regiões ortogonais (`read`, `write`, `process`, `history`) e flags de capacidade (`capability`). A eliminação de todos os produtores ou sintetizadores paralelos de snapshots em runtime permanece dívida técnica em aberto na LINA-15D.
 
 ### 5.2 `deriveEmbeddingWritePathDecision()`
 - **Definição:** `src/index/embeddingLifecycleWritePath.ts`
@@ -259,5 +259,23 @@ O roadmap da iniciativa **LINA-15 (Embeddings Subsystem Hardening & Integrity)**
 ## 8. Conclusão e Prontidão para a Fase LINA-15B
 
 A documentação do repositório Lina encontra-se totalmente auditada, classificada e consolidada. Não subsistem ambiguidades quanto ao branch oficial (`master`), à autoridade dos documentos, aos contratos normativos de embeddings ou ao roadmap ativo da LINA-15.
+
+### Respostas aos Critérios de Conclusão:
+1. **Qual é a arquitetura atual dos embeddings?**
+   Fluxo unidirecional: Estado factual → `EmbeddingLifecycleSnapshot` (modelo canónico) → `deriveEmbeddingWritePathDecision()` → Executores/ViewModels, com escrita durável protegida por Monotonic Epoch Fencing (`OwnershipGate` / `assertCurrent()`).
+2. **Qual é a fonte única de verdade?**
+   O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do estado do lifecycle e a base normativa das decisões operacionais. A existência de sintetizadores paralelos em runtime ainda identificados (findings F-06 e F-07) constitui dívida técnica em tratamento na LINA-15D e não representa uma segunda regra de negócio.
+3. **Quais são os contratos normativos?**
+   `EmbeddingLifecycleSnapshot`, `deriveEmbeddingWritePathDecision()`, `VectorContractV1`, `OwnershipGate` com epoch fencing monotónico e isolamento Producer/Companion.
+4. **O que foi concluído na LINA-14?**
+   A fundação lógica pura do lifecycle, adapter factual, remoção de comparadores shadow e do `EmbeddingWorkflowState`, e wiring inicial de executores.
+5. **O que está aberto na LINA-15?**
+   LINA-15A concluída; LINA-15B a LINA-15I abertas (reconciliação plano↔lifecycle, teto JSONL, eliminação de sintetizadores paralelos na LINA-15D, sidebar UI, persistência e arranque leve).
+6. **Qual é o próximo trabalho?**
+   **Fase LINA-15B** (Reconciliação Plano ↔ Lifecycle — Finding F-03).
+7. **Qual é o branch oficial?**
+   `master`.
+8. **Que documentos são históricos e não devem ser tratados como especificação?**
+   `docs/Lina-0.2.x-Roadmap.md`, `docs/architecture/embedding-policy-foundation.md`, `docs/architecture/storage-audit.md`, `docs/architecture/lina-0.2-*.md`, `docs/agents/*.md`, `release-notes.md`, `README-pt.md` e `docs/manual-alfa.md`.
 
 **O repositório está formalmente pronto para o arranque da Fase LINA-15B (Reconciliação Plano ↔ Lifecycle).**

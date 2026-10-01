@@ -58,6 +58,10 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 
 O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** complementada pelas resoluções da iniciativa **LINA-15** (`docs/audits/architecture/LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md` §30):
 
+> [!NOTE]
+> **Modelo Canónico vs Dívida Técnica em Runtime:** O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do ciclo de vida de embeddings e a base normativa das decisões operacionais (`deriveEmbeddingWritePathDecision()`). A eliminação física de produtores e sintetizadores paralelos de snapshots em runtime constitui dívida técnica identificada em tratamento na fase **LINA-15D**.
+
+
 | Fase | Título / Âmbito | Estado | Ficheiro de Referência |
 |---|---|---|---|
 | **LINA-15A** | Ownership Fencing & Epoch Hardening | **CONCLUÍDA** (commit `0d9580d`) | `docs/audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md` |
