@@ -2244,7 +2244,8 @@ export default class LinaPlugin extends Plugin {
                   excludedContentContainsCount: excludedContentContains.length,
                 },
                 provenance,
-                activePolicy
+                activePolicy,
+                fence
               ),
               () => {
                 this.textIndexLoaded = true;
@@ -2496,7 +2497,16 @@ export default class LinaPlugin extends Plugin {
       };
 
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
-      const provenance = await this.getOwnershipGate().evaluateProvenance();
+      // The authority is proven again at publication time (never from a cached decision):
+      // a rebuild that lost ownership while it was running writes nothing.
+      const writeFence = await this.acquireCanonicalMaintenanceFence();
+      if (!writeFence) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+      }
+      const provenance = writeFence.identity
+        ? createArtifactProvenance(writeFence.identity.producerDeviceId, writeFence.identity.epoch)
+        : undefined;
       const policy = this.getCanonicalExclusionPolicy();
 
       const success = await saveTextIndex(
@@ -2507,7 +2517,8 @@ export default class LinaPlugin extends Plugin {
         totalExcludedCount,
         exclusionsInfo,
         provenance,
-        policy
+        policy,
+        writeFence
       );
 
       if (!success) {
@@ -3707,7 +3718,19 @@ export default class LinaPlugin extends Plugin {
       const pathExclusions = this.getIndexPathExclusions();
       const excludedContentContains = this.getExcludedContentTerms();
 
-      const provenance = this.getOwnershipGate().getProvenance();
+      const writeFence = await this.acquireCanonicalMaintenanceFence();
+      if (!writeFence) {
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: updates[0]?.path ?? "batch",
+          message: "automatic batch skipped because ownership could not be proven"
+        });
+        // Not requeued: the changes are re-detected by the startup reconciliation.
+        return;
+      }
+      const provenance = writeFence.identity
+        ? createArtifactProvenance(writeFence.identity.producerDeviceId, writeFence.identity.epoch)
+        : undefined;
       const policy = this.getCanonicalExclusionPolicy();
       const success = await persistAndActivateTextIndexCandidate(
         () => saveTextIndex(
@@ -3724,7 +3747,8 @@ export default class LinaPlugin extends Plugin {
             excludedContentContainsCount: excludedContentContains.length,
           },
           provenance,
-          policy
+          policy,
+          writeFence
         ),
         () => {
           this.indexedNotes = updatedNotes;

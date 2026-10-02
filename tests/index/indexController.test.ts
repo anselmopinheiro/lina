@@ -93,6 +93,12 @@ function createHarness(): {
     updatedAt: "2026-08-01T00:00:00.000Z",
     role: "producer",
   };
+  // Text index publication requires a proven write authority (LINA-15H-D); these tests exercise
+  // the index logic, so the authority is a valid fence rather than a real ownership manifest.
+  plugin.acquireCanonicalMaintenanceFence = async () => ({
+    assertCurrent: async () => true,
+    identity: { producerDeviceId: "11111111-1111-4111-8111-111111111111", epoch: 1 },
+  });
   plugin.indexedNotes = [];
   plugin.indexedChunks = [];
   plugin.textIndexLoaded = false;
@@ -578,6 +584,28 @@ describe("text index controller integration", () => {
     expect((plugin.pendingAutomaticUpdates as Map<string, unknown>).size).toBe(0);
     expect(await readPersistedPaths(plugin)).toEqual(["Existing.md", "Live.md"]);
     expect((plugin.indexedNotes as IndexedNote[]).map((note) => note.path).sort()).toEqual(["Existing.md", "Live.md"]);
+  });
+
+  it("writes nothing when the automatic batch cannot prove write authority (no auto-claim, no stale authority)", async () => {
+    const { vault, plugin, adapter } = createHarness();
+    const content = "Original note content that is long enough to produce a normal chunk for the index.";
+    const file = makeFile("Auth.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+    const before = adapter.getFile(".lina/index/manifest.json");
+
+    plugin.acquireCanonicalMaintenanceFence = async () => undefined;
+    const changed = makeFile("Auth.md", `${content} edited`, 200);
+    vault.setMarkdownFiles([changed]);
+    vault.setContent(changed.path, `${content} edited`);
+    adapter.writeCount = adapter.renameCount = adapter.removeCount = 0;
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "modify", file: changed, path: changed.path, receivedAt: "2026-08-18T19:00:00.000Z",
+    }]);
+
+    expect(adapter.writeCount + adapter.renameCount + adapter.removeCount).toBe(0);
+    expect(adapter.getFile(".lina/index/manifest.json")).toBe(before);
   });
 
   it("replaces short-note chunks correctly across incremental content transitions", async () => {

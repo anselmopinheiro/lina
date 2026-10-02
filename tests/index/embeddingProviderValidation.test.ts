@@ -154,7 +154,7 @@ function createPluginHarness(): {
 }
 
 async function flushMicrotasks(): Promise<void> {
-  for (let index = 0; index < 100; index++) {
+  for (let index = 0; index < 400; index++) {
     await Promise.resolve();
   }
 }

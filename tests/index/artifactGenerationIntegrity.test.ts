@@ -452,7 +452,7 @@ describe("LINA-03-007: Artifact Generation Integrity & Sync Resilience", () => {
       // 2. Simulate failure when promoting manifest.json
       const originalRename = adapter.rename.bind(adapter);
       adapter.rename = async (from: string, to: string) => {
-        if (from.includes("manifest.json.tmp-")) {
+        if (from.includes("text-manifest.publish.tmp")) {
           throw new Error("Simulated failure promoting manifest.json");
         }
         return originalRename(from, to);

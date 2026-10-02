@@ -467,7 +467,9 @@ describe("saveTextIndex (atomic write)", () => {
     await saveTextIndex(asApp(app), VALID_NOTES, VALID_CHUNKS, { enabled: true, chunkSize: 1200, overlap: 150 });
 
     expect(adapter.writtenPaths.every((path) => path.startsWith(".lina/producer/staging/"))).toBe(true);
-    expect(adapter.renamedTo.filter((path) => path.includes(".bak-")).every((path) => path.startsWith(".lina/producer/backups/"))).toBe(true);
+    const backups = adapter.renamedTo.filter((path) => path.endsWith(".publish.backup"));
+    expect(backups).toHaveLength(3);
+    expect(backups.every((path) => path.startsWith(".lina/producer/backups/"))).toBe(true);
   });
 
   it("preserves previous index when write fails", async () => {

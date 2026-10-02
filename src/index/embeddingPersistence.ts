@@ -13,6 +13,8 @@ import {
 } from "./exclusionPolicy";
 import { shouldExcludePath } from "./indexExclusions";
 import { IndexWriteCoordinator } from "./indexWriteCoordinator";
+import { IndexWriteFence, OwnershipFenceRejectedError, assertIndexWriteFence } from "./writeFence";
+import { recoverTextIndexPublication } from "./indexStore";
 import { evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 
@@ -47,18 +49,10 @@ export interface EmbeddingPersistenceRetryOptions {
  * artifact is changed. Persistence deliberately owns no second authority
  * model.
  */
-export interface EmbeddingWriteFence {
-  assertCurrent(): Promise<boolean>;
-  /** Authority captured when the fence was acquired; used only to stamp provenance. */
-  readonly identity?: { readonly producerDeviceId: string; readonly epoch: number };
-}
-
-class OwnershipFenceRejectedError extends Error {}
+export type EmbeddingWriteFence = IndexWriteFence;
 
 async function assertWriteFence(fence: EmbeddingWriteFence | undefined): Promise<void> {
-  if (fence && !await fence.assertCurrent()) {
-    throw new OwnershipFenceRejectedError("Ownership fence rejected the embedding write.");
-  }
+  await assertIndexWriteFence(fence);
 }
 
 interface EmbeddingPersistenceRenameAdapter {
@@ -504,9 +498,26 @@ async function restoreCheckpointBackups(app: App): Promise<boolean> {
   return true;
 }
 
+/**
+ * A manifest that exists and differs from the backed-up one is a newer publication
+ * (the interrupted embeddings publication always leaves `manifest.json` absent between its
+ * two renames). Restoring the older shared manifest over it would erase newer text state.
+ */
+async function manifestSupersedesBackup(app: App): Promise<boolean> {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  if (!(await fileExists(app, files.canonicalManifest))) return false;
+  const current = await app.vault.adapter.read(files.canonicalManifest);
+  try { JSON.parse(current); } catch { return false; } // a corrupt manifest is not a newer publication
+  if (!(await fileExists(app, files.manifestPublishBackup))) return true;
+  return current !== (await app.vault.adapter.read(files.manifestPublishBackup));
+}
+
 async function restoreCanonicalBackups(app: App): Promise<boolean> {
   const files = EMBEDDING_PERSISTENCE_FILES;
-  const bothBackupsValid = await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
+  const superseded = await manifestSupersedesBackup(app);
+  const bothBackupsValid = superseded
+    ? { valid: false }
+    : await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
   if (bothBackupsValid.valid) {
     await ensureProducerWorkDirectories(app);
     // Retain both backups until a coherent restored publication is observed.
@@ -541,7 +552,8 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
   }
 
   if (
-    !(await fileExists(app, files.embeddingsPublishBackup))
+    !superseded
+    && !(await fileExists(app, files.embeddingsPublishBackup))
     && await fileExists(app, files.manifestPublishBackup)
   ) {
     try {
@@ -604,6 +616,10 @@ export async function recoverEmbeddingPersistenceArtifacts(
   // Orphan temporaries are never commit markers and are never auto-promoted.
 
   try {
+    // The shared manifest also belongs to the text index: resolve an interrupted text
+    // publication first so the embeddings recovery sees the manifest it must preserve.
+    warnings.push(...(await recoverTextIndexPublication(app)).warnings);
+
     await cleanupPaths(app, [
       files.checkpointTemporary,
       files.checkpointMetadataTemporary,

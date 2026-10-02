@@ -3,6 +3,7 @@ import { ScannedNote } from "./noteScanner";
 import { hashContent } from "./noteHasher";
 import { Chunk } from "./chunker";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
+import { IndexWriteFence, OwnershipFenceRejectedError, assertIndexWriteFence, withFencedAdapter } from "./writeFence";
 import {
   ExclusionPolicyV1,
   ExclusionPolicyCompatibility,
@@ -151,7 +152,6 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
 const MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
 const NOTES_INDEX_PATH = ".lina/index/notes.json";
 const CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
-const CHUNKS_FILE = "chunks.jsonl";
 const MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_INDEXED_CHUNKS_TO_LOAD = 100_000;
 const warnedNotesIndexReadIssues = new Set<string>();
@@ -344,6 +344,198 @@ async function readChunksIndexFile(app: App, strict: boolean): Promise<ChunksInd
   }
 }
 
+/**
+ * Deterministic staging/backup names of the text index publication protocol
+ * (LINA-15H-D). They are the only names `recoverTextIndexPublication` recognises and
+ * they never collide with the embeddings publication names.
+ */
+export const TEXT_INDEX_PUBLICATION_FILES = {
+  notes: NOTES_INDEX_PATH,
+  chunks: CHUNKS_INDEX_PATH,
+  manifest: MANIFEST_INDEX_PATH,
+  notesTemporary: ".lina/producer/staging/text-notes.publish.tmp",
+  chunksTemporary: ".lina/producer/staging/text-chunks.publish.tmp",
+  manifestTemporary: ".lina/producer/staging/text-manifest.publish.tmp",
+  notesBackup: ".lina/producer/backups/text-notes.publish.backup",
+  chunksBackup: ".lina/producer/backups/text-chunks.publish.backup",
+  manifestBackup: ".lina/producer/backups/text-manifest.publish.backup",
+} as const;
+
+/** Deterministic backup of the embeddings publication (owned by embeddingPersistence). */
+const EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP = ".lina/producer/backups/manifest.publish.backup";
+
+type EmbeddingManifestSection = Record<string, unknown>;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function adapterFileExists(adapter: App["vault"]["adapter"], path: string): Promise<boolean> {
+  return (await adapter.stat(path))?.type === "file";
+}
+
+async function adapterRemoveIfExists(adapter: App["vault"]["adapter"], path: string): Promise<void> {
+  if (await adapter.exists(path)) await adapter.remove(path);
+}
+
+function extractEmbeddingSection(value: unknown): EmbeddingManifestSection {
+  if (isPlainRecord(value) && value.embeddingsEnabled === true && isPlainRecord(value.embeddings)) {
+    return {
+      embeddingsEnabled: true,
+      embeddings: value.embeddings,
+      ...(isPlainRecord(value.embeddingInput) ? { embeddingInput: value.embeddingInput } : {}),
+    };
+  }
+  return {};
+}
+
+async function readEmbeddingSectionFrom(adapter: App["vault"]["adapter"], path: string): Promise<EmbeddingManifestSection | undefined> {
+  try {
+    if (!await adapterFileExists(adapter, path)) return undefined;
+    return extractEmbeddingSection(JSON.parse(await adapter.read(path)) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Checks that a (notes, chunks, manifest) triple is one complete text publication:
+ * everything parses, counts and digests declared by the manifest match.
+ */
+function isCompleteTextTriple(notesRaw: string | undefined, chunksRaw: string | undefined, manifestRaw: string | undefined): boolean {
+  if (notesRaw === undefined || chunksRaw === undefined || manifestRaw === undefined) return false;
+  try {
+    const manifest: unknown = JSON.parse(manifestRaw);
+    if (!isTextIndexManifest(manifest)) return false;
+    const notes: unknown = JSON.parse(notesRaw);
+    if (!Array.isArray(notes) || !notes.every(isIndexedNote)) return false;
+    const lines = chunksRaw.split("\n").filter((line) => line.trim().length > 0);
+    if (!lines.every((line) => isTextChunk(JSON.parse(line) as unknown))) return false;
+    if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notes.length) return false;
+    if (typeof manifest.totalChunks === "number" && manifest.totalChunks !== lines.length) return false;
+    if (manifest.notesDigest !== undefined && manifest.notesDigest !== computeTextArtifactDigest(notesRaw)) return false;
+    if (manifest.chunksDigest !== undefined && manifest.chunksDigest !== computeTextArtifactDigest(chunksRaw)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readOptionalText(adapter: App["vault"]["adapter"], path: string): Promise<string | undefined> {
+  try {
+    return await adapterFileExists(adapter, path) ? await adapter.read(path) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export interface TextIndexRecoveryResult {
+  readonly warnings: string[];
+  readonly changed: boolean;
+}
+
+/**
+ * Recovers an interrupted `saveTextIndex` publication using only the deterministic
+ * protocol names. The caller must hold the writer lease and pass an app whose adapter
+ * is fenced (`withFencedAdapter`); this function never claims ownership.
+ *
+ * Evidence rules (a newer publication is never replaced by an older one):
+ * - a complete current triple means any backup is residue and is only removed;
+ * - a backup is restored only when the manifest is not already the committed one
+ *   (no manifest backup next to an existing manifest) and the triple made of the
+ *   backups plus the untouched current files is itself a complete publication;
+ * - staging temporaries are never promoted, only removed.
+ */
+export async function recoverTextIndexPublication(app: App): Promise<TextIndexRecoveryResult> {
+  const files = TEXT_INDEX_PUBLICATION_FILES;
+  const adapter = app.vault.adapter;
+  const warnings: string[] = [];
+  let changed = false;
+  const remove = async (path: string): Promise<void> => {
+    if (await adapter.exists(path)) {
+      await adapter.remove(path);
+      changed = true;
+    }
+  };
+
+  for (const path of [files.notesTemporary, files.chunksTemporary, files.manifestTemporary]) await remove(path);
+
+  const backups = {
+    notes: await adapterFileExists(adapter, files.notesBackup),
+    chunks: await adapterFileExists(adapter, files.chunksBackup),
+    manifest: await adapterFileExists(adapter, files.manifestBackup),
+  };
+  if (!backups.notes && !backups.chunks && !backups.manifest) return { warnings, changed };
+
+  const backupPaths = [files.notesBackup, files.chunksBackup, files.manifestBackup];
+  const [notesNow, chunksNow, manifestNow] = [
+    await readOptionalText(adapter, files.notes),
+    await readOptionalText(adapter, files.chunks),
+    await readOptionalText(adapter, files.manifest),
+  ];
+  if (isCompleteTextTriple(notesNow, chunksNow, manifestNow)) {
+    // The publication committed (or a newer one exists): backups are stale residue.
+    for (const path of backupPaths) await remove(path);
+    return { warnings, changed };
+  }
+
+  if (backups.manifest && manifestNow !== undefined) {
+    warnings.push("text-backup-superseded");
+    return { warnings, changed };
+  }
+
+  const pick = async (current: string | undefined, backupPath: string, hasBackup: boolean) =>
+    hasBackup ? readOptionalText(adapter, backupPath) : current;
+  const candidate = {
+    notes: await pick(notesNow, files.notesBackup, backups.notes),
+    chunks: await pick(chunksNow, files.chunksBackup, backups.chunks),
+    manifest: await pick(manifestNow, files.manifestBackup, backups.manifest),
+  };
+  if (!isCompleteTextTriple(candidate.notes, candidate.chunks, candidate.manifest)) {
+    warnings.push("text-backup-invalid");
+    return { warnings, changed };
+  }
+
+  const restores: Array<{ canonical: string; temporary: string; backup: string; content: string | undefined; has: boolean }> = [
+    { canonical: files.notes, temporary: files.notesTemporary, backup: files.notesBackup, content: candidate.notes, has: backups.notes },
+    { canonical: files.chunks, temporary: files.chunksTemporary, backup: files.chunksBackup, content: candidate.chunks, has: backups.chunks },
+    { canonical: files.manifest, temporary: files.manifestTemporary, backup: files.manifestBackup, content: candidate.manifest, has: backups.manifest },
+  ];
+  for (const item of restores) {
+    if (!item.has || item.content === undefined) continue;
+    // Restore through staging so a revoked fence between two files leaves complete backups.
+    await adapter.write(item.temporary, item.content);
+    changed = true;
+    await remove(item.canonical);
+    await adapter.rename(item.temporary, item.canonical);
+  }
+  const restored = [
+    await readOptionalText(adapter, files.notes),
+    await readOptionalText(adapter, files.chunks),
+    await readOptionalText(adapter, files.manifest),
+  ] as const;
+  if (!isCompleteTextTriple(...restored)) {
+    warnings.push("text-backup-restore-invalid");
+    return { warnings, changed };
+  }
+  for (const path of backupPaths) await remove(path);
+  return { warnings, changed };
+}
+
+/**
+ * Publishes notes.json, chunks.jsonl and the shared manifest.json.
+ *
+ * The caller must hold the writer lease (rebuild, automatic batch or canonical
+ * maintenance) and pass the fence acquired for the current authority; every durable
+ * mutation re-validates it, and nothing is written when it is rejected.
+ *
+ * Protocol (deterministic names, see TEXT_INDEX_PUBLICATION_FILES): recover any
+ * interrupted publication → read the embeddings section of the shared manifest →
+ * stage the three files → re-check that section is unchanged → per file
+ * backup + rename (manifest last, the logical commit point) → validate the
+ * published manifest → remove the backups. After a fence rejection nothing is rolled
+ * back: the backups stay in place for the recovery.
+ */
 export async function saveTextIndex(
   app: App,
   indexedNotes: IndexedNote[],
@@ -352,7 +544,8 @@ export async function saveTextIndex(
   excludedNotes?: number,
   exclusionsInfo?: TextIndexManifest["exclusions"],
   provenance?: ArtifactProvenance,
-  policyIdentity?: TextIndexPolicyStamping | ExclusionPolicyV1
+  policyIdentity?: TextIndexPolicyStamping | ExclusionPolicyV1,
+  fence?: IndexWriteFence
 ): Promise<boolean> {
   try {
     let stampedRevision: number | undefined;
@@ -403,6 +596,8 @@ export async function saveTextIndex(
       stampedHash = rawHash;
     }
 
+    await assertIndexWriteFence(fence);
+
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
@@ -410,33 +605,32 @@ export async function saveTextIndex(
     const producerStagingFolderPath = ".lina/producer/staging";
     const producerBackupsFolderPath = ".lina/producer/backups";
 
-    await ensureFolder(app, linaFolderPath);
-    await ensureFolder(app, indexFolderPath);
-    await ensureFolder(app, producerCheckpointsFolderPath);
-    await ensureFolder(app, producerStagingFolderPath);
-    await ensureFolder(app, producerBackupsFolderPath);
+    const fencedApp = withFencedAdapter(app, fence);
+    await ensureFolder(fencedApp, linaFolderPath);
+    await ensureFolder(fencedApp, indexFolderPath);
+    await ensureFolder(fencedApp, producerCheckpointsFolderPath);
+    await ensureFolder(fencedApp, producerStagingFolderPath);
+    await ensureFolder(fencedApp, producerBackupsFolderPath);
 
-    const manifestPath = normalizePath(`${indexFolderPath}/manifest.json`);
-    let preservedEmbeddingManifest: Record<string, unknown> = {};
-    try {
-      const existingManifestStat = await app.vault.adapter.stat(manifestPath);
-      if (existingManifestStat?.type === "file") {
-        const parsedExisting = JSON.parse(await app.vault.adapter.read(manifestPath)) as unknown;
-        if (parsedExisting && typeof parsedExisting === "object" && !Array.isArray(parsedExisting)) {
-          const candidate = parsedExisting as Record<string, unknown>;
-          if (candidate.embeddingsEnabled === true && candidate.embeddings && typeof candidate.embeddings === "object") {
-            preservedEmbeddingManifest = {
-              embeddingsEnabled: true,
-              embeddings: candidate.embeddings,
-              ...(candidate.embeddingInput && typeof candidate.embeddingInput === "object" ? { embeddingInput: candidate.embeddingInput } : {}),
-            };
-          }
-        }
-      }
-    } catch {
-      // A missing/invalid text manifest is not a reason to fabricate embedding
-      // identity. A valid existing embedding section is preserved above.
-    }
+    const adapter = fencedApp.vault.adapter;
+    const paths = TEXT_INDEX_PUBLICATION_FILES;
+
+    // Resolve an interrupted previous publication before reading the shared manifest.
+    await recoverTextIndexPublication(fencedApp);
+
+    // The embeddings identity is read inside the lease, from the committed manifest or,
+    // when it is absent, from the deterministic backup of the interrupted publication.
+    const committedSection = await readEmbeddingSectionFrom(adapter, paths.manifest);
+    const preservedEmbeddingManifest: EmbeddingManifestSection =
+      committedSection
+      ?? await readEmbeddingSectionFrom(adapter, paths.manifestBackup)
+      // An interrupted embeddings publication (manifest absent between its two renames)
+      // leaves the identity here; the embeddings recovery completes it afterwards.
+      ?? await readEmbeddingSectionFrom(adapter, EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP)
+      ?? {};
+    // Whatever the recovery could not resolve has already contributed its identity above.
+    for (const path of [paths.notesBackup, paths.chunksBackup, paths.manifestBackup]) await adapterRemoveIfExists(adapter, path);
+    const preservedSignature = JSON.stringify(preservedEmbeddingManifest);
 
     const notesContent = JSON.stringify(indexedNotes, null, 2);
     const chunksContent = chunks.map((item) => JSON.stringify(item)).join("\n");
@@ -464,47 +658,78 @@ export async function saveTextIndex(
         : {}),
     };
 
-    const files = [
-      { path: normalizePath(`${indexFolderPath}/notes.json`), content: notesContent },
-      { path: normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
-      // Publish manifest last so a reader never observes a new identity with old
-      // notes/chunks. The old embedding section remains intact throughout.
-      { path: manifestPath, content: JSON.stringify(manifest, null, 2) },
+    const items = [
+      { path: paths.notes, temporaryPath: paths.notesTemporary, backupPath: paths.notesBackup, content: notesContent, backedUp: false, published: false },
+      { path: paths.chunks, temporaryPath: paths.chunksTemporary, backupPath: paths.chunksBackup, content: chunksContent, backedUp: false, published: false },
+      // The manifest is published last: it is the logical commit point of the publication.
+      { path: paths.manifest, temporaryPath: paths.manifestTemporary, backupPath: paths.manifestBackup, content: JSON.stringify(manifest, null, 2), backedUp: false, published: false },
     ];
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const adapter = app.vault.adapter;
-    const prepared = files.map((file) => ({
-      ...file,
-      temporaryPath: normalizePath(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
-      backupPath: normalizePath(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
-      hadOriginal: false,
-      published: false,
-    }));
 
     try {
-      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
-      for (const file of prepared) {
-        file.hadOriginal = (await adapter.stat(file.path))?.type === "file";
-        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
+      for (const item of items) await adapter.write(item.temporaryPath, item.content);
+      const staged: unknown = JSON.parse(await adapter.read(paths.manifestTemporary));
+      if (!isPlainRecord(staged) || staged.generationId !== generationId) {
+        throw new Error("Text index manifest candidate validation failed.");
       }
-      for (const file of prepared) {
-        await adapter.rename(file.temporaryPath, file.path);
-        file.published = true;
+      // Never last-write-wins over a shared manifest that changed after it was read.
+      const current = await readEmbeddingSectionFrom(adapter, paths.manifest);
+      // Read from the committed manifest: it must be unchanged. Read from a backup (manifest
+      // absent): the manifest must still be absent, otherwise someone published meanwhile.
+      const unchanged = committedSection !== undefined
+        ? JSON.stringify(current ?? {}) === preservedSignature
+        : current === undefined;
+      if (!unchanged) {
+        throw new Error("Shared manifest embeddings section changed during the text index publication.");
       }
-      for (const file of prepared) {
-        try {
-          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
-        } catch (cleanupError) {
-          console.warn(`Lina: não foi possível remover backup temporário do índice ${file.backupPath}:`, cleanupError);
+
+      for (const item of items) {
+        await assertIndexWriteFence(fence);
+        if (await adapterFileExists(adapter, item.path)) {
+          await adapter.rename(item.path, item.backupPath);
+          item.backedUp = true;
         }
+        await assertIndexWriteFence(fence);
+        await adapter.rename(item.temporaryPath, item.path);
+        item.published = true;
+      }
+
+      const publishedManifest: unknown = JSON.parse(await adapter.read(paths.manifest));
+      if (
+        !isPlainRecord(publishedManifest)
+        || publishedManifest.generationId !== generationId
+        || JSON.stringify(extractEmbeddingSection(publishedManifest)) !== preservedSignature
+      ) {
+        throw new Error("Published text index manifest validation failed.");
       }
     } catch (error) {
-      for (const file of prepared) {
-        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
-        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
-        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
+      if (error instanceof OwnershipFenceRejectedError) throw error;
+      // Roll back only what this publication moved; a failed backup move never deletes the original.
+      for (const item of [...items].reverse()) {
+        try {
+          if (item.backedUp) {
+            await adapterRemoveIfExists(adapter, item.path);
+            if (await adapter.exists(item.backupPath)) await adapter.rename(item.backupPath, item.path);
+          } else if (item.published) {
+            await adapterRemoveIfExists(adapter, item.path);
+          }
+        } catch (rollbackError) {
+          console.warn(`Lina: text index rollback incomplete for ${item.path}; the backup remains for recovery.`, rollbackError);
+        }
+      }
+      for (const item of items) {
+        try { await adapterRemoveIfExists(adapter, item.temporaryPath); } catch { /* recovery removes known temporaries */ }
       }
       throw error;
+    }
+
+    // Cleanup only after the commit and validation; a rejected fence leaves residue
+    // that the next recovery recognises and removes.
+    for (const item of items) {
+      try {
+        await adapterRemoveIfExists(adapter, item.backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: não foi possível remover backup temporário do índice ${item.backupPath}:`, cleanupError);
+      }
     }
 
     return true;

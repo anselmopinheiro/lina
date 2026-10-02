@@ -186,7 +186,7 @@ describe("LINA-15H-C — coordinated canonical purge", () => {
       let attempts: string[] = [];
       adapter.setOptions({
         beforeOperation: async (operation, path) => {
-          if (operation !== "write" || !path.includes("manifest.json.tmp-") || attempts.length) return;
+          if (operation !== "write" || !path.includes("text-manifest.publish.tmp") || attempts.length) return;
           attempts = [
             coordinator.startEmbeddingGeneration().status,
             coordinator.startAutomaticBatch().status,
