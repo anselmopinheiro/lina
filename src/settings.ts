@@ -28,6 +28,7 @@ import type {
 import type { CredentialRuntimeSettingsSnapshot } from "./settings/credentialRuntimeBridge";
 import type { PureBinaryResult } from "./settings/pureSettingsAsyncActions";
 import { createSettingsIntroductionRenderer } from "./settings/declarativeSettingRenderers";
+import { resolveEffectiveAnalysisConfig, resolveEffectiveEmbeddingsConfig } from "./settings/effectiveAiConfig";
 import {
   isLegacyPureLocalProviderId,
   resolvePureLocalProviderId,
@@ -710,7 +711,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   aiProvider: "ollama",
   aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   aiApiKey: "",
-  aiAnalysisModel: "gemma4:12b",
+  aiAnalysisModel: getAnalysisProviderDefaults("ollama").model,
   aiRequestTimeoutSeconds: 60,
   aiOutputLanguage: "pt-PT",
   aiProfiles: [
@@ -741,7 +742,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   embeddingProvider: "ollama",
   embeddingBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   embeddingApiKey: "",
-  embeddingModel: "nomic-embed-text",
+  embeddingModel: getEmbeddingProviderDefaults("ollama").model,
   embeddingBatchSize: 10,
   embeddingRequestTimeoutSeconds: 60,
   generateEmbeddingsOnStartup: false,
@@ -782,6 +783,30 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   deviceSettingsById: {},
 };
 
+/**
+ * Values that EXISTING installations have always used as effective defaults (they were the
+ * `DEFAULT_SETTINGS` before LINA-15G and are persisted in every `data.json` saved since).
+ * They apply only when persisted settings exist but lack the key, so an existing installation never
+ * changes its effective model silently. New installations use the documented provider defaults.
+ */
+export const LEGACY_COMPATIBILITY_DEFAULTS: Readonly<Pick<LinaSettings, "embeddingModel" | "aiAnalysisModel">> = Object.freeze({
+  embeddingModel: "nomic-embed-text",
+  aiAnalysisModel: "gemma4:12b",
+});
+
+/**
+ * Builds the in-memory settings from the persisted ones (LINA-15G, Option B).
+ * - No persisted settings (new installation): documented defaults.
+ * - Persisted settings (existing installation): persisted values win; keys they lack keep the
+ *   behaviour the installation always had. Pure; does not write to disk.
+ */
+export function resolveLoadedSettings(rawSettings: Record<string, unknown> | undefined): LinaSettings {
+  if (!rawSettings) {
+    return Object.assign({}, DEFAULT_SETTINGS);
+  }
+  return Object.assign({}, DEFAULT_SETTINGS, LEGACY_COMPATIBILITY_DEFAULTS, rawSettings);
+}
+
 export class LinaSettingTab extends PluginSettingTab {
   plugin: LinaPlugin;
   private composition: DeclarativeSettingsCandidateComposition | undefined;
@@ -808,8 +833,10 @@ export class LinaSettingTab extends PluginSettingTab {
         return deviceName ? `${roleLabel} · ${deviceName}` : roleLabel;
       }
       case "ai-analysis": {
-        const provider = getLocalAnalysisProvider() || "ollama";
-        const model = getLocalAnalysisModel() || "gemma4:e2b";
+        const { provider, model } = resolveEffectiveAnalysisConfig(
+          { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
+          this.plugin.settings,
+        );
         return `${provider} · ${model}`;
       }
       case "search": {
@@ -824,8 +851,10 @@ export class LinaSettingTab extends PluginSettingTab {
           }
           return `📱 ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
         }
-        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
-        const provider = getLocalEmbeddingsProvider() || "ollama";
+        const { provider, model } = resolveEffectiveEmbeddingsConfig(
+          { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
+          this.plugin.settings,
+        );
         return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
       }
       case "producer": {
@@ -1009,11 +1038,21 @@ export class LinaSettingTab extends PluginSettingTab {
           credentialAvailable: credentialRuntime.getAvailability(ref, provider as never).available,
         };
       }
-      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
+      // LINA-15G: test the configuration the runtime really uses (same resolver as the UI and the runtime).
+      const effective = analysis
+        ? resolveEffectiveAnalysisConfig(
+          { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
+          this.plugin.settings,
+        )
+        : resolveEffectiveEmbeddingsConfig(
+          { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
+          this.plugin.settings,
+        );
+      const provider = effective.provider;
       return {
         provider,
-        model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
-        baseUrl: analysis ? getLocalAnalysisBaseUrl() : getLocalEmbeddingsBaseUrl(),
+        model: effective.model,
+        baseUrl: effective.baseUrl,
         timeout: analysis ? getLocalAnalysisTimeout() : getLocalEmbeddingsTimeout(),
         credentialAvailable: credentialRuntime.getAvailability(ref, provider as never).available,
       };

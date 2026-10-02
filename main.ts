@@ -16,7 +16,9 @@ import {
   getLocalEmbeddingStorageReadPreference,
   getLegacyFingerprintDeviceId,
   migrateSettings,
+  resolveLoadedSettings,
 } from "./src/settings";
+import { resolveEffectiveEmbeddingsConfig } from "./src/settings/effectiveAiConfig";
 import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
 import {
   type DeviceRuntimeState,
@@ -36,7 +38,6 @@ import {
 } from "./src/device/secretStorage";
 import {
   chooseProviderDefaultBaseUrl,
-  chooseProviderDefaultModel,
   getEmbeddingProviderDefaults,
   OLLAMA_DEFAULT_BASE_URL
 } from "./src/ai/providerDefaults";
@@ -2656,19 +2657,15 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const provider = normalizeSupportedProvider(
-      getLocalEmbeddingsProvider() || this.settings.embeddingProvider
+    // LINA-15G: single source shared with the Settings UI (device-local → legacy global → provider default).
+    const { provider, baseUrl, model } = resolveEffectiveEmbeddingsConfig(
+      {
+        provider: getLocalEmbeddingsProvider(),
+        model: getLocalEmbeddingsModel(),
+        baseUrl: getLocalEmbeddingsBaseUrl(),
+      },
+      this.settings,
     );
-    const defaults = getEmbeddingProviderDefaults(provider);
-    const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
-      || this.settings.embeddingBaseUrl
-      || this.settings.embeddingLocalBaseUrl
-      || (provider === "ollama" ? this.settings.aiBaseUrl : "")
-      || defaults.baseUrl;
-    const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider)
-      || OLLAMA_DEFAULT_BASE_URL;
-    const configuredModel = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model;
-    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text";
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
     const localBatchSize = getLocalEmbeddingsBatchSize();
     const configuredBatchSize = localBatchSize !== ""
@@ -3730,11 +3727,7 @@ export default class LinaPlugin extends Plugin {
      });
 
      if (migration.unsupportedFutureVersion) {
-       this.settings = Object.assign(
-         {},
-         DEFAULT_SETTINGS,
-         rawSettings ?? {}
-       );
+       this.settings = resolveLoadedSettings(rawSettings);
 
        setDeviceSettingsContext(this.settings, () => {
          void this.saveSettings();
@@ -3760,11 +3753,7 @@ export default class LinaPlugin extends Plugin {
        return;
      }
 
-     this.settings = Object.assign(
-       {},
-       DEFAULT_SETTINGS,
-       rawSettings ?? {}
-     );
+     this.settings = resolveLoadedSettings(rawSettings);
 
      if (rawSettings) {
        const userFieldsToPreserve: Array<keyof LinaSettings> = [

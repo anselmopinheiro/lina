@@ -70,11 +70,10 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 | **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | **CONCLUÍDA** (commit `25859cf`) | `docs/audits/architecture/LINA-15D-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
 | **LINA-15E** | Alinhamento da Sidebar com Decisão Canónica & Limpeza | **CONCLUÍDA** | `docs/audits/architecture/LINA-15E-IMPLEMENT-SIDEBAR-CANONICAL-DECISION-001.md` |
 | **LINA-15F** | Configuração / Runtime Configuration Consistency (localidade por endpoint; geração sempre incremental) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15F-IMPLEMENT-CONFIG-RUNTIME-CONSISTENCY-001.md` (Findings F-11, F-12) |
-| **LINA-15G** | Persistência, Recuperação e Validação | **ABERTA / PRÓXIMA FASE** | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 |
-| **LINA-15G-bis** | Defaults e Configuração Efetiva (CR-03/05/06/07/09 da 15F; F-15, F-22) | ABERTA (requer decisão do responsável) | `docs/audits/architecture/LINA-15F-AUDIT-CONFIG-RUNTIME-CONSISTENCY-001.md` §12 |
-| **LINA-15H** | Arranque Leve e Otimização de Performance | ABERTA | Finding F-13 na auditoria global pós-LINA-14 |
-| **LINA-15I** | Cobertura de Testes e Reconciliação Documental | ABERTA | Findings F-24, D1–D12 na auditoria global pós-LINA-14 |
-
+| **LINA-15G** | Settings Defaults & Compatibility — Opção B (UI == runtime; instalações existentes preservadas; defaults documentados para novas) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15G-IMPLEMENT-SETTINGS-DEFAULTS-COMPATIBILITY-001.md` (CR-03 da 15F) |
+| **LINA-15H** | Persistência, Recuperação e Validação | **ABERTA / PRÓXIMA FASE** | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 (renumerada; antes 15G) |
+| **LINA-15I** | Arranque Leve e Otimização de Performance | ABERTA | Finding F-13 na auditoria global pós-LINA-14 |
+| **LINA-15J** | Cobertura de Testes e Reconciliação Documental; limpeza de dívida de configuração (CR-05/06/07/09, F-15, F-22) | ABERTA | Findings F-24, D1–D12 e `docs/audits/architecture/LINA-15F-AUDIT-CONFIG-RUNTIME-CONSISTENCY-001.md` §12 |
 ---
 
 ## 4. Arquivo de Documentação Histórica e Obsoleta (`docs/arquivo/`)
@@ -96,7 +95,7 @@ Toda a documentação histórica, análises pré-transição, rascunhos supersed
 ## 5. Estrutura do Diretório `docs/audits/`
 
 O diretório `docs/audits/` contém os relatórios formais e registos de implementação de todas as iniciativas de engenharia executadas no repositório:
-- `docs/audits/architecture/` — Auditorias arquiteturais (LINA-00 a LINA-15F, Git e Auditoria Global Pós-LINA-14).
+- `docs/audits/architecture/` — Auditorias arquiteturais (LINA-00 a LINA-15G, Git e Auditoria Global Pós-LINA-14).
 - `docs/audits/release/` — Auditorias de conformidade e registos de publicação de release.
 - `docs/audits/sync/` — Auditorias de fronteira de ficheiros de sincronização.
 - `docs/audits/ux/` — Auditorias de interfaces de utilizador e definições.

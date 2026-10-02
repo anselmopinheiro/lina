@@ -48,6 +48,11 @@ export interface DetachedSettingsPorts {
   requestUpdate(): void;
   getDeviceRole?(): string | undefined;
   getEffectiveEmbeddingContract?(): VectorContractV1 | null;
+  /**
+   * Provider / model / Base URL the runtime effectively uses for the domain (LINA-15G). When
+   * provided, the UI shows these instead of re-deriving defaults.
+   */
+  getEffectiveAiConfig?(domain: PureLocalProviderDomain): { provider: string; model: string; baseUrl: string };
 }
 
 export const clampDetachedWeight = normalizePureHybridSearchWeight;
@@ -532,7 +537,8 @@ export function createDetachedIndexYamlSettingDefinitions(
 const DETACHED_CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 
 function detachedProviderValue(ports: DetachedSettingsPorts, key: "analysisProvider" | "embeddingsProvider"): string {
-  return ports.getLocal(key) || "ollama";
+  const domain: PureLocalProviderDomain = key === "analysisProvider" ? "analysis" : "embedding";
+  return ports.getEffectiveAiConfig?.(domain).provider ?? (ports.getLocal(key) || "ollama");
 }
 
 function detachedModelValue(
@@ -541,6 +547,8 @@ function detachedModelValue(
   provider: string,
   domain: PureLocalProviderDomain,
 ): string {
+  const effective = ports.getEffectiveAiConfig?.(domain);
+  if (effective && effective.provider === provider) return effective.model;
   return chooseProviderDefaultModel(ports.getLocal(key), provider, domain === "analysis" ? "analysis" : "embedding");
 }
 
@@ -549,6 +557,9 @@ function detachedBaseUrlValue(
   key: "analysisBaseUrl" | "embeddingsBaseUrl",
   provider: string,
 ): string {
+  const domain: PureLocalProviderDomain = key === "analysisBaseUrl" ? "analysis" : "embedding";
+  const effective = ports.getEffectiveAiConfig?.(domain);
+  if (effective && effective.provider === provider) return effective.baseUrl;
   return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
 }
 

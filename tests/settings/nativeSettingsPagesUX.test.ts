@@ -95,7 +95,7 @@ describe("LINA-04 intent-based native settings pages", () => {
   it("preserves settings schema and defaults", () => {
     expect(DEFAULT_SETTINGS.embeddingsEnabled).toBe(false);
     expect(DEFAULT_SETTINGS.embeddingProvider).toBe("ollama");
-    expect(DEFAULT_SETTINGS.embeddingModel).toBe("nomic-embed-text");
+    expect(DEFAULT_SETTINGS.embeddingModel).toBe("nomic-embed-text-v2-moe");
     expect(DEFAULT_SETTINGS.settingsSchemaVersion).toBe(1);
   });
 });

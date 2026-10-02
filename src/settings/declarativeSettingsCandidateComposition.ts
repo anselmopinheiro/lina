@@ -1,5 +1,9 @@
 import type { SettingDefinition } from "obsidian";
-import { chooseProviderDefaultBaseUrl } from "../ai/providerDefaults";
+import {
+  resolveEffectiveAnalysisConfig,
+  resolveEffectiveEmbeddingsConfig,
+  type EffectiveAiConfig,
+} from "./effectiveAiConfig";
 import type { UiStrings } from "../i18n/strings";
 import type { DeviceRole } from "../device/deviceRole";
 import type { DeviceRoleResolution } from "../device/deviceRoleResolver";
@@ -169,13 +173,30 @@ function staticDefinition(id: string, name: string, description: string): Declar
   };
 }
 
-function baseUrlFor(
+/**
+ * Effective provider / model / Base URL for a domain (LINA-15G): the same resolver the runtime uses,
+ * fed with the current device-local values and the legacy global fallbacks of the live snapshot.
+ */
+function effectiveAiConfigFor(
   runtimeAdapters: SettingsRuntimeAdapters,
+  getSettings: () => object,
+  domain: "analysis" | "embedding",
+): EffectiveAiConfig {
+  const analysis = domain === "analysis";
+  const local = {
+    provider: runtimeAdapters.getLocalValue(analysis ? "analysisProvider" : "embeddingsProvider"),
+    model: runtimeAdapters.getLocalValue(analysis ? "analysisModel" : "embeddingsModel"),
+    baseUrl: runtimeAdapters.getLocalValue(analysis ? "analysisBaseUrl" : "embeddingsBaseUrl"),
+  };
+  const settings = getSettings();
+  return analysis ? resolveEffectiveAnalysisConfig(local, settings) : resolveEffectiveEmbeddingsConfig(local, settings);
+}
+
+function baseUrlFor(
+  effective: (domain: "analysis" | "embedding") => EffectiveAiConfig,
   key: "analysisBaseUrl" | "embeddingsBaseUrl",
 ): string {
-  const providerKey = key === "analysisBaseUrl" ? "analysisProvider" : "embeddingsProvider";
-  const provider = runtimeAdapters.getLocalValue(providerKey) || "ollama";
-  return chooseProviderDefaultBaseUrl(runtimeAdapters.getLocalValue(key) ?? "", provider);
+  return effective(key === "analysisBaseUrl" ? "analysis" : "embedding").baseUrl;
 }
 
 export function createDeclarativeSettingsCandidateComposition(
@@ -204,6 +225,9 @@ export function createDeclarativeSettingsCandidateComposition(
     strings: options.strings,
     ownerPrefix: "candidate-binary",
   });
+
+  const effectiveAiConfig = (domain: "analysis" | "embedding"): EffectiveAiConfig =>
+    effectiveAiConfigFor(runtimeAdapters, () => options.runtimeHost.getSnapshot().settings, domain);
 
   const invalidateConnectionForLocalSetting = (key: PureLocalSettingKey): void => {
     switch (key) {
@@ -282,12 +306,15 @@ export function createDeclarativeSettingsCandidateComposition(
     getEffectiveEmbeddingContract() {
       return options.getEffectiveEmbeddingContract?.() ?? null;
     },
+    getEffectiveAiConfig(domain) {
+      return effectiveAiConfig(domain);
+    },
   };
 
   const localDefinitions = createPureLocalSettingDefinitions({
     strings: options.strings,
-    analysisBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "analysisBaseUrl"),
-    embeddingsBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "embeddingsBaseUrl"),
+    analysisBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "analysisBaseUrl"),
+    embeddingsBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "embeddingsBaseUrl"),
   });
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
   const staticDefinitions: DeclarativeSettingsCandidateDefinition[] = [
@@ -542,7 +569,7 @@ export function createDeclarativeSettingsCandidateComposition(
   const refreshDynamicDefinitions = (): void => {
     for (const [key, definition] of baseUrlControlDefinitions) {
       if (!("control" in definition) || !definition.control || definition.control.type !== "text") continue;
-      definition.control.placeholder = baseUrlFor(runtimeAdapters, key);
+      definition.control.placeholder = baseUrlFor(effectiveAiConfig, key);
     }
   };
 

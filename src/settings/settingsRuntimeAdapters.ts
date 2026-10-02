@@ -26,6 +26,7 @@ import {
   type PureLocalSettingKey,
 } from "./pureLocalSettingsModel";
 import type { VectorContractV1 } from "../index/vectorContract";
+import { resolveEffectiveAnalysisConfig, resolveEffectiveEmbeddingsConfig } from "./effectiveAiConfig";
 
 export const SETTINGS_RUNTIME_GLOBAL_KEYS = [
   "embeddingsEnabled",
@@ -320,14 +321,18 @@ interface RuntimeEmbeddingIdentity {
 }
 
 function getEffectiveEmbeddingIdentity(snapshot: SettingsRuntimeSnapshot, deviceId: string): RuntimeEmbeddingIdentity {
+  // LINA-15G: same resolver as the runtime and the UI (device-local → legacy global → provider default).
   const device = snapshot.settings.deviceSettingsById?.[deviceId];
-  const storedProvider = typeof device?.embeddingsProvider === "string" ? device.embeddingsProvider : "";
-  const provider = resolvePureLocalProviderId(storedProvider) ?? "ollama";
   const storedModel = typeof device?.embeddingsModel === "string" ? device.embeddingsModel.trim() : "";
-  return {
-    provider,
-    model: storedModel || getEmbeddingProviderDefaults(provider).model,
-  };
+  const { provider, model } = resolveEffectiveEmbeddingsConfig(
+    {
+      provider: typeof device?.embeddingsProvider === "string" ? device.embeddingsProvider : undefined,
+      model: undefined,
+    },
+    snapshot.settings,
+  );
+  // A persisted model is compared as persisted; only an absent one falls back to the effective value.
+  return { provider, model: storedModel || model };
 }
 
 function effectsForEmbeddingIdentityChange(
@@ -356,17 +361,20 @@ function hasSameEffectiveProviderTuple(
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
   const rawProvider = device?.[providerKey];
   const storedProvider = typeof rawProvider === "string" ? resolvePureLocalProviderId(rawProvider) : undefined;
-  const defaults = domain === "analysis"
-    ? getAnalysisProviderDefaults(storedProvider ?? "ollama")
-    : getEmbeddingProviderDefaults(storedProvider ?? "ollama");
   const rawModel = device?.[modelKey];
-  const storedModel = typeof rawModel === "string" && rawModel.trim()
-    ? rawModel.trim()
-    : defaults.model;
   const rawBaseUrl = device?.[baseUrlKey];
-  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim()
-    ? rawBaseUrl.trim()
-    : defaults.baseUrl;
+  const effective = (domain === "analysis" ? resolveEffectiveAnalysisConfig : resolveEffectiveEmbeddingsConfig)(
+    {
+      provider: storedProvider,
+      model: typeof rawModel === "string" ? rawModel : undefined,
+      baseUrl: typeof rawBaseUrl === "string" ? rawBaseUrl : undefined,
+    },
+    snapshot.settings,
+  );
+  // Compare what is PERSISTED (so historical inconsistent tuples are still repaired); only an absent
+  // value falls back to what the runtime effectively uses.
+  const storedModel = typeof rawModel === "string" && rawModel.trim() ? rawModel.trim() : effective.model;
+  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim() ? rawBaseUrl.trim() : effective.baseUrl;
   return storedProvider === provider && storedModel === model && storedBaseUrl === baseUrl;
 }
 

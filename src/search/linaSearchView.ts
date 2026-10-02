@@ -17,9 +17,9 @@ import { readCompanionConsumptionState, type CompanionArtifactConsumptionState }
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { isProviderEndpointLocal } from "../ai/providerCapabilities";
+import { resolveEffectiveAnalysisConfig } from "../settings/effectiveAiConfig";
 import { searchTextIndex } from "./textSearch";
 import { generateProviderText } from "../ai/textProvider";
-import { getAnalysisProviderDefaults } from "../ai/providerDefaults";
 import {
   getLocalAnalysisProvider,
   getLocalAnalysisModel,
@@ -1748,10 +1748,15 @@ export class LinaSearchView extends ItemView {
   }
 
   private getActiveTextAiProfile(): { provider: string; model: string; baseUrl: string; isLocal: boolean } {
-    const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
-    const defaults = getAnalysisProviderDefaults(provider);
-    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || defaults.model;
-    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || defaults.baseUrl;
+    // LINA-15G: single source shared with the Settings UI (device-local → legacy global → provider default).
+    const { provider, model, baseUrl } = resolveEffectiveAnalysisConfig(
+      {
+        provider: getLocalAnalysisProvider(),
+        model: getLocalAnalysisModel(),
+        baseUrl: getLocalAnalysisBaseUrl(),
+      },
+      this.plugin.settings,
+    );
     // LINA-15F: "local" means the endpoint is on this machine, not merely that the provider is Ollama.
     const isLocal = isProviderEndpointLocal(provider, baseUrl);
     return { provider, model, baseUrl, isLocal };
