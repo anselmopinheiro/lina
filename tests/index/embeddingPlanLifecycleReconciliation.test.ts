@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { activeProducerRuntime } from "../helpers/producerRuntimeState";
 import {
   adaptCurrentStateToLifecycleSnapshot,
   toEmbeddingIdentitySummary,
@@ -69,7 +70,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
         updatePlan: plan,
       };
 
-      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1);
+      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1, activeProducerRuntime());
 
       // Invariant validation
       const inv = validateLifecycleInvariants(snapshot);
@@ -120,6 +121,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
       };
 
       const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: activeProducerRuntime(),
         canonicalExists: true,
         canonicalReadability: "readable",
         upstreamTextIndex: "ready",
@@ -164,7 +166,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
         updatePlan: plan,
       };
 
-      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1);
+      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1, activeProducerRuntime());
       expect(snapshot.primary).toBe("INCOMPATIBLE");
 
       const decision = deriveEmbeddingWritePathDecision(snapshot);
@@ -206,7 +208,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
         updatePlan: plan,
       };
 
-      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1);
+      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1, activeProducerRuntime());
       expect(snapshot.primary).toBe("UPDATE_AVAILABLE");
       expect(snapshot.read.semanticAvailable).toBe(true);
       expect(snapshot.write.work.mode).toBe("incremental");
@@ -252,7 +254,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
         updatePlan: plan,
       };
 
-      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1);
+      const snapshot = buildEmbeddingWorkLifecycleSnapshot(summary, 1, activeProducerRuntime());
       expect(snapshot.primary).toBe("UPDATE_AVAILABLE");
       expect(snapshot.write.cost).toBe("external");
 
@@ -283,6 +285,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
       };
 
       const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: activeProducerRuntime(),
         canonicalExists: false,
         canonicalReadability: "missing",
         upstreamTextIndex: "ready",
@@ -313,6 +316,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
       };
 
       const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: activeProducerRuntime(),
         canonicalExists: true,
         canonicalReadability: "unreadable",
         upstreamTextIndex: "ready",
@@ -355,6 +359,7 @@ describe("LINA-15B: Embedding Plan ↔ Lifecycle Reconciliation", () => {
       };
 
       const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: activeProducerRuntime(),
         deviceRuntimeState: {
           deviceId: "standby-device",
           effectiveRole: "producer",

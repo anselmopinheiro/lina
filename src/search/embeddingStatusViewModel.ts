@@ -2,7 +2,6 @@ import { EmbeddingOperationState } from "../index/embeddingOperationManager";
 import { EmbeddingWorkRuntimeState } from "../index/embeddingWorkStatusController";
 import { UiStrings } from "../i18n/strings";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 import { type EmbeddingWritePathDecision, deriveEmbeddingWritePathDecision } from "../index/embeddingLifecycleWritePath";
 
 export type EmbeddingDiagnosticTone = "neutral" | "success" | "warning" | "error" | "running";
@@ -48,7 +47,7 @@ export interface BuildEmbeddingStatusViewModelInput {
   indexReady: boolean;
   embeddingsReady: boolean;
   strings: UiStrings;
-  lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
+  lifecycleSnapshot: EmbeddingLifecycleSnapshot;
 }
 
 function formatNumber(value: number | undefined): string {
@@ -186,35 +185,8 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput & { lifecycleSna
 
 export function buildEmbeddingStatusViewModel(input: BuildEmbeddingStatusViewModelInput): EmbeddingStatusViewModel {
   const summary = input.workState.summary;
-  const updatePlan = summary?.updatePlan;
-  const hasSummary = Boolean(summary);
-  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    updatePlan,
-    operationState: input.operationState,
-    upstreamTextIndex: input.indexReady ? "ready" : "missing",
-    canonicalExists: hasSummary && (input.embeddingsReady || summary?.exists === true || summary?.updatePlan?.mode === "full-rebuild"),
-    validForSearchCount: summary?.validForSearchCount ?? summary?.validCount ?? (input.embeddingsReady ? 1 : 0),
-    publishedIdentity: summary ? {
-      provider: summary.provider ?? input.configuredProvider,
-      model: summary.model ?? input.configuredModel,
-      dimensions: summary.dimensions ?? updatePlan?.targetIdentity?.dimensions,
-      inputVersion: updatePlan?.targetIdentity?.inputVersion ?? 1,
-      prefixMode: (summary.manifestPrefixMode ?? summary.expectedPrefixMode ?? updatePlan?.targetIdentity?.prefixMode ?? "none") as "none" | "nomic-search-query-document",
-    } : (input.embeddingsReady ? {
-      provider: input.configuredProvider,
-      model: input.configuredModel,
-      dimensions: 1536,
-      inputVersion: 1,
-      prefixMode: "none" as const,
-    } : undefined),
-    targetIdentity: {
-      provider: input.configuredProvider,
-      model: input.configuredModel,
-      dimensions: updatePlan?.targetIdentity?.dimensions,
-      inputVersion: updatePlan?.targetIdentity?.inputVersion ?? 1,
-      prefixMode: updatePlan?.targetIdentity?.prefixMode ?? "none",
-    },
-  });
+  // Mandatory canonical snapshot; this view model never synthesises one (LINA-15D-B / S7: retained, not a production consumer).
+  const lifecycleSnapshot = input.lifecycleSnapshot;
 
   const adaptedInput: BuildEmbeddingStatusViewModelInput & { lifecycleSnapshot: EmbeddingLifecycleSnapshot } = {
     ...input,

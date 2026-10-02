@@ -19,7 +19,6 @@ import { CompanionArtifactConsumptionState } from "../companion/companionConsump
 import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS } from "../device/producerState";
 import { UiStrings, getStrings } from "../i18n/strings";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 import { deriveEmbeddingWritePathDecision } from "../index/embeddingLifecycleWritePath";
 
 export type SidebarSearchMode = "hibrida" | "textual" | "semantica";
@@ -131,7 +130,7 @@ export interface BuildSidebarStatusViewModelInput {
   readonly semanticPreparing?: boolean;
 
   // Unified Embedding Lifecycle Snapshot (Phase LINA-14C / Cutover LINA-14F.1)
-  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
+  readonly lifecycleSnapshot: EmbeddingLifecycleSnapshot;
 
   // Current UI state
   readonly currentSearchMode?: SidebarSearchMode;
@@ -258,78 +257,11 @@ export function buildSidebarStatusViewModel(
   } = input;
 
   const strings = input.strings ?? getStrings((input.language as "pt-PT" | "en") ?? "pt-PT");
-  const isCompanionRole = Boolean(input.deviceRole === "companion" || input.companionState != null);
-  const isStandbyRole = Boolean(input.isStandbyProducer || (input.deviceRole === "producer" && input.isAuthorizedProducer === false));
   const isAuthorizedProducerRole = Boolean(input.isAuthorizedProducer ?? (input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId)));
 
-  const hasValidVectors = Boolean(input.semanticAvailable || (input.runtimeEmbeddings?.semanticAvailable && input.semanticAvailable !== false));
-  const isMismatch = Boolean(input.runtimeEmbeddings?.contractState === "mismatch" || input.semanticReasonCode === "model-incompatible" || input.runtimeEmbeddings?.reasonCode === "model-incompatible");
 
-  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    companionState: input.companionState,
-    workAssessment: isMismatch ? {
-      kind: "pending",
-      mode: "full-rebuild",
-      updateRequired: true,
-      severity: "blocking",
-      cost: "local",
-      reasons: ["model-incompatible"],
-    } : (input.embeddingsWorkAvailable !== undefined ? {
-      kind: input.embeddingsWorkAvailable ? "pending" : "none",
-      mode: input.embeddingsWorkAvailable ? "incremental" : undefined,
-      updateRequired: input.embeddingsWorkAvailable,
-      severity: input.embeddingsWorkAvailable ? "action" : "none",
-      cost: "local",
-      reasons: input.embeddingsWorkAvailable ? ["work-available"] : ["up-to-date"],
-    } : undefined),
-    deviceRuntimeState: {
-      deviceId: input.deviceId ?? "device-1",
-      deviceName: "Device",
-      effectiveRole: isCompanionRole ? "companion" : "producer",
-      assignmentState: "assigned",
-      isConfigured: true,
-      ownershipExists: true,
-      isActiveProducer: isAuthorizedProducerRole,
-      isStandbyProducer: isStandbyRole,
-      isCompanion: isCompanionRole,
-      isUnassigned: false,
-      canPublish: isAuthorizedProducerRole,
-      canTransferOwnership: false,
-      transferEligibilityReason: "ready",
-      embeddings: {
-        configured: input.embeddingsEnabled ?? true,
-        textIndexAvailable: input.textIndexReady ?? true,
-        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists),
-        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists),
-        vectorFileState: "available",
-        provenance: { stale: false },
-        compatibility: { compatible: !isMismatch },
-        contractState: isMismatch ? "mismatch" : (input.runtimeEmbeddings?.contractState ?? "compatible"),
-        readiness: { loaded: true, runtimeReady: true },
-        runtimeState: "ready",
-        semanticAvailable: hasValidVectors && !isMismatch,
-        effectiveMode: (hasValidVectors && !isMismatch) ? "full" : "text-only",
-      },
-    },
-    upstreamTextIndex: input.textIndexReady ? "ready" : (input.textIndexUsability === "missing" ? "missing" : "invalid"),
-    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists || hasValidVectors || isMismatch),
-    validForSearchCount: (hasValidVectors && !isMismatch) ? 1 : 0,
-    factsChecking: input.embeddingsChecking,
-    publishedIdentity: (isMismatch || hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
-      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "default",
-      model: input.runtimeEmbeddings?.compatibility?.model ?? "default",
-      dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : undefined,
-    targetIdentity: isMismatch ? undefined : ((hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
-      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "default",
-      model: input.runtimeEmbeddings?.compatibility?.model ?? "default",
-      dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : undefined),
-  });
+  // The canonical snapshot is mandatory: the view model never synthesises one (LINA-15D-B / S5).
+  const lifecycleSnapshot = input.lifecycleSnapshot;
 
   const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && (input.embeddingsEnabled ?? true);
   const embeddingsUpdatedAt = lifecycleSnapshot.info.embeddingsPublishedAt ?? input.embeddingsUpdatedAt;
@@ -542,8 +474,8 @@ export function buildSidebarStatusViewModel(
   }
   // Priority 3: Vector contract mismatch
   else if (
-    ((Boolean(input.lifecycleSnapshot || input.embeddingsReady || input.runtimeEmbeddings?.exists || companionState?.artifactAvailability.embeddings === "available")) &&
-      (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible")) ||
+    lifecycleSnapshot.primary === "INCOMPATIBLE" ||
+    lifecycleSnapshot.read.compatibility.status === "incompatible" ||
     (companionState?.vectorContractCompatibility && companionState.vectorContractCompatibility.status === "mismatch")
   ) {
     degradedAlert = {

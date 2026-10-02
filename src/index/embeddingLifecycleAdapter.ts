@@ -87,8 +87,11 @@ export function adaptCurrentStateToLifecycleSnapshot(
 
   const deviceRuntime = inputs.deviceRuntimeState;
   const isCompanion = inputs.companionState != null || deviceRuntime?.effectiveRole === "companion";
-  const deviceRole = isCompanion ? "companion" : (deviceRuntime?.effectiveRole ?? "producer");
-  const isActiveProducer = isCompanion ? false : (deviceRuntime?.isActiveProducer ?? true);
+  // Absent facts stay absent: without a runtime the role is unassigned and never an Active Producer.
+  // `embeddingsEnabled` keeps the documented product default (enabled) because it only gates the
+  // read path and write authority already requires an assigned, active Producer.
+  const deviceRole = isCompanion ? "companion" : (deviceRuntime?.effectiveRole ?? "unassigned");
+  const isActiveProducer = isCompanion ? false : (deviceRuntime?.isActiveProducer ?? false);
   const embeddingsEnabled = deviceRuntime?.embeddings?.configured ?? true;
 
   const upstreamTextIndex = inputs.upstreamTextIndex ?? (
@@ -106,10 +109,11 @@ export function adaptCurrentStateToLifecycleSnapshot(
   const canonicalExists = inputs.canonicalExists ?? (
     inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (deviceRuntime?.embeddings?.exists ?? false)
   );
+  // An unknown count is not evidence of searchable vectors; JSONL is the canonical source by invariant.
   const validForSearchCount = inputs.validForSearchCount ?? (
-    inputs.companionState ? (inputs.companionState.vectorContractCompatibility?.status === "compatible" ? 1 : 0) : (canonicalExists ? 1 : 0)
+    inputs.companionState ? (inputs.companionState.vectorContractCompatibility?.status === "compatible" ? 1 : 0) : 0
   );
-  const activeSource = inputs.activeSource ?? "jsonl";
+  const activeSource = inputs.activeSource ?? (canonicalExists ? "jsonl" : "none");
 
   // Classify work using the update plan if provided, or direct assessment
   let workAssessment: EmbeddingWorkAssessment | undefined = inputs.workAssessment ?? undefined;

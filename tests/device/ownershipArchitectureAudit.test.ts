@@ -1,3 +1,4 @@
+import { buildDiagnosticsWithSnapshot, readDiagnosticsWithSnapshot } from "../helpers/diagnosticsFixtures";
 import { describe, expect, it, vi } from "vitest";
 import { DeviceState, saveDeviceState, loadDeviceState } from "../../src/device/deviceState";
 import {
@@ -191,7 +192,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
   describe("2. Comprehensive State Matrix", () => {
     describe("Device States Matrix", () => {
       it("evaluates Active Producer correctly", () => {
-        const diag = buildDeviceDiagnostics({
+        const diag = buildDiagnosticsWithSnapshot({
           deviceId: deviceA,
           deviceState: { schemaVersion: 2, deviceId: deviceA, role: "producer" },
           ownership: { schemaVersion: 1, activeProducerId: deviceA, epoch: 5, acquiredAt: timestamp, updatedAt: timestamp, reason: "manual-transfer" },
@@ -206,7 +207,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
       });
 
       it("evaluates Standby Producer correctly", () => {
-        const diag = buildDeviceDiagnostics({
+        const diag = buildDiagnosticsWithSnapshot({
           deviceId: deviceB,
           deviceState: { schemaVersion: 2, deviceId: deviceB, role: "producer" },
           ownership: { schemaVersion: 1, activeProducerId: deviceA, epoch: 5, acquiredAt: timestamp, updatedAt: timestamp, reason: "manual-transfer" },
@@ -221,7 +222,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
       });
 
       it("evaluates Companion correctly", () => {
-        const diag = buildDeviceDiagnostics({
+        const diag = buildDiagnosticsWithSnapshot({
           deviceId: deviceC,
           deviceState: { schemaVersion: 2, deviceId: deviceC, role: "companion" },
           ownership: { schemaVersion: 1, activeProducerId: deviceA, epoch: 5, acquiredAt: timestamp, updatedAt: timestamp, reason: "manual-transfer" },
@@ -236,7 +237,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
       });
 
       it("evaluates Unassigned role correctly", () => {
-        const diag = buildDeviceDiagnostics({
+        const diag = buildDiagnosticsWithSnapshot({
           deviceId: deviceB, // non-owner device with unassigned role
           deviceState: { schemaVersion: 2, deviceId: deviceB }, // role omitted
           ownership: { schemaVersion: 1, activeProducerId: deviceA, epoch: 5, acquiredAt: timestamp, updatedAt: timestamp, reason: "manual-transfer" },
@@ -471,7 +472,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
       );
 
       const writesBefore = adapter.writeLog.length;
-      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceA);
+      const diagnostics = await readDiagnosticsWithSnapshot(adapter as any, deviceA);
 
       expect(diagnostics.device.id).toBe(deviceA);
       expect(diagnostics.recovery.status).toBe("healthy");

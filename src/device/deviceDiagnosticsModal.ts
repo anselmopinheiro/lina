@@ -16,7 +16,6 @@ import { App, Modal, Notice } from "obsidian";
 import {
   DeviceDiagnostics,
   DeviceDiagnosticsArtifactItem,
-  readDeviceDiagnostics,
 } from "./deviceDiagnostics";
 import { ArtifactProvenanceStatus } from "./artifactProvenanceValidation";
 import { OwnershipRecoveryStatus } from "./ownershipRecoveryDiagnostics";
@@ -604,8 +603,6 @@ export class DeviceDiagnosticsModal extends Modal {
         async () => {
           if (this.onRefreshRequested) {
             this.diagnostics = await this.onRefreshRequested();
-          } else if (this.adapter) {
-            this.diagnostics = await readDeviceDiagnostics(this.adapter, this.diagnostics.device.id);
           }
           this.onOpen();
         },

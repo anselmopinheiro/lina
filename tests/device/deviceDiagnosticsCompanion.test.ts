@@ -1,3 +1,4 @@
+import { buildDiagnosticsWithSnapshot, readDiagnosticsWithSnapshot } from "../helpers/diagnosticsFixtures";
 import { describe, it, expect, vi } from "vitest";
 import {
   buildDeviceDiagnostics,
@@ -61,7 +62,7 @@ function createMockContainer(elements: { tag: string; text?: string; attr?: any 
 describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
   describe("Capability and Role Resolution", () => {
     it("reports companion role as companion in diagnostics", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: {
           deviceId: MOCK_COMPANION_ID,
@@ -85,7 +86,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
     });
 
     it("reports producer role correctly without disabling search consumption", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_PRODUCER_ID,
         deviceState: {
           deviceId: MOCK_PRODUCER_ID,
@@ -108,7 +109,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
     });
 
     it("reports unassigned device role with neutral defaults", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: "550e8400-e29b-41d4-a716-446655440099",
         deviceState: null,
         textManifestRaw: {
@@ -127,7 +128,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
 
   describe("Search Availability and Consumption Modes", () => {
     it("reports 'full' mode when text index and embeddings are both available", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         textManifestRaw: {
@@ -162,7 +163,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
     });
 
     it("reports 'text-only' mode when embeddings are disabled or missing", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         textManifestRaw: {
@@ -181,7 +182,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
     });
 
     it("reports 'unavailable' mode when index manifest is absent", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         textManifestRaw: null,
@@ -194,7 +195,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
     });
 
     it("preserves availability under stale or unknown provenance", () => {
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         ownership: {
@@ -249,7 +250,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
         }),
       });
 
-      const diag = await readDeviceDiagnostics(adapter, MOCK_COMPANION_ID);
+      const diag = await readDiagnosticsWithSnapshot(adapter, MOCK_COMPANION_ID);
 
       expect(diag.companionSearch.available).toBe(true);
       expect(diag.companionSearch.isCompanionRole).toBe(true);
@@ -264,7 +265,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
   describe("UI Modal and Internationalization (pt-PT and en)", () => {
     it("renders companion search section correctly in pt-PT", () => {
       const ptStrings = getStrings("pt-PT");
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         textManifestRaw: {
@@ -291,7 +292,7 @@ describe("DeviceDiagnostics Companion Search Section (Phase 0.4.2.1)", () => {
 
     it("renders companion search section correctly in en", () => {
       const enStrings = getStrings("en");
-      const diag = buildDeviceDiagnostics({
+      const diag = buildDiagnosticsWithSnapshot({
         deviceId: MOCK_COMPANION_ID,
         deviceState: { deviceId: MOCK_COMPANION_ID, role: "companion" },
         textManifestRaw: null, // unavailable

@@ -1,6 +1,7 @@
 import {
   EmbeddingStateSummary,
   type EmbeddingInputPrefixMode,
+  type PublishedEmbeddingIdentity,
 } from "./embeddingState";
 import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
 import { type EmbeddingLifecycleSnapshot } from "./embeddingLifecycleModel";
@@ -77,6 +78,10 @@ export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
   manifestPrefixMode?: string;
   isPrefixModeMismatch?: boolean;
   updatePlan?: EmbeddingUpdatePlanPreview;
+  /** Real identity read from the published manifest (not reconstructed from partial fields). */
+  publishedIdentity?: PublishedEmbeddingIdentity;
+  /** Factual usability of the text index (`readTextIndexStatus`); when absent it derives from the device runtime. */
+  textIndexStatus?: "ready" | "stale" | "missing" | "invalid";
   deviceRuntimeState?: DeviceRuntimeState;
   /**
    * Effective locality of the configured endpoint (LINA-15F): `true` when note content would leave
@@ -84,6 +89,10 @@ export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
    * capability is used.
    */
   targetEndpointIsExternal?: boolean;
+}
+
+function positiveOrUndefined(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function cloneState(state: EmbeddingWorkRuntimeState): EmbeddingWorkRuntimeState {
@@ -161,87 +170,60 @@ export function buildEmbeddingWorkLifecycleSnapshot(
   customDeviceRuntime?: DeviceRuntimeState,
   operationState?: EmbeddingOperationState | null
 ): EmbeddingLifecycleSnapshot {
-  const targetProvider = safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider;
-  const targetModel = safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model;
-  const targetDimensions = safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions;
+  const plannedTarget = safeSummary.updatePlan?.targetIdentity;
+  const targetProvider = plannedTarget?.provider ?? safeSummary.provider;
+  const targetModel = plannedTarget?.model ?? safeSummary.model;
 
-  const targetIdentity = targetProvider && targetModel ? {
+  // Unknown facts stay unknown: no default dimensions, input version or prefix mode (LINA-15D-B).
+  const targetIdentity: PublishedEmbeddingIdentity | undefined = targetProvider && targetModel ? {
     provider: targetProvider,
     model: targetModel,
-    dimensions: targetDimensions ?? 768,
-    inputVersion: safeSummary.updatePlan?.targetIdentity?.inputVersion ?? 1,
-    prefixMode: (safeSummary.updatePlan?.targetIdentity?.prefixMode ?? safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+    dimensions: positiveOrUndefined(plannedTarget?.dimensions ?? safeSummary.dimensions),
+    inputVersion: plannedTarget?.inputVersion,
+    prefixMode: (plannedTarget?.prefixMode ?? safeSummary.expectedPrefixMode) as EmbeddingInputPrefixMode | undefined,
   } : undefined;
 
-  const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
-    provider: safeSummary.provider,
-    model: safeSummary.model,
-    dimensions: safeSummary.dimensions ?? safeSummary.updatePlan?.targetIdentity?.dimensions ?? 768,
-    inputVersion: 1,
-    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? safeSummary.updatePlan?.targetIdentity?.prefixMode ?? "none") as EmbeddingInputPrefixMode,
-  } : undefined;
+  // The published identity is the real manifest identity carried by the work summary.
+  const publishedIdentity: PublishedEmbeddingIdentity | undefined = safeSummary.exists !== false && safeSummary.publishedIdentity
+    ? {
+      ...safeSummary.publishedIdentity,
+      dimensions: positiveOrUndefined(safeSummary.publishedIdentity.dimensions),
+    }
+    : undefined;
 
-  const defaultProducerRuntime: DeviceRuntimeState = {
-    deviceId: customDeviceRuntime?.deviceId ?? "local-device",
-    effectiveRole: "producer",
-    isActiveProducer: true,
-    assignmentState: "assigned",
-    isConfigured: true,
-    ownershipExists: true,
-    isStandbyProducer: false,
-    isCompanion: false,
-    isUnassigned: false,
-    canPublish: true,
-    canTransferOwnership: false,
-    transferEligibilityReason: "already-active-producer",
-    embeddings: {
-      configured: true,
-      textIndexAvailable: true,
-      embeddingsDeclared: true,
-      exists: safeSummary.exists ?? true,
-      vectorFileState: "available",
-      provenance: { stale: false },
-      compatibility: { compatible: true },
-      contractState: "compatible",
-      readiness: { loaded: true, runtimeReady: true },
-      runtimeState: "ready",
-      semanticAvailable: true,
-      effectiveMode: "full",
-    },
-  };
-
-  const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
+  // A missing runtime is not an Active Producer: the adapter receives no runtime and the work
+  // assessment is explicitly indeterminate (fail-closed).
+  const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime;
 
   const isExternalProvider = safeSummary.targetEndpointIsExternal
     ?? (targetIdentity?.provider ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false);
 
+  // Without the runtime or the update plan the work cannot be assessed: indeterminate, never "no work".
+  const missingFact = !deviceRuntimeState
+    ? "device-runtime-unavailable"
+    : !safeSummary.updatePlan ? "update-plan-unavailable" : undefined;
+
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
+    ...(missingFact ? {
+      workAssessment: {
+        kind: "indeterminate" as const,
+        updateRequired: false,
+        severity: "none" as const,
+        cost: "none" as const,
+        reasons: [missingFact],
+      },
+    } : {}),
     targetIdentity,
     isExternalProvider,
-    updatePlan: safeSummary.updatePlan ?? (targetIdentity ? {
-      mode: "incremental",
-      totalChunks: safeSummary.totalChunks ?? 0,
-      missingCount: safeSummary.missingCount ?? 0,
-      staleToReplaceCount: safeSummary.staleCount ?? 0,
-      obsoleteToDropCount: safeSummary.obsoleteCount ?? 0,
-      toGenerateCount: (safeSummary.missingCount ?? 0) + (safeSummary.staleCount ?? 0),
-      reusableCanonicalCount: safeSummary.validCount ?? 0,
-      recoverableCheckpointCount: safeSummary.recoverableCheckpointCount ?? 0,
-      requiresPublication:
-        (safeSummary.missingCount ?? 0) > 0 ||
-        (safeSummary.staleCount ?? 0) > 0 ||
-        (safeSummary.obsoleteCount ?? 0) > 0 ||
-        (safeSummary.duplicateRecordCount ?? 0) > 0 ||
-        (safeSummary.invalidRecordCount ?? 0) > 0,
-      reasons: [],
-      targetIdentity,
-    } : undefined),
+    updatePlan: missingFact ? undefined : safeSummary.updatePlan,
     publishedIdentity,
     canonicalExists: safeSummary.exists ?? true,
+    // Real count of vectors valid for search; the plan's reusable canonical records when the status has none.
+    validForSearchCount: safeSummary.validForSearchCount ?? safeSummary.updatePlan?.reusableCanonicalCount,
     canonicalReadability: safeSummary.canonicalReadability ?? "readable",
-    upstreamTextIndex: "ready",
+    upstreamTextIndex: safeSummary.textIndexStatus,
     operationState: operationState ?? undefined,
   });
 

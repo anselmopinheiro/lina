@@ -10,7 +10,6 @@
 
 import { type SemanticCompatibility } from "./hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export type SemanticOperationalReasonCode =
   | "vector-file-missing"
@@ -175,31 +174,86 @@ export function evaluateSemanticCapabilityFromSnapshot(
   };
 }
 
+/**
+ * Plain facts a device can establish without an `EmbeddingLifecycleSnapshot`
+ * (manifest declarations, semantic availability probe, companion contract).
+ * Nothing here is an identity: only whether an identity/evidence exists (LINA-15D-B / S3).
+ */
+export interface SemanticCapabilityFacts {
+  readonly textIndexAvailable: boolean;
+  readonly contractState: "compatible" | "mismatch" | "none";
+  /** A canonical embeddings publication is declared or evidenced. */
+  readonly canonicalExists: boolean;
+  /** There is evidence of at least one vector valid for search. */
+  readonly hasValidForSearchEvidence: boolean;
+  /** A published identity (provider + model) is known from a real source. */
+  readonly hasPublishedIdentity: boolean;
+  readonly isChecking?: boolean;
+  readonly providerReachable?: boolean;
+}
+
+/**
+ * Semantic capability from plain facts, for callers that do not hold a lifecycle snapshot
+ * (the device runtime state). Same output contract as `evaluateSemanticCapabilityFromSnapshot`.
+ */
+export function evaluateSemanticCapabilityFromFacts(facts: SemanticCapabilityFacts): SemanticCapabilityState {
+  const isChecking = facts.isChecking === true;
+  const providerReachable = facts.providerReachable ?? true;
+  const readable = facts.canonicalExists && facts.hasValidForSearchEvidence && facts.hasPublishedIdentity;
+  const semanticAvailable = (facts.contractState === "mismatch" ? false : readable) && providerReachable && !isChecking;
+  // Declared-but-unreadable vectors are not "missing": only no index/declaration, or a known identity without valid vectors.
+  const indexOnly = facts.textIndexAvailable
+    && (!facts.canonicalExists || (facts.hasPublishedIdentity && !facts.hasValidForSearchEvidence));
+  const vectorFileMissing = !isChecking && (!facts.textIndexAvailable || !facts.canonicalExists || indexOnly);
+
+  const runtimeState: SemanticCapabilityState["runtimeState"] = isChecking
+    ? "checking"
+    : readable && providerReachable ? "ready" : "unavailable";
+  const effectiveMode: SemanticCapabilityState["effectiveMode"] = !facts.textIndexAvailable
+    ? "unavailable"
+    : semanticAvailable ? "full" : "text-only";
+
+  let reasonCode: SemanticOperationalReasonCode | undefined;
+  let reason: string | undefined;
+  if (isChecking) {
+    reasonCode = "runtime-checking";
+    reason = "A verificar disponibilidade semântica...";
+  } else if (!providerReachable) {
+    reasonCode = "provider-unreachable";
+    reason = "Fornecedor de embeddings inacessível ou endpoint indisponível.";
+  } else if (!semanticAvailable) {
+    if (facts.contractState === "mismatch") {
+      reasonCode = "model-incompatible";
+      reason = "Contrato vetorial incompatível com o dispositivo.";
+    } else if (indexOnly) {
+      reasonCode = "vector-file-missing";
+      reason = "Embeddings não encontrados.";
+    } else if (!facts.hasPublishedIdentity) {
+      reasonCode = "no-contract";
+      reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    } else {
+      reasonCode = "vector-file-missing";
+      reason = "Embeddings não encontrados.";
+    }
+  }
+
+  return {
+    artifactState: {
+      textIndex: facts.textIndexAvailable ? "available" : "missing",
+      embeddingsDeclared: true,
+      vectorFile: vectorFileMissing ? "missing" : "available",
+    },
+    contractState: facts.contractState,
+    runtimeState,
+    semanticAvailable,
+    effectiveMode,
+    reasonCode,
+    reason,
+  };
+}
+
 export function evaluateSemanticCapability(
-  input: EvaluateSemanticCapabilityInput
+  input: EvaluateSemanticCapabilityInput & { readonly lifecycleSnapshot: EmbeddingLifecycleSnapshot }
 ): SemanticCapabilityState {
-  const isCompatible = input.vectorContractState === "compatible" || input.semanticCompatibility?.available === true;
-  const canonicalExists = (input.embeddingsDeclaredInManifest ?? false) && input.semanticCompatibility?.reasonCode !== "missing";
-
-  const provider = input.semanticCompatibility?.indexProvider ?? "default";
-  const model = input.semanticCompatibility?.indexModel ?? "default";
-  const dimensions = input.semanticCompatibility?.indexDimensions ?? 768;
-
-  const publishedIdentity = canonicalExists ? {
-    provider,
-    model,
-    dimensions,
-    inputVersion: 1,
-    prefixMode: "none" as const,
-  } : undefined;
-
-  const snapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    upstreamTextIndex: (input.textIndexAvailable ?? true) ? "ready" : "missing",
-    canonicalExists,
-    validForSearchCount: isCompatible ? 1 : 0,
-    publishedIdentity,
-    targetIdentity: publishedIdentity,
-  });
-
-  return evaluateSemanticCapabilityFromSnapshot(snapshot, input);
+  return evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, input);
 }

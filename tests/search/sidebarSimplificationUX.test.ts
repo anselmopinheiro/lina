@@ -1,3 +1,4 @@
+import { buildSidebarVmForScenario } from "../helpers/sidebarScenarioSnapshot";
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -166,7 +167,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   it("3. hybrid mode works via dropdown value selection", () => {
     const src = viewSource();
     expect(src).toContain("{ mode: \"hibrida\", label: this.L.searchHybrid }");
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({ currentSearchMode: "hibrida" }));
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({ currentSearchMode: "hibrida" }));
     expect(vm.searchAvailability.currentModeHeadline).toBe(ptStrings.sidebarSearchHybridFull);
   });
 
@@ -174,7 +175,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   it("4. semantic mode works via dropdown value selection", () => {
     const src = viewSource();
     expect(src).toContain("{ mode: \"semantica\", label: this.L.searchSemantic }");
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({ currentSearchMode: "semantica" }));
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({ currentSearchMode: "semantica" }));
     expect(vm.searchAvailability.currentModeHeadline).toBe(ptStrings.sidebarSearchSemanticAvailable);
   });
 
@@ -218,7 +219,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
 
   // 9. healthy state não mostra telemetria detalhada
   it("9. healthy state exhibits silent success without verbose counters or detailed telemetry in sidebar", () => {
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput());
+    const vm = buildSidebarVmForScenario(createBaseStatusInput());
     expect(vm.degradedAlert).toBeUndefined();
     const src = viewSource();
     // Raw note counters, chunk counters, and embedding published lists are relocated to diagnostics modal
@@ -230,7 +231,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   // 10. aging usa 24–48h para textIndex enquanto embeddings operacionais sem drift mantêm fresh
   it("10. aging threshold correctly evaluates between 24h and 48h", () => {
     const thirtyHoursAgo = new Date(baseNow - 30 * 60 * 60 * 1000).toISOString();
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({
       textIndexUpdatedAt: thirtyHoursAgo,
       embeddingsUpdatedAt: thirtyHoursAgo,
       currentTime: baseNow,
@@ -243,7 +244,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   // 11. stale começa após 48h para textIndex enquanto embeddings operacionais sem drift mantêm fresh
   it("11. stale threshold starts strictly after 48h", () => {
     const fiftyHoursAgo = new Date(baseNow - 50 * 60 * 60 * 1000).toISOString();
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({
       textIndexUpdatedAt: fiftyHoursAgo,
       embeddingsUpdatedAt: fiftyHoursAgo,
       currentTime: baseNow,
@@ -255,7 +256,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
 
   // 12. erro crítico continua visível
   it("12. critical errors remain prominently visible via prioritized alert banner", () => {
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({
       companionState: {
         canConsume: false,
         artifactAvailability: { textIndex: "available", embeddings: "missing" },
@@ -276,7 +277,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
 
   // 13. apenas um alerta prioritário
   it("13. only one prioritized degraded alert is returned to avoid visual clutter", () => {
-    const vm = buildSidebarStatusViewModel(createBaseStatusInput({
+    const vm = buildSidebarVmForScenario(createBaseStatusInput({
       semanticAvailable: false,
       currentSearchMode: "semantica",
       companionState: {

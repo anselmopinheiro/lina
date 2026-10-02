@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { seedReadableWorkSummary } from "../helpers/seedWorkSummary";
 import { Platform } from "obsidian";
 import LinaPlugin from "../../main.ts";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -113,6 +114,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("derives automatic work from a fresh update plan while the passive status remains uncalculated", async () => {
     const { plugin } = createPluginHarness();
+    vi.spyOn(plugin as unknown as { getTextIndexStatus(): Promise<unknown> }, "getTextIndexStatus").mockResolvedValue({ exists: true, usability: "ready", isUsable: true });
 
     expect(plugin.getEmbeddingWorkStatus()).toMatchObject({ status: "unknown" });
     const hasAutomaticEmbeddingWork = plugin["hasAutomaticEmbeddingWork"] as () => Promise<boolean>;
@@ -245,6 +247,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("routes a production dirty signal to one Ollama request and starts post-publication status refresh", async () => {
     const { plugin, timers } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const runGeneration = vi.fn(async () => ({ success: true, message: "generated" }));
     plugin["runGenerateLocalEmbeddings"] = runGeneration;
@@ -271,6 +274,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("refreshes derived status once after an automatic canonical publication", async () => {
     const { plugin, timers } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const refreshAfterPublication = vi.fn();
     plugin["refreshEmbeddingWorkStatusAfterCanonicalPublication"] = refreshAfterPublication;
@@ -297,6 +301,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("uses the same post-publication refresh hook for manual generation", async () => {
     const { plugin } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     const refreshAfterPublication = vi.fn();
     plugin["refreshEmbeddingWorkStatusAfterCanonicalPublication"] = refreshAfterPublication;
     plugin["runGenerateLocalEmbeddings"] = vi.fn(async () => ({
@@ -315,6 +320,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("does not refresh derived status after a failed automatic generation and applies backoff cooldown", async () => {
     const { plugin, timers } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const refreshAfterPublication = vi.fn();
     plugin["refreshEmbeddingWorkStatusAfterCanonicalPublication"] = refreshAfterPublication;
@@ -340,6 +346,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("suppresses immediate retry when a new text-index-published signal arrives during backoff cooldown", async () => {
     const { plugin, timers, advanceTime } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const runGeneration = vi.fn(async () => ({ success: false, message: "failed" }));
     plugin["runGenerateLocalEmbeddings"] = runGeneration;
@@ -383,6 +390,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("does not abort an automatic worker when another dirty signal arrives", async () => {
     const { plugin, timers } = createPluginHarness();
+    seedReadableWorkSummary(plugin);
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const runningGeneration = deferred<{ success: boolean; message: string }>();
     let activeSignal: AbortSignal | undefined;

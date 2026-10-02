@@ -1,3 +1,4 @@
+import { buildSidebarVmForScenario } from "../helpers/sidebarScenarioSnapshot";
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import {
@@ -35,7 +36,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Caso 1 — Sem drift
   it("Caso 1: displays 'Pesquisa híbrida disponível' and 'Embeddings: Atualizado' without button or preparing notice", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: false,
         semanticPreparing: false,
@@ -53,7 +54,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Caso 2 — Drift + manual
   it("Caso 2: displays 'Atualização necessária' and allows update button without false 'A preparar...' or 'Prontos'", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: true,
         semanticPreparing: false,
@@ -75,7 +76,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Caso 2 EN: English strings
   it("Caso 2 (EN): displays 'Hybrid search available' and 'Update required' with update button in English", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: true,
         semanticPreparing: false,
@@ -93,7 +94,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Caso 3 — Real generation running
   it("Caso 3: only displays 'A preparar pesquisa semântica...' when generation is actively running", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: true,
         semanticPreparing: true, // true because operation is running
@@ -107,7 +108,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Caso 7 — Elimination of competing channels and contradictory messages
   it("Caso 7: ensures the sidebar never presents 'Atualização necessária' and 'Prontos' simultaneously", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: true,
         semanticPreparing: false,
@@ -127,7 +128,7 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
 
   // Binary copy phases never trigger semanticPreparing
   it("ensures binary copy maintenance phases do not trigger semanticPreparing", () => {
-    const vm = buildSidebarStatusViewModel(
+    const vm = buildSidebarVmForScenario(
       createBaseInput({
         embeddingsWorkAvailable: true,
         semanticPreparing: false,

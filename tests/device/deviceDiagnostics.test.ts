@@ -1,3 +1,4 @@
+import { buildDiagnosticsWithSnapshot, readDiagnosticsWithSnapshot } from "../helpers/diagnosticsFixtures";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDeviceDiagnostics,
@@ -65,7 +66,7 @@ describe("deviceDiagnostics", () => {
         updatedAt: timestamp,
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdA,
         deviceState,
         timestamp,
@@ -99,7 +100,7 @@ describe("deviceDiagnostics", () => {
         reason: "initial",
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdA,
         deviceState,
         ownership,
@@ -134,7 +135,7 @@ describe("deviceDiagnostics", () => {
         reason: "initial",
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdB,
         deviceState,
         ownership,
@@ -156,7 +157,7 @@ describe("deviceDiagnostics", () => {
         updatedAt: timestamp,
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdB,
         deviceState,
         timestamp,
@@ -212,7 +213,7 @@ describe("deviceDiagnostics", () => {
         provenance: createArtifactProvenance(deviceIdA, 2, timestamp), // valid epoch 2
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdA,
         ownership,
         textManifestRaw,
@@ -245,7 +246,7 @@ describe("deviceDiagnostics", () => {
     });
 
     it("handles missing artifacts gracefully with 'unknown' status and exists: false", () => {
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdA,
         timestamp,
       });
@@ -291,7 +292,7 @@ describe("deviceDiagnostics", () => {
         provenance: createArtifactProvenance(deviceIdB, 1, timestamp),
       };
 
-      const diagnostics = buildDeviceDiagnostics({
+      const diagnostics = buildDiagnosticsWithSnapshot({
         deviceId: deviceIdA,
         deviceState,
         ownership,
@@ -324,7 +325,7 @@ describe("deviceDiagnostics", () => {
           reason: "initial",
         };
 
-        const diagnostics = buildDeviceDiagnostics({
+        const diagnostics = buildDiagnosticsWithSnapshot({
           deviceId: deviceIdA,
           deviceState,
           ownership,
@@ -358,7 +359,7 @@ describe("deviceDiagnostics", () => {
           reason: "manual-transfer",
         };
 
-        const diagnostics = buildDeviceDiagnostics({
+        const diagnostics = buildDiagnosticsWithSnapshot({
           deviceId: deviceIdB,
           deviceState,
           ownership,
@@ -392,7 +393,7 @@ describe("deviceDiagnostics", () => {
           reason: "initial",
         };
 
-        const diagnostics = buildDeviceDiagnostics({
+        const diagnostics = buildDiagnosticsWithSnapshot({
           deviceId: deviceIdB,
           deviceState,
           ownership,
@@ -415,7 +416,7 @@ describe("deviceDiagnostics", () => {
           reason: "initial",
         };
 
-        const diagnostics = buildDeviceDiagnostics({
+        const diagnostics = buildDiagnosticsWithSnapshot({
           deviceId: deviceIdB,
           ownership,
           timestamp,
@@ -436,7 +437,7 @@ describe("deviceDiagnostics", () => {
           updatedAt: timestamp,
         };
 
-        const diagnostics = buildDeviceDiagnostics({
+        const diagnostics = buildDiagnosticsWithSnapshot({
           deviceId: deviceIdA,
           deviceState,
           ownership: null,
@@ -507,7 +508,7 @@ describe("deviceDiagnostics", () => {
         })
       );
 
-      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+      const diagnostics = await readDiagnosticsWithSnapshot(adapter as any, deviceIdA);
 
       // Verify diagnostics content
       expect(diagnostics.device.name).toBe("MacBook Pro");
@@ -531,7 +532,7 @@ describe("deviceDiagnostics", () => {
       adapter.files.set(".lina/ownership.json", "corrupted ownership content");
       adapter.files.set(".lina/index/manifest.json", "corrupted text manifest");
 
-      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+      const diagnostics = await readDiagnosticsWithSnapshot(adapter as any, deviceIdA);
 
       expect(diagnostics.device.id).toBe(deviceIdA);
       expect(diagnostics.device.name).toBeUndefined();
@@ -597,7 +598,7 @@ describe("deviceDiagnostics", () => {
         })
       );
 
-      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+      const diagnostics = await readDiagnosticsWithSnapshot(adapter as any, deviceIdA);
 
       expect(diagnostics.recovery).toBeDefined();
       expect(diagnostics.recovery.status).toBe("healthy");
@@ -627,7 +628,7 @@ describe("deviceDiagnostics", () => {
       adapter.files.set(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata, checkpointMetadata);
       adapter.files.set(".lina/index/embeddings.checkpoint.meta.json", "legacy residue");
 
-      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+      const diagnostics = await readDiagnosticsWithSnapshot(adapter as any, deviceIdA);
 
       expect(diagnostics.artifacts.checkpoint).toMatchObject({
         exists: true,

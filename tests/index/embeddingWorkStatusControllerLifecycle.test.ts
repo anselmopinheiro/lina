@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { createControllerWithFacts } from "../helpers/completeWorkSummary";
 import {
-  EmbeddingWorkStatusController,
   EmbeddingWorkSummary,
 } from "../../src/index/embeddingWorkStatusController";
 import { DeviceRuntimeState } from "../../src/device/deviceRuntimeState";
@@ -51,7 +51,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -80,7 +80,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -112,7 +112,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -148,7 +148,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -182,7 +182,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       };
     });
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const errorState = await controller.refresh("manual-refresh");
 
     expect(errorState.status).toBe("error");
@@ -245,7 +245,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -302,7 +302,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary,
       getDeviceRuntimeState: () => standbyRuntime,
     });
@@ -334,7 +334,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -360,7 +360,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
       },
     }));
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
     const state = await controller.refresh("manual-refresh");
 
     expect(state.status).toBe("ready");
@@ -372,7 +372,7 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
 
   it("10. Scenario Parity: controller derived workAvailable matches classification semantics", async () => {
     const make = async (summary: EmbeddingWorkSummary | undefined) => {
-      const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => summary! });
+      const controller = createControllerWithFacts({ refreshSummary: async () => summary! });
       return (await controller.refresh()).workAvailable;
     };
 

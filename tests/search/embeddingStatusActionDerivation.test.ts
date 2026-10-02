@@ -1,3 +1,4 @@
+import { buildEmbeddingVmForScenario } from "../helpers/embeddingStatusScenario";
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { buildEmbeddingStatusViewModel } from "../../src/search/embeddingStatusViewModel";
@@ -53,7 +54,7 @@ const idle: EmbeddingOperationState = {
 const work: EmbeddingWorkRuntimeState = { status: "ready", revision: 1, calculatedRevision: 1, workAvailable: false };
 
 function actions(snapshot: EmbeddingLifecycleSnapshot, embeddingsReady = false) {
-  return buildEmbeddingStatusViewModel({
+  return buildEmbeddingVmForScenario({
     workState: work,
     operationState: idle,
     configuredProvider: "ollama",

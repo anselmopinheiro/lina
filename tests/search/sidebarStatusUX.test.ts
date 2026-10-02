@@ -1,3 +1,4 @@
+import { buildSidebarVmForScenario } from "../helpers/sidebarScenarioSnapshot";
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import {
@@ -37,13 +38,13 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 1. Active Producer shows correct role
   it("1. Active Producer shows correct role in pt-PT and en", () => {
-    const vmPt = buildSidebarStatusViewModel(createBaseInput({ isAuthorizedProducer: true, strings: stringsPt }));
+    const vmPt = buildSidebarVmForScenario(createBaseInput({ isAuthorizedProducer: true, strings: stringsPt }));
     expect(vmPt.role.roleKey).toBe("active-producer");
     expect(vmPt.role.title).toBe("Produtor ativo");
     expect(vmPt.role.description).toBe("Mantém o índice e os embeddings");
     expect(vmPt.role.tone).toBe("accent");
 
-    const vmEn = buildSidebarStatusViewModel(createBaseInput({ isAuthorizedProducer: true, strings: stringsEn }));
+    const vmEn = buildSidebarVmForScenario(createBaseInput({ isAuthorizedProducer: true, strings: stringsEn }));
     expect(vmEn.role.roleKey).toBe("active-producer");
     expect(vmEn.role.title).toBe("Active Producer");
     expect(vmEn.role.description).toBe("Maintains search index and embeddings");
@@ -51,7 +52,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 2. Standby Producer shows correct role
   it("2. Standby Producer shows correct role in pt-PT and en", () => {
-    const vmPt = buildSidebarStatusViewModel(createBaseInput({
+    const vmPt = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "producer",
       isAuthorizedProducer: false,
       isStandbyProducer: true,
@@ -62,7 +63,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(vmPt.role.description).toBe("Outro dispositivo é o Produtor ativo");
     expect(vmPt.role.tone).toBe("neutral");
 
-    const vmEn = buildSidebarStatusViewModel(createBaseInput({
+    const vmEn = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "producer",
       isAuthorizedProducer: false,
       isStandbyProducer: true,
@@ -75,7 +76,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 3. Companion shows correct role
   it("3. Companion shows correct role in pt-PT and en", () => {
-    const vmPt = buildSidebarStatusViewModel(createBaseInput({
+    const vmPt = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "companion",
       isAuthorizedProducer: false,
       isStandbyProducer: false,
@@ -86,7 +87,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(vmPt.role.description).toBe("Usa os artefactos produzidos noutro dispositivo");
     expect(vmPt.role.tone).toBe("muted");
 
-    const vmEn = buildSidebarStatusViewModel(createBaseInput({
+    const vmEn = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "companion",
       isAuthorizedProducer: false,
       isStandbyProducer: false,
@@ -99,7 +100,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 4. Active Producer sees maintenance actions
   it("4. Active Producer sees maintenance actions as executable", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({ isAuthorizedProducer: true }));
+    const vm = buildSidebarVmForScenario(createBaseInput({ isAuthorizedProducer: true }));
     expect(vm.maintenance.canExecuteMaintenance).toBe(true);
     expect(vm.maintenance.isCompanion).toBe(false);
     expect(vm.maintenance.isStandby).toBe(false);
@@ -108,7 +109,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 5. Companion does not see Producer actions as executable
   it("5. Companion does not see Producer actions as executable", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "companion",
       isAuthorizedProducer: false,
       isStandbyProducer: false,
@@ -121,7 +122,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 6. Standby does not see Producer actions as executable
   it("6. Standby does not see Producer actions as executable", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       deviceRole: "producer",
       isAuthorizedProducer: false,
       isStandbyProducer: true,
@@ -135,7 +136,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
   // 7. Freshness fresh
   it("7. Freshness fresh within aging window (< 24h)", () => {
     const twoHoursAgo = new Date(baseNow - 2 * 60 * 60 * 1000).toISOString();
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       textIndexUpdatedAt: twoHoursAgo,
       embeddingsUpdatedAt: twoHoursAgo,
       strings: stringsPt,
@@ -145,7 +146,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(vm.freshness.embeddings.status).toBe("fresh");
     expect(vm.freshness.embeddings.humanText).toBe("Atualizado (há 2 h)");
 
-    const vmEn = buildSidebarStatusViewModel(createBaseInput({
+    const vmEn = buildSidebarVmForScenario(createBaseInput({
       textIndexUpdatedAt: twoHoursAgo,
       embeddingsUpdatedAt: twoHoursAgo,
       strings: stringsEn,
@@ -156,7 +157,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
   // 8. Freshness aging
   it("8. Freshness aging between 24h and 48h", () => {
     const thirtyHoursAgo = new Date(baseNow - 30 * 60 * 60 * 1000).toISOString();
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       textIndexUpdatedAt: thirtyHoursAgo,
       embeddingsUpdatedAt: thirtyHoursAgo,
       strings: stringsPt,
@@ -168,7 +169,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
   // 9. Freshness stale
   it("9. Freshness stale beyond 48h", () => {
     const threeDaysAgo = new Date(baseNow - 72 * 60 * 60 * 1000).toISOString();
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       textIndexUpdatedAt: threeDaysAgo,
       embeddingsUpdatedAt: threeDaysAgo,
       strings: stringsPt,
@@ -179,7 +180,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 10. Freshness unknown
   it("10. Freshness unknown when timestamp is missing or unparseable", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       textIndexReady: false,
       textIndexUpdatedAt: null,
       embeddingsReady: false,
@@ -193,7 +194,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 11. Semantic available
   it("11. Semantic available produces positive operational headline", () => {
-    const vmSemantic = buildSidebarStatusViewModel(createBaseInput({
+    const vmSemantic = buildSidebarVmForScenario(createBaseInput({
       currentSearchMode: "semantica",
       semanticAvailable: true,
       strings: stringsPt,
@@ -202,7 +203,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(vmSemantic.searchAvailability.currentModeHeadline).toBe("Pesquisa semântica disponível");
     expect(vmSemantic.searchAvailability.tone).toBe("success");
 
-    const vmHybrid = buildSidebarStatusViewModel(createBaseInput({
+    const vmHybrid = buildSidebarVmForScenario(createBaseInput({
       currentSearchMode: "hibrida",
       semanticAvailable: true,
       strings: stringsPt,
@@ -214,7 +215,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 12. Semantic unavailable
   it("12. Semantic unavailable produces human-friendly notice and degraded alert in semantic mode", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       currentSearchMode: "semantica",
       semanticAvailable: false,
       semanticReason: "Model not found on Ollama server",
@@ -230,7 +231,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   // 13. Hybrid text-only fallback
   it("13. Hybrid mode falls back cleanly to text-only mode when semantic is unavailable", () => {
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       currentSearchMode: "hibrida",
       textIndexReady: true,
       semanticAvailable: false,
@@ -247,7 +248,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       generationIntegrity: "digest-mismatch",
       canConsume: false,
     };
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       companionState: mockCompanionState as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -267,7 +268,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
         artifactHash: "h2",
       },
     };
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       companionState: mockCompanionState as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -287,7 +288,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
         reason: "model-mismatch",
       },
     };
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       companionState: mockCompanionState as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -306,7 +307,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       vectorContractCompatibility: { status: "mismatch", reason: "model-mismatch" },
       producerFreshness: "stale",
     };
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       companionState: mockCompanionState as CompanionArtifactConsumptionState,
       currentSearchMode: "semantica",
       semanticAvailable: false,
@@ -323,7 +324,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       vectorContractCompatibility: { status: "mismatch", reason: "model-mismatch" },
       producerFreshness: "stale",
     };
-    const vmPolicy = buildSidebarStatusViewModel(createBaseInput({
+    const vmPolicy = buildSidebarVmForScenario(createBaseInput({
       companionState: mockPolicyWin as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -336,7 +337,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       vectorContractCompatibility: { status: "mismatch", reason: "model-mismatch" },
       producerFreshness: "stale",
     };
-    const vmVector = buildSidebarStatusViewModel(createBaseInput({
+    const vmVector = buildSidebarVmForScenario(createBaseInput({
       companionState: mockVectorWin as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -349,7 +350,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       vectorContractCompatibility: { status: "compatible" },
       producerFreshness: "stale",
     };
-    const vmStale = buildSidebarStatusViewModel(createBaseInput({
+    const vmStale = buildSidebarVmForScenario(createBaseInput({
       companionState: mockStaleWin as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
@@ -360,7 +361,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
   // 18. Absence of Producer State does not crash UI
   it("18. Absence of Producer State handles gracefully with no crash", () => {
     expect(() => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         companionState: null,
         textIndexUpdatedAt: null,
         embeddingsUpdatedAt: null,
@@ -389,7 +390,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
         hasBinaryAcceleration: false,
       },
     };
-    const vm = buildSidebarStatusViewModel(createBaseInput({
+    const vm = buildSidebarVmForScenario(createBaseInput({
       companionState: mockLegacyCompanionState as CompanionArtifactConsumptionState,
       textIndexReady: true,
       semanticAvailable: true,
@@ -469,7 +470,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
   describe("LINA-08: Canonical Priority & Semantic Status Presentation", () => {
     it("Cenário 1: prior epoch provenance with valid embeddings never produces 'Estado desconhecido'", () => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         currentSearchMode: "hibrida",
         semanticAvailable: true,
         embeddingsChecking: true, // sensor in transient/dirty state
@@ -511,7 +512,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     });
 
     it("Cenário 3: contract mismatch degrades to text-only mode with clear status", () => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         currentSearchMode: "hibrida",
         semanticAvailable: false,
         runtimeEmbeddings: {
@@ -539,7 +540,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     });
 
     it("Cenário 4: missing embeddings artifact displays missing and falls back to text-only", () => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         currentSearchMode: "hibrida",
         semanticAvailable: false,
         embeddingsReady: false,
@@ -568,7 +569,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     });
 
     it("Cenário 5: checking state displays explicit checking text, never 'Estado desconhecido'", () => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         currentSearchMode: "hibrida",
         semanticAvailable: false,
         embeddingsChecking: true,
@@ -598,7 +599,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
   describe("LINA-09: Embedding Freshness vs Update Plan Coherence", () => {
     it("1. 21 days without note changes (workAvailable === false) displays 'Atualizado (há 21 dias)' and never 'Desatualizado'", () => {
       const twentyOneDaysAgo = new Date(baseNow - 21 * 24 * 60 * 60 * 1000).toISOString();
-      const vmPt = buildSidebarStatusViewModel(createBaseInput({
+      const vmPt = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: twentyOneDaysAgo,
         embeddingsWorkAvailable: false,
         semanticAvailable: true,
@@ -610,7 +611,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       expect(vmPt.freshness.embeddings.humanText).toBe("Atualizado (há 21 dias)");
       expect(vmPt.freshness.embeddings.humanText).not.toContain("Desatualizado");
 
-      const vmEn = buildSidebarStatusViewModel(createBaseInput({
+      const vmEn = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: twentyOneDaysAgo,
         embeddingsWorkAvailable: false,
         semanticAvailable: true,
@@ -625,7 +626,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
     it("2. 21 days with real drift (workAvailable === true) displays 'Atualização necessária (há 21 dias)'", () => {
       const twentyOneDaysAgo = new Date(baseNow - 21 * 24 * 60 * 60 * 1000).toISOString();
-      const vmPt = buildSidebarStatusViewModel(createBaseInput({
+      const vmPt = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: twentyOneDaysAgo,
         embeddingsWorkAvailable: true,
         semanticAvailable: true,
@@ -636,7 +637,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       expect(vmPt.freshness.embeddings.status).toBe("stale");
       expect(vmPt.freshness.embeddings.humanText).toBe("Atualização necessária (há 21 dias)");
 
-      const vmEn = buildSidebarStatusViewModel(createBaseInput({
+      const vmEn = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: twentyOneDaysAgo,
         embeddingsWorkAvailable: true,
         semanticAvailable: true,
@@ -650,7 +651,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
     it("3. Recent publication without drift displays 'Atualizado (há 2 h)' and status 'fresh'", () => {
       const twoHoursAgo = new Date(baseNow - 2 * 60 * 60 * 1000).toISOString();
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: twoHoursAgo,
         embeddingsWorkAvailable: false,
         semanticAvailable: true,
@@ -664,7 +665,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
 
     it("4. Chronological age alone (e.g. 60 days) never causes 'stale' when embeddings are operational and workAvailable is false/undefined", () => {
       const sixtyDaysAgo = new Date(baseNow - 60 * 24 * 60 * 60 * 1000).toISOString();
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         embeddingsUpdatedAt: sixtyDaysAgo,
         embeddingsWorkAvailable: false,
         semanticAvailable: true,
@@ -678,7 +679,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     });
 
     it("5. Contract mismatch causes 'stale' with update required notice even if workAvailable is false", () => {
-      const vm = buildSidebarStatusViewModel(createBaseInput({
+      const vm = buildSidebarVmForScenario(createBaseInput({
         currentSearchMode: "hibrida",
         semanticAvailable: false,
         embeddingsWorkAvailable: false,

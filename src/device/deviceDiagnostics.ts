@@ -51,7 +51,6 @@ import {
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export interface DeviceDiagnosticsCompanionSearchSection {
   readonly supported: boolean;
@@ -375,27 +374,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     binaryManifestRaw: input.binaryManifestRaw,
   });
 
-  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    deviceRuntimeState: runtime,
-    upstreamTextIndex: textIndexArtifact.exists ? "ready" : "missing",
-    canonicalExists: embeddingsArtifact.exists,
-    validForSearchCount: (input.semanticAvailability?.available || (embeddingsArtifact.exists && embeddingsArtifact.provider && input.semanticCapability?.semanticAvailable !== false)) ? 1 : 0,
-    embeddingsDeclaredInManifest: embeddingsArtifact.exists,
-    publishedIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
-      provider: embeddingsArtifact.provider,
-      model: embeddingsArtifact.model,
-      dimensions: embeddingsArtifact.dimensions,
-      inputVersion: 1,
-      prefixMode: "none" as const,
-    } : undefined,
-    targetIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
-      provider: embeddingsArtifact.provider,
-      model: embeddingsArtifact.model,
-      dimensions: embeddingsArtifact.dimensions,
-      inputVersion: 1,
-      prefixMode: "none" as const,
-    } : undefined,
-  });
+  const lifecycleSnapshot = input.lifecycleSnapshot;
 
   const textIndexAvailable = lifecycleSnapshot.upstream.textIndex === "ready" || lifecycleSnapshot.upstream.textIndex === "stale";
   const embeddingsDeclared = lifecycleSnapshot.read.compatibility.status !== "none" || embeddingsArtifact.exists;
@@ -429,9 +408,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     reason: companionState.provenanceReason,
     operationalSemanticAvailable,
     operationalMode,
-    operationalReason: input.lifecycleSnapshot
-      ? (lifecycleSnapshot.read.compatibility.reasons[0] ?? semanticCap.reason)
-      : (semanticCap.reason ?? lifecycleSnapshot.read.compatibility.reasons[0]),
+    operationalReason: lifecycleSnapshot.read.compatibility.reasons[0] ?? semanticCap.reason,
     operationalReasonCode: semanticCap.reasonCode,
     semanticCapability: semanticCap,
   };
@@ -455,7 +432,8 @@ export interface ReadDeviceDiagnosticsOptions {
   readonly isMobile?: boolean;
   readonly semanticAvailability?: SemanticCompatibility;
   readonly semanticCapability?: SemanticCapabilityState;
-  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
+  /** The live canonical snapshot; diagnostics never synthesise one (LINA-15D-B / S4). */
+  readonly lifecycleSnapshot: EmbeddingLifecycleSnapshot;
 }
 
 /**
@@ -466,7 +444,7 @@ export interface ReadDeviceDiagnosticsOptions {
 export async function readDeviceDiagnostics(
   adapter: OwnershipDataAdapter,
   deviceId: string,
-  options?: ReadDeviceDiagnosticsOptions
+  options: ReadDeviceDiagnosticsOptions
 ): Promise<DeviceDiagnostics> {
   const normalizedId = deviceId.trim();
 
@@ -527,19 +505,6 @@ export async function readDeviceDiagnostics(
     checkpointMetaRaw = null;
   }
 
-  const lifecycleSnapshot = options?.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    companionState: evaluateCompanionConsumptionState({
-      deviceId: normalizedId,
-      role: options?.roleResolution?.effectiveRole === "producer" ? "producer" : (options?.roleResolution?.effectiveRole === "companion" ? "companion" : undefined),
-      ownership,
-      textManifestRaw,
-      binaryManifestRaw,
-    }),
-    upstreamTextIndex: textManifestRaw ? "ready" : "missing",
-    canonicalExists: Boolean(textManifestRaw && typeof textManifestRaw === "object" && (textManifestRaw as Record<string, unknown>).embeddings),
-    validForSearchCount: options?.semanticAvailability?.available ? 1 : 0,
-  });
-
   return buildDeviceDiagnostics({
     deviceId: normalizedId,
     deviceState,
@@ -548,11 +513,11 @@ export async function readDeviceDiagnostics(
     textManifestRaw,
     binaryManifestRaw,
     checkpointMetaRaw,
-    roleResolution: options?.roleResolution,
-    legacyRoleFallbackAllowed: options?.legacyRoleFallbackAllowed,
-    isMobile: options?.isMobile,
-    semanticAvailability: options?.semanticAvailability,
-    semanticCapability: options?.semanticCapability,
-    lifecycleSnapshot,
+    roleResolution: options.roleResolution,
+    legacyRoleFallbackAllowed: options.legacyRoleFallbackAllowed,
+    isMobile: options.isMobile,
+    semanticAvailability: options.semanticAvailability,
+    semanticCapability: options.semanticCapability,
+    lifecycleSnapshot: options.lifecycleSnapshot,
   });
 }

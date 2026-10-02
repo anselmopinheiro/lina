@@ -1,3 +1,4 @@
+import { buildEmbeddingVmForScenario } from "../helpers/embeddingStatusScenario";
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { buildEmbeddingStatusViewModel } from "../../src/search/embeddingStatusViewModel";
@@ -107,7 +108,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.primary).toBe("READY");
     expect(snapshot.read.semanticAvailable).toBe(true);
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -167,7 +168,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.read.semanticAvailable).toBe(true);
     expect(snapshot.write.updateRequired).toBe(true);
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -248,7 +249,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.primary).toBe("INCOMPATIBLE");
     expect(snapshot.read.semanticAvailable).toBe(false);
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -316,7 +317,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.primary).toBe("INDEX_ONLY");
     expect(snapshot.read.semanticAvailable).toBe(false);
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -367,7 +368,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.write.applicable).toBe(false);
     expect(snapshot.capability.blockedReason).toBe("companion");
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -420,7 +421,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
 
     expect(errorSnapshot.primary).toBe("ERROR");
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -465,7 +466,7 @@ describe("LINA-14C.2: Diagnostics with EmbeddingLifecycleSnapshot", () => {
     expect(snapshot.primary).toBe("READY");
     expect(snapshot.info.embeddingsPublishedAt).toBe(historicalTime);
 
-    const vm = buildEmbeddingStatusViewModel({
+    const vm = buildEmbeddingVmForScenario({
       workState: dummyWorkState(),
       operationState: idleOperation(),
       configuredProvider: "ollama",

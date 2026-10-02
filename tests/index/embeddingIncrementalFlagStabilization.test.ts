@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { activeProducerRuntime } from "../helpers/producerRuntimeState";
 import * as obsidian from "obsidian";
 import { Chunk } from "../../src/index/chunker";
 import {
@@ -92,7 +93,8 @@ function assess(updatePlan: Awaited<ReturnType<typeof readEmbeddingUpdatePreview
       provider: PROVIDER,
       model: MODEL,
     },
-    1
+    1,
+    activeProducerRuntime()
   );
   return { snapshot, scheduler: evaluateSchedulerDecisionFromSnapshot(snapshot, "automatic-local-only") };
 }

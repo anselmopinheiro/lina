@@ -1,3 +1,4 @@
+import { evaluateCapabilityFromLegacyFacts } from "../helpers/capabilityFromFacts";
 import { describe, expect, it } from "vitest";
 import {
   evaluateSemanticCapability,
@@ -63,7 +64,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("READY");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -105,7 +106,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("UPDATE_AVAILABLE");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -144,7 +145,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("INDEX_ONLY");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -197,7 +198,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("INCOMPATIBLE");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -249,7 +250,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("INCOMPATIBLE");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -308,7 +309,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("READY");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -337,7 +338,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(snapshot.primary).toBe("STANDBY");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: snapshot,
     });
 
@@ -364,7 +365,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
 
     expect(errorSnapshot.primary).toBe("ERROR");
 
-    const result = evaluateSemanticCapability({
+    const result = evaluateCapabilityFromLegacyFacts({
       lifecycleSnapshot: errorSnapshot,
     });
 
@@ -375,7 +376,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
   });
 
   it("9. Scenario Fallback without snapshot: gracefully evaluates legacy inputs", () => {
-    const legacyCompatible = evaluateSemanticCapability({
+    const legacyCompatible = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "compatible",
@@ -393,7 +394,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
     expect(legacyCompatible.contractState).toBe("compatible");
     expect(legacyCompatible.runtimeState).toBe("ready");
 
-    const legacyMismatch = evaluateSemanticCapability({
+    const legacyMismatch = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "mismatch",
@@ -423,7 +424,7 @@ describe("LINA-14C.4: Semantic Capability with EmbeddingLifecycleSnapshot", () =
     });
 
     const fromDirect = evaluateSemanticCapabilityFromSnapshot(snapshot);
-    const fromInput = evaluateSemanticCapability({ lifecycleSnapshot: snapshot });
+    const fromInput = evaluateCapabilityFromLegacyFacts({ lifecycleSnapshot: snapshot });
 
     expect(fromDirect).toEqual(fromInput);
   });

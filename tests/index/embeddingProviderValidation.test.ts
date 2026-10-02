@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { seedReadableWorkSummary } from "../helpers/seedWorkSummary";
 import * as obsidian from "obsidian";
 import LinaPlugin from "../../main.ts";
 import { generateEmbeddingsForChunks } from "../../src/index/embeddingGenerator";
@@ -148,6 +149,7 @@ function createPluginHarness(): {
     },
   });
 
+  seedReadableWorkSummary(plugin);
   return { plugin, adapter, scheduledCallbacks };
 }
 

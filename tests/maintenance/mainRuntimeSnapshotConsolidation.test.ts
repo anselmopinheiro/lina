@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { completeSummary } from "../helpers/completeWorkSummary";
+import { activeProducerRuntime } from "../helpers/producerRuntimeState";
 import * as fs from "fs";
 import * as path from "path";
 import LinaPlugin from "../../main.ts";
@@ -281,6 +283,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
         chunksCount: 10,
         embeddingsCount: 5,
       });
+    vi.spyOn(plugin as unknown as { getTextIndexStatus(): Promise<unknown> }, "getTextIndexStatus").mockResolvedValue({ exists: true, usability: "ready", isUsable: true });
 
       const hasWork = await (plugin as any).hasAutomaticEmbeddingWork();
       expect(hasWork).toBe(true);
@@ -380,7 +383,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
           reasons: [],
         },
       };
-      const readySnapshot = buildEmbeddingWorkLifecycleSnapshot(readySummary, 1);
+      const readySnapshot = buildEmbeddingWorkLifecycleSnapshot(completeSummary(readySummary), 1, activeProducerRuntime());
       expect(readySnapshot.primary).toBe("READY");
       const readyDecision = deriveEmbeddingWritePathDecision(readySnapshot);
       expect(readyDecision.updateRequired).toBe(false);
@@ -398,7 +401,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
           requiresPublication: true,
         },
       };
-      const updateSnapshot = buildEmbeddingWorkLifecycleSnapshot(updateSummary, 2);
+      const updateSnapshot = buildEmbeddingWorkLifecycleSnapshot(completeSummary(updateSummary), 2, activeProducerRuntime());
       expect(updateSnapshot.primary).toBe("UPDATE_AVAILABLE");
       const updateDecision = deriveEmbeddingWritePathDecision(updateSnapshot);
       expect(updateDecision.updateRequired).toBe(true);
@@ -429,7 +432,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
           reasons: [],
         },
       };
-      const indexOnlySnapshot = buildEmbeddingWorkLifecycleSnapshot(indexOnlySummary, 3);
+      const indexOnlySnapshot = buildEmbeddingWorkLifecycleSnapshot(completeSummary(indexOnlySummary), 3, activeProducerRuntime());
       expect(indexOnlySnapshot.primary).toBe("INDEX_ONLY");
 
       // INCOMPATIBLE (different model)
@@ -464,7 +467,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
           },
         },
       };
-      const incompatibleSnapshot = buildEmbeddingWorkLifecycleSnapshot(incompatibleSummary, 4);
+      const incompatibleSnapshot = buildEmbeddingWorkLifecycleSnapshot(completeSummary(incompatibleSummary), 4, activeProducerRuntime());
       expect(incompatibleSnapshot.primary).toBe("INCOMPATIBLE");
 
       // ERROR / UNREADABLE
@@ -486,7 +489,7 @@ describe("LINA-14F.4-B4.3: Main Runtime Snapshot Consolidation", () => {
           reasons: ["canonical-unreadable"],
         },
       };
-      const errorSnapshot = buildEmbeddingWorkLifecycleSnapshot(errorSummary, 5);
+      const errorSnapshot = buildEmbeddingWorkLifecycleSnapshot(completeSummary(errorSummary), 5, activeProducerRuntime());
       expect(errorSnapshot.primary).toBe("INDETERMINATE");
     });
   });

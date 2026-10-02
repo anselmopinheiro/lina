@@ -156,12 +156,19 @@ export class SemanticSearchModal extends Modal {
       return;
     }
 
-    const settingsProvider = isCompanion
+    const settingsProvider: string = isCompanion
       ? (this.config.contract?.provider || this.config.provider || "")
-      : normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider() || "ollama");
+      : (this.config.provider || getLocalEmbeddingsProvider()
+        ? normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider())
+        : "");
     const settingsModel = isCompanion
       ? (this.config.contract?.model || this.config.model || "")
-      : (this.config.model || getLocalEmbeddingsModel() || "nomic-embed-text");
+      : (this.config.model || getLocalEmbeddingsModel() || "");
+    if (!settingsProvider || !settingsModel) {
+      // No configured identity: never assume a provider or model (LINA-15D-B / R2).
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableNoContract;
+      return;
+    }
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
     if (this.plugin && runtimeChunks) {

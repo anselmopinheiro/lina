@@ -1,3 +1,6 @@
+import { buildSidebarVmForScenario } from "../helpers/sidebarScenarioSnapshot";
+import { buildDiagnosticsWithSnapshot, readDiagnosticsWithSnapshot } from "../helpers/diagnosticsFixtures";
+import { evaluateCapabilityFromLegacyFacts } from "../helpers/capabilityFromFacts";
 import { describe, expect, it, vi } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { buildSidebarStatusViewModel } from "../../src/search/sidebarStatusViewModel";
@@ -95,7 +98,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 1: Active Producer + text + vectors + reachable provider
   it("1. Active Producer + text + vectors + reachable provider: sidebar available, diagnostics available, no 'Companion' label", () => {
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "compatible",
@@ -106,7 +109,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     expect(semanticCap.semanticAvailable).toBe(true);
     expect(semanticCap.effectiveMode).toBe("full");
 
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,
@@ -119,7 +122,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
     expect(sidebarVm.searchAvailability.hybridMode).toBe("full");
 
-    const diag = buildDeviceDiagnostics({
+    const diag = buildDiagnosticsWithSnapshot({
       deviceId,
       deviceState: { schemaVersion: 2, deviceId, deviceName: "Studio", role: "producer" },
       ownership: { schemaVersion: 1, activeProducerId: deviceId, epoch: 1, acquiredAt: timestamp, updatedAt: timestamp, reason: "initial" },
@@ -162,7 +165,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     };
 
     // Vector contract from index matches the effective model
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "compatible",
@@ -181,7 +184,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 3: Active Producer + text + vectors + runtime checking
   it("3. Active Producer + runtime checking: sidebar shows 'A verificar...', not permanent unknown, and suppresses degraded alert", () => {
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,
@@ -198,7 +201,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     // Crucial: degradedAlert for semantic-unavailable must not show while checking
     expect(sidebarVm.degradedAlert).toBeUndefined();
 
-    const sidebarVmEn = buildSidebarStatusViewModel({
+    const sidebarVmEn = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,
@@ -215,7 +218,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 4: Active Producer + vectors present in manifest but physical vector file missing
   it("4. Active Producer + vectors in manifest but physical file missing: diagnostics shows declared artifact but operational mode degrades to text-only", () => {
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       semanticCompatibility: {
@@ -231,7 +234,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     expect(semanticCap.effectiveMode).toBe("text-only");
     expect(semanticCap.reasonCode).toBe("vector-file-missing");
 
-    const diag = buildDeviceDiagnostics({
+    const diag = buildDiagnosticsWithSnapshot({
       deviceId,
       deviceState: { schemaVersion: 2, deviceId, deviceName: "Studio", role: "producer" },
       ownership: { schemaVersion: 1, activeProducerId: deviceId, epoch: 1, acquiredAt: timestamp, updatedAt: timestamp, reason: "initial" },
@@ -269,7 +272,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
   // Scenario 5: Companion + valid contract + valid vector file
   it("5. Companion + valid contract + valid vector file: diagnostics and sidebar agree on semantic capability", () => {
     const companionId = "companion-device-1";
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "compatible",
@@ -277,7 +280,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
       providerReachable: true,
     });
 
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId: companionId,
       deviceRole: "companion",
       isAuthorizedProducer: false,
@@ -288,7 +291,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
       strings: stringsPt,
     });
 
-    const diag = buildDeviceDiagnostics({
+    const diag = buildDiagnosticsWithSnapshot({
       deviceId: companionId,
       deviceState: { schemaVersion: 2, deviceId: companionId, deviceName: "Tablet", role: "companion" },
       ownership: { schemaVersion: 1, activeProducerId: deviceId, epoch: 1, acquiredAt: timestamp, updatedAt: timestamp, reason: "initial" },
@@ -316,7 +319,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
   // Scenario 6: Companion + no endpoint / runtime unavailable
   it("6. Companion + no endpoint / runtime unavailable: artifacts valid, operational semantic unavailable, wording distinguishes both", () => {
     const companionId = "companion-device-1";
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       vectorContractState: "compatible",
@@ -333,7 +336,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     expect(semanticCap.effectiveMode).toBe("text-only");
     expect(semanticCap.reasonCode).toBe("provider-unreachable");
 
-    const diag = buildDeviceDiagnostics({
+    const diag = buildDiagnosticsWithSnapshot({
       deviceId: companionId,
       deviceState: { schemaVersion: 2, deviceId: companionId, deviceName: "Tablet", role: "companion" },
       ownership: { schemaVersion: 1, activeProducerId: deviceId, epoch: 1, acquiredAt: timestamp, updatedAt: timestamp, reason: "initial" },
@@ -443,14 +446,14 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 10: Sidebar and diagnostics consume the same canonical semantic capability
   it("10. sidebar and diagnostics consume the same semantic capability result", () => {
-    const sharedCapability: SemanticCapabilityState = evaluateSemanticCapability({
+    const sharedCapability: SemanticCapabilityState = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       semanticCompatibility: { available: true },
       providerReachable: true,
     });
 
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,
@@ -461,7 +464,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
       strings: stringsPt,
     });
 
-    const diag = buildDeviceDiagnostics({
+    const diag = buildDiagnosticsWithSnapshot({
       deviceId,
       deviceState: { schemaVersion: 2, deviceId, deviceName: "Studio", role: "producer" },
       ownership: { schemaVersion: 1, activeProducerId: deviceId, epoch: 1, acquiredAt: timestamp, updatedAt: timestamp, reason: "initial" },
@@ -487,7 +490,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 11: No regression in text-only fallback
   it("11. no regression in text-only fallback when semantic search is unavailable", () => {
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: false,
       vectorContractState: "none",
@@ -496,7 +499,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     expect(semanticCap.semanticAvailable).toBe(false);
     expect(semanticCap.effectiveMode).toBe("text-only");
 
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,
@@ -514,7 +517,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
   // Scenario 12: Hybrid degrades correctly when semantic unavailable
   it("12. hybrid degrades correctly when semantic is unavailable", () => {
-    const semanticCap = evaluateSemanticCapability({
+    const semanticCap = evaluateCapabilityFromLegacyFacts({
       textIndexAvailable: true,
       embeddingsDeclaredInManifest: true,
       semanticCompatibility: {
@@ -526,7 +529,7 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
 
     expect(semanticCap.effectiveMode).toBe("text-only");
 
-    const sidebarVm = buildSidebarStatusViewModel({
+    const sidebarVm = buildSidebarVmForScenario({
       deviceId,
       deviceRole: "producer",
       isAuthorizedProducer: true,

@@ -1,3 +1,5 @@
+import { buildSidebarVmForScenario } from "../helpers/sidebarScenarioSnapshot";
+import { buildDiagnosticsWithSnapshot, readDiagnosticsWithSnapshot } from "../helpers/diagnosticsFixtures";
 import { describe, expect, it } from "vitest";
 import {
   resolveDeviceRuntimeState,
@@ -255,7 +257,7 @@ describe("DeviceRuntimeState (LINA-06-IMPLEMENT-DEVICE-RUNTIME-STATE-001)", () =
       };
 
       const runtimeState = resolveDeviceRuntimeState(input);
-      const diagnostics = buildDeviceDiagnostics(input);
+      const diagnostics = buildDiagnosticsWithSnapshot(input);
 
       // Core device and role parity
       expect(diagnostics.device.id).toBe(runtimeState.deviceId);
@@ -443,7 +445,7 @@ describe("DeviceRuntimeState (LINA-06-IMPLEMENT-DEVICE-RUNTIME-STATE-001)", () =
         isChecking: true,
       });
 
-      const checkingVm = buildSidebarStatusViewModel({
+      const checkingVm = buildSidebarVmForScenario({
         deviceId: deviceIdA,
         textIndexReady: true,
         currentSearchMode: "hibrida",
@@ -470,7 +472,7 @@ describe("DeviceRuntimeState (LINA-06-IMPLEMENT-DEVICE-RUNTIME-STATE-001)", () =
         semanticAvailability: { available: true },
       });
 
-      const readyVm = buildSidebarStatusViewModel({
+      const readyVm = buildSidebarVmForScenario({
         deviceId: deviceIdA,
         textIndexReady: true,
         currentSearchMode: "hibrida",

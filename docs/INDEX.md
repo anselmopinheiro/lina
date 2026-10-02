@@ -67,7 +67,9 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 | **LINA-15A** | Ownership Fencing & Epoch Hardening | **CONCLUÍDA** (commit `0d9580d`) | `docs/audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md` |
 | **LINA-15B** | Reconciliação Plano ↔ Lifecycle | **CONCLUÍDA** (commit `c2437ac`) | `docs/audits/architecture/LINA-15B-IMPLEMENT-UPDATEPLAN-LIFECYCLE-001.md` |
 | **LINA-15C** | Separação entre Teto de Leitura JSONL e Corrupção Física | **CONCLUÍDA** (commit `3b7e7d9`) | `docs/audits/architecture/LINA-15C-IMPLEMENT-RESOURCE-LIMIT-001.md` |
-| **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | **CONCLUÍDA** (commit `25859cf`) | `docs/audits/architecture/LINA-15D-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
+| **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | **CONCLUÍDA parcialmente** (commit `25859cf`; completada na 15D-B) | `docs/audits/architecture/LINA-15D-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
+| **LINA-15D-A** | Auditoria dos sintetizadores paralelos de snapshot | **CONCLUÍDA** | `docs/audits/architecture/LINA-15D-A-AUDIT-SNAPSHOT-SYNTHESIZERS-001.md` |
+| **LINA-15D-B** | Remoção efetiva dos sintetizadores e identidades fabricadas (S1–S9, R1–R3; S7 RETAIN) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15D-B-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
 | **LINA-15E** | Alinhamento da Sidebar com Decisão Canónica & Limpeza | **CONCLUÍDA** | `docs/audits/architecture/LINA-15E-IMPLEMENT-SIDEBAR-CANONICAL-DECISION-001.md` |
 | **LINA-15F** | Configuração / Runtime Configuration Consistency (localidade por endpoint; geração sempre incremental) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15F-IMPLEMENT-CONFIG-RUNTIME-CONSISTENCY-001.md` (Findings F-11, F-12) |
 | **LINA-15G** | Settings Defaults & Compatibility — Opção B (UI == runtime; instalações existentes preservadas; defaults documentados para novas) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15G-IMPLEMENT-SETTINGS-DEFAULTS-COMPATIBILITY-001.md` (CR-03 da 15F) |

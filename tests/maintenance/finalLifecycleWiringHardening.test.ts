@@ -1,3 +1,4 @@
+import { buildEmbeddingVmForScenario } from "../helpers/embeddingStatusScenario";
 import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -195,7 +196,7 @@ describe("Final Lifecycle Wiring Cleanup & Hardening (LINA-14F.4-B4.4)", () => {
       expect(workerDecision.action).toBe("update");
 
       // 4. Embedding Status ViewModel
-      const embeddingVM = buildEmbeddingStatusViewModel({
+      const embeddingVM = buildEmbeddingVmForScenario({
         workState: {
           status: "ready",
           workAvailable: true,
@@ -334,7 +335,7 @@ describe("Final Lifecycle Wiring Cleanup & Hardening (LINA-14F.4-B4.4)", () => {
       expect(workerDecision.action).toBe("rebuild");
 
       // 4. Embedding Status ViewModel
-      const embeddingVM = buildEmbeddingStatusViewModel({
+      const embeddingVM = buildEmbeddingVmForScenario({
         workState: {
           status: "ready",
           workAvailable: true,

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { seedReadableWorkSummary } from "../helpers/seedWorkSummary";
 import LinaPlugin from "../../main.ts";
 import {
   EmbeddingOperationCompletion,
@@ -53,6 +54,7 @@ function createPluginForUnloadTest(): TestableLinaPlugin {
     role: "producer",
   };
 
+  seedReadableWorkSummary(plugin);
   return plugin;
 }
 

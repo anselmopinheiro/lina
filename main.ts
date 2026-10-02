@@ -43,7 +43,7 @@ import {
 } from "./src/ai/providerDefaults";
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
-import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
+import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote, type TextIndexUsability } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import {
   convertLegacySettingsToExclusionRules,
@@ -458,6 +458,15 @@ export default class LinaPlugin extends Plugin {
       expectedNotes,
       activePolicy: this.getCanonicalExclusionPolicy(),
     });
+  }
+
+  /** Factual usability of the text index for the lifecycle snapshot; unknown when it cannot be read. */
+  private async readUpstreamTextIndexUsability(): Promise<TextIndexUsability | undefined> {
+    try {
+      return (await this.getTextIndexStatus()).usability;
+    } catch {
+      return undefined;
+    }
   }
 
   private isContentExcludedByUserRules(content: string): boolean {
@@ -905,17 +914,14 @@ export default class LinaPlugin extends Plugin {
       operationState,
       upstreamTextIndex: this.textIndexLoaded ? "ready" : undefined,
       isExternalProvider: !providerCapability.isLocal,
-      ...(summary
-        ? {
-          workAssessment: {
-            kind: "indeterminate" as const,
-            updateRequired: false,
-            severity: "none" as const,
-            cost: "none" as const,
-            reasons: ["canonical-unreadable"],
-          },
-        }
-        : {}),
+      // Without a trustworthy work summary the state is unknown, never "no work" (LINA-15D-B / S9).
+      workAssessment: {
+        kind: "indeterminate" as const,
+        updateRequired: false,
+        severity: "none" as const,
+        cost: "none" as const,
+        reasons: [summary ? "canonical-unreadable" : "work-summary-unavailable"],
+      },
     });
   }
 
@@ -1044,17 +1050,15 @@ export default class LinaPlugin extends Plugin {
       companionState = null;
     }
 
-    const operationState = this.getEmbeddingOperationState();
-    const vectorContract = await this.loadCanonicalVectorContract();
-
-    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: runtimeState,
-      operationState,
-      companionState,
-      vectorContract,
-      canonicalExists: runtimeState.embeddings.exists,
-      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
-    });
+    // Diagnostics show the same live canonical snapshot as the Sidebar; without a work summary
+    // the snapshot is (correctly) indeterminate, so make sure a summary exists first.
+    if (!this.getEmbeddingWorkStatusController().getState().summary) {
+      await this.refreshEmbeddingWorkStatus();
+    }
+    const liveSnapshot = this.getEmbeddingLifecycleSnapshot();
+    const lifecycleSnapshot: EmbeddingLifecycleSnapshot = companionState
+      ? { ...liveSnapshot, info: { ...liveSnapshot.info, provenance: companionState.provenanceValidity } }
+      : liveSnapshot;
 
     const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
@@ -1771,6 +1775,7 @@ export default class LinaPlugin extends Plugin {
       canonicalReadability: summary?.canonicalReadability ?? "readable",
       provider: config.provider,
       model: config.model,
+      textIndexStatus: await this.readUpstreamTextIndexUsability(),
       targetEndpointIsExternal: !providerCapability.isLocal,
     };
 
@@ -1819,6 +1824,11 @@ export default class LinaPlugin extends Plugin {
           cancelled: true,
         };
       }
+    }
+
+    // The start gate reads the controller cache; without a work summary it is (correctly) fail-closed.
+    if (!this.getEmbeddingWorkStatusController().getState().summary) {
+      await this.refreshEmbeddingWorkStatus();
     }
 
     const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
@@ -2705,6 +2715,7 @@ export default class LinaPlugin extends Plugin {
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
       provider: config.provider,
       model: config.model,
+      textIndexStatus: await this.readUpstreamTextIndexUsability(),
       targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal,
     };
 
@@ -2739,6 +2750,7 @@ export default class LinaPlugin extends Plugin {
           return {
             ...summary,
             updatePlan,
+            textIndexStatus: await this.readUpstreamTextIndexUsability(),
             targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal,
           };
         },

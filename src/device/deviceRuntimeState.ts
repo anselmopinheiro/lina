@@ -32,11 +32,11 @@ import { evaluateCompanionConsumptionState } from "../companion";
 import {
   type SemanticCapabilityState,
   type SemanticOperationalReasonCode,
-  evaluateSemanticCapability,
+  evaluateSemanticCapabilityFromFacts,
+  evaluateSemanticCapabilityFromSnapshot,
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export type DeviceTransferEligibilityReason =
   | "ready"
@@ -232,42 +232,33 @@ export function resolveDeviceRuntimeState(
 
   const manifestEmbeddings = (input.textManifestRaw as Record<string, unknown> | null | undefined)?.embeddings as Record<string, unknown> | undefined;
 
-  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
-    companionState,
-    upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
-    canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || (input.semanticAvailability?.reasonCode === "incompatible"),
-    validForSearchCount: (input.semanticAvailability?.available || vectorContractState === "compatible" || vectorContractState === "mismatch" || (Boolean(manifestEmbeddings) && input.semanticAvailability?.reasonCode !== "missing")) ? 1 : 0,
-    factsChecking: input.isChecking,
-    publishedIdentity: (manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string") ? {
-      provider: manifestEmbeddings.provider,
-      model: manifestEmbeddings.model,
-      dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
-      inputVersion: 1,
-      prefixMode: "none" as const,
-    } : (companionState.vectorContract ? {
-      provider: companionState.vectorContract.provider,
-      model: companionState.vectorContract.model,
-      dimensions: companionState.vectorContract.dimensions,
-      inputVersion: companionState.vectorContract.inputVersion ?? 1,
-      prefixMode: (companionState.vectorContract.prefixMode ?? "none") as "none" | "nomic-search-query-document",
-    } : (input.semanticAvailability?.indexProvider && input.semanticAvailability?.indexModel ? {
-      provider: input.semanticAvailability.indexProvider,
-      model: input.semanticAvailability.indexModel,
-      dimensions: input.semanticAvailability.indexDimensions ?? 768,
-      inputVersion: 1,
-      prefixMode: "none" as const,
-    } : undefined)),
-  });
-
-  const semanticCap = input.semanticCapability ?? evaluateSemanticCapability({
-    textIndexAvailable,
-    embeddingsDeclaredInManifest: embeddingsDeclared,
-    vectorContractState,
-    semanticCompatibility: input.semanticAvailability,
-    isChecking: input.isChecking,
-    providerReachable: input.providerReachable,
-    lifecycleSnapshot,
-  });
+  // Without a lifecycle snapshot the capability comes from plain facts; no identity is synthesised
+  // (LINA-15D-B / S3). Only the *existence* of a published identity/evidence is a fact here.
+  const semanticCap = input.semanticCapability ?? (input.lifecycleSnapshot
+    ? evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, {
+      textIndexAvailable,
+      embeddingsDeclaredInManifest: embeddingsDeclared,
+      vectorContractState,
+      semanticCompatibility: input.semanticAvailability,
+      isChecking: input.isChecking,
+      providerReachable: input.providerReachable,
+    })
+    : evaluateSemanticCapabilityFromFacts({
+      textIndexAvailable,
+      contractState: vectorContractState,
+      canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || (input.semanticAvailability?.reasonCode === "incompatible"),
+      hasValidForSearchEvidence: Boolean(input.semanticAvailability?.available)
+        || vectorContractState === "compatible"
+        || vectorContractState === "mismatch"
+        || (Boolean(manifestEmbeddings) && input.semanticAvailability?.reasonCode !== "missing"),
+      hasPublishedIdentity: Boolean(
+        (manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string")
+        || companionState.vectorContract
+        || (input.semanticAvailability?.indexProvider && input.semanticAvailability?.indexModel)
+      ),
+      isChecking: input.isChecking,
+      providerReachable: input.providerReachable,
+    }));
 
   const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available" || Boolean(input.semanticAvailability))
     && semanticCap.artifactState.vectorFile !== "missing";

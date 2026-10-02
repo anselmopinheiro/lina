@@ -1,3 +1,4 @@
+import { buildEmbeddingVmForScenario } from "../helpers/embeddingStatusScenario";
 import { describe, expect, it } from "vitest";
 import { EmbeddingOperationState } from "../../src/index/embeddingOperationManager";
 import { EmbeddingWorkRuntimeState } from "../../src/index/embeddingWorkStatusController";
@@ -80,7 +81,7 @@ function readyWork(overrides: Partial<EmbeddingWorkRuntimeState["summary"]> = {}
 
 describe("embedding sidebar diagnostic view-model", () => {
   it("shows incremental work as an update without full rebuild confirmation", () => {
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: readyWork(),
       operationState: idleOperation(),
       configuredProvider: "ollama",
@@ -102,7 +103,7 @@ describe("embedding sidebar diagnostic view-model", () => {
   });
 
   it("requires confirmation for a full rebuild and does not expose internal identifiers", () => {
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: {
         ...readyWork({
         provider: "ollama",
@@ -153,7 +154,7 @@ describe("embedding sidebar diagnostic view-model", () => {
   });
 
   it("shows recoverable checkpoints as reusable work, not pending active work", () => {
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: readyWork({
         recoverableCheckpointCount: 2,
         updatePlan: {
@@ -198,7 +199,7 @@ describe("embedding sidebar diagnostic view-model", () => {
       phase: "generating" as const,
       startedAt: "2026-07-20T10:00:00.000Z",
     };
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: readyWork(),
       operationState: running,
       configuredProvider: "ollama",
@@ -213,7 +214,7 @@ describe("embedding sidebar diagnostic view-model", () => {
   });
 
   it("does not claim embeddings are up to date when a ready state has no calculated details", () => {
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: {
         status: "ready",
         revision: 3,
@@ -234,7 +235,7 @@ describe("embedding sidebar diagnostic view-model", () => {
   });
 
   it("keeps a manifest-derived full rebuild actionable when vector details are unavailable", () => {
-    const model = buildEmbeddingStatusViewModel({
+    const model = buildEmbeddingVmForScenario({
       workState: {
         ...readyWork({
           detailsAvailable: false,

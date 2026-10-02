@@ -5,6 +5,8 @@
 > **Autoridade Documental:** `AGENTS.md`, `docs/INDEX.md`, `docs/audits/architecture/LINA-15D-AUDIT-SNAPSHOT-SYNTHESIZERS-001.md`, `docs/audits/architecture/LINA-EMBEDDINGS-AUDITORIA-GLOBAL-POS-LINA14-001.md`  
 > **Contexto:** Resolução dos Findings F-06 e F-07 da Auditoria Global Pós-LINA-14  
 
+> **RETIFICAÇÃO (LINA-15D-B, 2026-10-02):** este relatório afirmava a remoção integral de `768`, `"nomic-embed-text"`, `"local-device"`, `"default"` e `inputVersion:1` nos sintetizadores de snapshot. A auditoria LINA-15D-A demonstrou que várias dessas ocorrências persistiam; só ficaram removidas na LINA-15D-B (`LINA-15D-B-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md`).
+
 ---
 
 ## 1. Sumário da Execução

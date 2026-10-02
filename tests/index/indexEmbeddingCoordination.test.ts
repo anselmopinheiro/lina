@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { seedReadableWorkSummary } from "../helpers/seedWorkSummary";
 import LinaPlugin from "../../main.ts";
 import { TFile } from "obsidian";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -100,6 +101,7 @@ function createHarness(): {
     clearTimeout: vi.fn(),
   });
 
+  seedReadableWorkSummary(plugin);
   return { plugin, adapter, scheduledCallbacks };
 }
 

@@ -357,8 +357,8 @@ export function resolveEffectiveEmbeddingRuntimeConfig(input: {
   }
 
   // Producer role: uses local settings
-  const provider = normalizeString(input.localSettings?.provider ?? "ollama");
-  const model = normalizeString(input.localSettings?.model ?? "nomic-embed-text");
+  const provider = normalizeString(input.localSettings?.provider ?? "");
+  const model = normalizeString(input.localSettings?.model ?? "");
   const dimensions = canonicalContract ? canonicalContract.dimensions : 0;
   const prefixMode = canonicalContract ? canonicalContract.prefixMode : "none";
   const inputVersion = canonicalContract ? canonicalContract.inputVersion : 1;

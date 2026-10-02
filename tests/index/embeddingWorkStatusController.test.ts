@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createControllerWithFacts } from "../helpers/completeWorkSummary";
 import { EmbeddingStateSummary } from "../../src/index/embeddingState";
 import {
   EmbeddingWorkStatusClock,
@@ -81,7 +82,7 @@ describe("embedding work status controller — initial and read-only behaviour",
       },
     };
 
-    const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => configurationMismatch });
+    const controller = createControllerWithFacts({ refreshSummary: async () => configurationMismatch });
     const state = await controller.refresh();
     expect(state.workAvailable).toBe(true);
     expect(state.decision?.workMode).toBe("full-rebuild");
@@ -89,14 +90,14 @@ describe("embedding work status controller — initial and read-only behaviour",
 
   it("starts as unknown and getState does not calculate", () => {
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     expect(controller.getState()).toMatchObject({ status: "unknown", revision: 0 });
     expect(refreshSummary).not.toHaveBeenCalled();
   });
 
   it("explicit refresh produces ready state", async () => {
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary: async () => summary({ missingCount: 1, validCount: 1 }),
     });
 
@@ -112,7 +113,7 @@ describe("embedding work status controller — initial and read-only behaviour",
   });
 
   it("keeps compatible unreadable details indeterminate instead of proving no work", async () => {
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary: async () => ({
         ...summary(),
         detailsAvailable: false,
@@ -137,7 +138,7 @@ describe("embedding work status controller — initial and read-only behaviour",
   });
 
   it("publishes a fresh ready summary to subscribers after canonical publication", async () => {
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary: async () => summary({ validCount: 2, missingCount: 0 }),
       autoRefreshOnSubscribe: false,
       autoRefreshOnDirty: false,
@@ -161,7 +162,7 @@ describe("embedding work status controller — initial and read-only behaviour",
       .fn<() => Promise<EmbeddingStateSummary>>()
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     expect((await controller.refresh()).status).toBe("error");
     expect((await controller.refresh()).status).toBe("ready");
@@ -171,7 +172,7 @@ describe("embedding work status controller — initial and read-only behaviour",
 describe("embedding work status controller — invalidation and lazy refresh", () => {
   it("markDirty increments revision without calculating", () => {
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     controller.markDirty("text-index-published");
 
@@ -186,7 +187,7 @@ describe("embedding work status controller — invalidation and lazy refresh", (
   it("100 invalidations without subscribers do not schedule parsing", () => {
     const clock = new ManualClock();
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary, clock });
+    const controller = createControllerWithFacts({ refreshSummary, clock });
 
     for (let index = 0; index < 100; index++) {
       controller.markDirty("text-index-published");
@@ -200,7 +201,7 @@ describe("embedding work status controller — invalidation and lazy refresh", (
   it("active subscriber schedules one coalesced refresh", async () => {
     const clock = new ManualClock();
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary, clock });
+    const controller = createControllerWithFacts({ refreshSummary, clock });
     controller.subscribe(() => undefined);
 
     controller.markDirty("text-index-published");
@@ -210,6 +211,7 @@ describe("embedding work status controller — invalidation and lazy refresh", (
     expect(clock.pendingCount()).toBe(1);
     clock.runNext();
     await Promise.resolve();
+    await Promise.resolve(); // the fixture helper adds one async hop
 
     expect(refreshSummary).toHaveBeenCalledTimes(1);
     expect(controller.getState()).toMatchObject({ status: "ready", revision: 3 });
@@ -218,7 +220,7 @@ describe("embedding work status controller — invalidation and lazy refresh", (
   it("unsubscribe cancels a pending lazy refresh", () => {
     const clock = new ManualClock();
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({ refreshSummary, clock });
+    const controller = createControllerWithFacts({ refreshSummary, clock });
     const unsubscribe = controller.subscribe(() => undefined);
 
     controller.markDirty("text-index-published");
@@ -232,7 +234,7 @@ describe("embedding work status controller — invalidation and lazy refresh", (
   it("can keep a UI subscriber passive until an explicit refresh", async () => {
     const clock = new ManualClock();
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary,
       clock,
       autoRefreshOnSubscribe: false,
@@ -253,7 +255,7 @@ describe("embedding work status controller — single-flight and revision protec
   it("simultaneous refreshes share one calculation", async () => {
     const refresh = deferred<EmbeddingStateSummary>();
     const refreshSummary = vi.fn(() => refresh.promise);
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     const first = controller.refresh();
     const second = controller.refresh();
@@ -267,7 +269,7 @@ describe("embedding work status controller — single-flight and revision protec
   it("late result after invalidation does not mark the new revision ready", async () => {
     const refresh = deferred<EmbeddingStateSummary>();
     const refreshSummary = vi.fn(() => refresh.promise);
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     const first = controller.refresh();
     controller.markDirty("text-index-published");
@@ -288,7 +290,7 @@ describe("embedding work status controller — single-flight and revision protec
       .fn<() => Promise<EmbeddingStateSummary>>()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
-    const controller = new EmbeddingWorkStatusController({ refreshSummary });
+    const controller = createControllerWithFacts({ refreshSummary });
 
     const firstRefresh = controller.refresh();
     controller.markDirty("text-index-published");
@@ -311,7 +313,7 @@ describe("embedding work status controller — single-flight and revision protec
 
   it("ignores callbacks after dispose", async () => {
     const refresh = deferred<EmbeddingStateSummary>();
-    const controller = new EmbeddingWorkStatusController({ refreshSummary: () => refresh.promise });
+    const controller = createControllerWithFacts({ refreshSummary: () => refresh.promise });
 
     const active = controller.refresh();
     controller.dispose();
@@ -328,7 +330,7 @@ describe("embedding work status controller — defer and workAvailable", () => {
     let defer = true;
     const clock = new ManualClock();
     const refreshSummary = vi.fn(async () => summary());
-    const controller = new EmbeddingWorkStatusController({
+    const controller = createControllerWithFacts({
       refreshSummary,
       clock,
       shouldDeferRefresh: () => defer,
@@ -349,7 +351,7 @@ describe("embedding work status controller — defer and workAvailable", () => {
 
   it("derives workAvailable from missing, stale, obsolete, duplicate or invalid records", async () => {
     const make = async (s: EmbeddingStateSummary) => {
-      const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => s });
+      const controller = createControllerWithFacts({ refreshSummary: async () => s });
       return (await controller.refresh()).workAvailable;
     };
     expect(await make(summary())).toBe(false);
