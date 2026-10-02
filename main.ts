@@ -132,7 +132,8 @@ import {
   TextIndexVaultEvent,
   TextIndexWorker,
 } from "./src/maintenance/textIndexWorker";
-import { getEmbeddingProviderCapability } from "./src/ai/providerCapabilities";
+import { resolveEndpointProviderCapability, type EmbeddingProviderCapability } from "./src/ai/providerCapabilities";
+import { EMBEDDING_GENERATION_INCREMENTAL, isLegacyFullRegenerationPreferenceSet } from "./src/maintenance/embeddingUpdateSettings";
 import {
   evaluateEmbeddingUpdatePolicyFromSnapshot,
 } from "./src/maintenance/embeddingPolicyEngine";
@@ -888,11 +889,16 @@ export default class LinaPlugin extends Plugin {
     const summary = workState?.summary;
 
     if (summary && !isIndeterminateWorkSummary(summary)) {
-      return buildEmbeddingWorkLifecycleSnapshot(summary, workState?.revision ?? 0, runtime, operationState);
+      // The cached summary may predate a Base URL change: write/dispatch decisions use the live locality.
+      const liveSummary = {
+        ...summary,
+        targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability().isLocal,
+      };
+      return buildEmbeddingWorkLifecycleSnapshot(liveSummary, workState?.revision ?? 0, runtime, operationState);
     }
 
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
     return adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtime,
       operationState,
@@ -1538,7 +1544,7 @@ export default class LinaPlugin extends Plugin {
             return false;
           }
           const config = this.getEffectiveEmbeddingConfig();
-          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
           if (!providerCapability.isLocal) {
             return false;
           }
@@ -1736,7 +1742,7 @@ export default class LinaPlugin extends Plugin {
     }
 
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
     const deviceRole = this.getEffectiveDeviceRole();
     if (deviceRole !== "producer") {
       new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
@@ -1751,7 +1757,7 @@ export default class LinaPlugin extends Plugin {
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: !isFullRebuild && (this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true),
+      incremental: !isFullRebuild && EMBEDDING_GENERATION_INCREMENTAL,
     });
 
     const policy = this.settings.embeddingUpdateMode ?? "manual";
@@ -1764,6 +1770,7 @@ export default class LinaPlugin extends Plugin {
       canonicalReadability: summary?.canonicalReadability ?? "readable",
       provider: config.provider,
       model: config.model,
+      targetEndpointIsExternal: !providerCapability.isLocal,
     };
 
     const snapshot = buildEmbeddingWorkLifecycleSnapshot(
@@ -2590,6 +2597,17 @@ export default class LinaPlugin extends Plugin {
     return contract;
   }
 
+  /**
+   * Capability of the *configured* embeddings endpoint: the provider capability plus the effective
+   * locality of the Base URL (LINA-15F). Always computed live from the current configuration; an
+   * Ollama provider pointing to a non-loopback endpoint is NOT local.
+   */
+  getEffectiveEmbeddingEndpointCapability(
+    config: Pick<EffectiveEmbeddingConfig, "provider" | "baseUrl"> = this.getEffectiveEmbeddingConfig()
+  ): EmbeddingProviderCapability {
+    return resolveEndpointProviderCapability(config.provider, config.baseUrl);
+  }
+
   getEffectiveEmbeddingConfig(targetContract?: VectorContractV1 | null): EffectiveEmbeddingConfig {
     const isCompanion = this.getLocalDeviceRole() === "companion";
     const contract = targetContract !== undefined ? targetContract : this.getEffectiveEmbeddingContract();
@@ -2681,7 +2699,7 @@ export default class LinaPlugin extends Plugin {
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+      incremental: EMBEDDING_GENERATION_INCREMENTAL,
     });
 
     const workSummary: EmbeddingWorkSummary = {
@@ -2690,6 +2708,7 @@ export default class LinaPlugin extends Plugin {
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
       provider: config.provider,
       model: config.model,
+      targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal,
     };
 
     const snapshot = buildEmbeddingWorkLifecycleSnapshot(
@@ -2718,11 +2737,12 @@ export default class LinaPlugin extends Plugin {
           const updatePlan = await readEmbeddingUpdatePreview(this.app, {
             provider: config.provider,
             model: config.model,
-            incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+            incremental: EMBEDDING_GENERATION_INCREMENTAL,
           });
           return {
             ...summary,
             updatePlan,
+            targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal,
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
@@ -2922,7 +2942,7 @@ export default class LinaPlugin extends Plugin {
       apiKey: embeddingConfig.apiKey,
       timeoutMs: embeddingConfig.timeoutMs,
       batchSize: embeddingConfig.batchSize,
-      incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+      incremental: EMBEDDING_GENERATION_INCREMENTAL,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,
       operationId: operationId === undefined ? undefined : String(operationId),
@@ -3811,6 +3831,11 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async runStartupEmbeddingAutomation(): Promise<void> {
+    if (isLegacyFullRegenerationPreferenceSet(this.settings)) {
+      console.warn(
+        "Lina: legacy setting generateOnlyMissingEmbeddings=false is ignored; embedding generation is always incremental."
+      );
+    }
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }

@@ -16,6 +16,7 @@ import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
+import { isProviderEndpointLocal } from "../ai/providerCapabilities";
 import { searchTextIndex } from "./textSearch";
 import { generateProviderText } from "../ai/textProvider";
 import { getAnalysisProviderDefaults } from "../ai/providerDefaults";
@@ -1751,7 +1752,8 @@ export class LinaSearchView extends ItemView {
     const defaults = getAnalysisProviderDefaults(provider);
     const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || defaults.model;
     const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || defaults.baseUrl;
-    const isLocal = provider === "ollama";
+    // LINA-15F: "local" means the endpoint is on this machine, not merely that the provider is Ollama.
+    const isLocal = isProviderEndpointLocal(provider, baseUrl);
     return { provider, model, baseUrl, isLocal };
   }
 

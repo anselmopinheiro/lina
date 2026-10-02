@@ -78,6 +78,12 @@ export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
   isPrefixModeMismatch?: boolean;
   updatePlan?: EmbeddingUpdatePlanPreview;
   deviceRuntimeState?: DeviceRuntimeState;
+  /**
+   * Effective locality of the configured endpoint (LINA-15F): `true` when note content would leave
+   * this device (remote/invalid endpoint or non-local provider). When omitted, the static provider
+   * capability is used.
+   */
+  targetEndpointIsExternal?: boolean;
 }
 
 function cloneState(state: EmbeddingWorkRuntimeState): EmbeddingWorkRuntimeState {
@@ -206,7 +212,8 @@ export function buildEmbeddingWorkLifecycleSnapshot(
 
   const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
 
-  const isExternalProvider = targetIdentity?.provider ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false;
+  const isExternalProvider = safeSummary.targetEndpointIsExternal
+    ?? (targetIdentity?.provider ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false);
 
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,

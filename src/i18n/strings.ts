@@ -1000,6 +1000,7 @@ export interface UiStrings {
   confirmEmbeddingUpdateCostWarningTitle: string;
   confirmEmbeddingUpdateCostWarningText: string;
   confirmEmbeddingUpdateLocalNoCost: string;
+  confirmEmbeddingUpdateRemoteEndpointWarningText: string;
   confirmEmbeddingUpdateButtonCancel: string;
   confirmEmbeddingUpdateButtonConfirm: string;
   confirmEmbeddingUpdateNoWorkNotice: string;
@@ -1980,6 +1981,7 @@ const PT_PT: UiStrings = {
   confirmEmbeddingUpdateCostWarningTitle: "Aviso de custos de API externa",
   confirmEmbeddingUpdateCostWarningText: "Esta operação irá contactar a API do provider externo ({provider}) e poderá consumir créditos ou saldo da sua conta.",
   confirmEmbeddingUpdateLocalNoCost: "Processamento local sem consumo de créditos externos de API.",
+  confirmEmbeddingUpdateRemoteEndpointWarningText: "O endereço configurado não é desta máquina: o conteúdo das notas será enviado para um servidor remoto.",
   confirmEmbeddingUpdateButtonCancel: "Cancelar",
   confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Os embeddings já se encontram atualizados.",
@@ -2964,6 +2966,7 @@ const EN: UiStrings = {
   confirmEmbeddingUpdateCostWarningTitle: "External API Cost Warning",
   confirmEmbeddingUpdateCostWarningText: "This operation will contact the external provider API ({provider}) and may consume account credits or billing balance.",
   confirmEmbeddingUpdateLocalNoCost: "Local processing with no external API credit consumption.",
+  confirmEmbeddingUpdateRemoteEndpointWarningText: "The configured address is not on this machine: your note content will be sent to a remote server.",
   confirmEmbeddingUpdateButtonCancel: "Cancel",
   confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",

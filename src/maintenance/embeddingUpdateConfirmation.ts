@@ -101,9 +101,12 @@ export function prepareEmbeddingUpdateConfirmation(
       ? "partial"
       : "unavailable";
 
+  // LINA-15F: a provider capable of local execution but addressed at a non-loopback endpoint is not local.
   const costWarningMessage = providerCapability.hasExternalCost
     ? strings.confirmEmbeddingUpdateCostWarningText.replace("{provider}", providerCapability.providerId)
-    : strings.confirmEmbeddingUpdateLocalNoCost;
+    : providerCapability.isLocal
+      ? strings.confirmEmbeddingUpdateLocalNoCost
+      : strings.confirmEmbeddingUpdateRemoteEndpointWarningText;
 
   return {
     providerId: providerCapability.providerId,
@@ -116,7 +119,8 @@ export function prepareEmbeddingUpdateConfirmation(
     totalToGenerate,
     totalChunks,
     semanticSearchImpact,
-    requiresConfirmation: policyDecision.requiresConfirmation || providerCapability.hasExternalCost || isFullRebuild,
+    requiresConfirmation:
+      policyDecision.requiresConfirmation || providerCapability.hasExternalCost || !providerCapability.isLocal || isFullRebuild,
     costWarningMessage,
     isFullRebuild,
   };

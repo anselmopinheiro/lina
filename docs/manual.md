@@ -331,7 +331,7 @@ Lina strictly separates three distinct operational concepts:
 
 | Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance | API Cost Profile |
 | :--- | :---: | :---: | :--- | :--- |
-| **Ollama** | Supported | Supported | Supported on Desktop Producer | Local compute (free) |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer when the Base URL is this computer | Local compute (free) |
 | **Mistral** | Supported | Supported | Manual only | Billed directly by provider |
 | **OpenRouter** | Supported | Supported | Manual only | Billed directly by provider |
 
@@ -405,7 +405,8 @@ Semantic search
 > Binary artifacts are derived data. Users do not manage them. Lina automatically prepares optimized semantic search data after embeddings exist or when existing installations need migration. On Desktop Producer, missing derived artifacts are repaired automatically.
 
 ### 5.2 Automatic & Manual Maintenance
-- **Automatic Local Maintenance (Ollama on Desktop Producer):** Lina automatically maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period).
+- **Automatic Local Maintenance (Ollama on this computer, Desktop Producer):** With the update mode set to *automatic (local only)*, Lina maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period). "Local" means the Ollama Base URL points to this very computer (`localhost`, `127.x.x.x`, `::1`). An Ollama server on another machine — including your own LAN or a hosted service — is **not** local: embeddings stay manual and always ask for confirmation, because your note content would leave this computer.
+- **Incremental generation:** Embedding updates are always incremental (only missing or outdated chunks). The legacy `generateOnlyMissingEmbeddings` preference is ignored; a full rebuild only happens when the published embeddings are incompatible with the current configuration, and always after explicit confirmation.
 - **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing. External API usage may involve costs charged by the respective providers.
 - **Batch Size:** Configurable from 1 to 50 chunks per request for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
 - **Checkpointing:** Validated batches are appended to an internal checkpoint. If generation is interrupted or fails, subsequent runs resume from the last valid checkpoint without wasting provider requests.
@@ -493,7 +494,7 @@ When syncing vaults across devices via file-synchronization tools such as Syncth
 
 ## Current Alpha Limitations
 
-- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. External API usage may involve costs charged by the respective providers.
+- Automatic embedding maintenance is currently enabled only for Ollama on this computer (loopback Base URL) on Desktop Producer; Ollama on another host and remote API providers (Mistral, OpenRouter) remain manual-only. External API usage may involve costs charged by the respective providers.
 - Official supported AI providers are **Ollama** (local analysis and embeddings), **Mistral** (remote analysis and embeddings), and **OpenRouter** (remote analysis and embeddings).
 - Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.
