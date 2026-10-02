@@ -191,6 +191,10 @@ function createHarness(): {
     canPublish: vi.fn().mockResolvedValue(plugin.localDeviceState?.role === "producer"),
     isAuthorizedSync: () => plugin.localDeviceState?.role === "producer",
     getProvenance: () => mockProvenance,
+    acquireFence: vi.fn().mockImplementation(async () => plugin.localDeviceState?.role === "producer"
+      ? { producerDeviceId: "11111111-1111-4111-8111-111111111111", epoch: 1 }
+      : undefined),
+    assertFence: vi.fn().mockResolvedValue(true),
   }) as never;
 
   // Provide a lightweight getTextIndexStatus mock so that

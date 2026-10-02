@@ -49,6 +49,8 @@ export interface EmbeddingPersistenceRetryOptions {
  */
 export interface EmbeddingWriteFence {
   assertCurrent(): Promise<boolean>;
+  /** Authority captured when the fence was acquired; used only to stamp provenance. */
+  readonly identity?: { readonly producerDeviceId: string; readonly epoch: number };
 }
 
 class OwnershipFenceRejectedError extends Error {}
@@ -1065,21 +1067,38 @@ export async function validateCanonicalEmbeddingIndex(app: App): Promise<boolean
   return (await validateCanonicalFiles(app)).valid;
 }
 
+export type PurgeOrphanEmbeddingsStatus = "purged" | "unchanged" | "refused";
+
 export interface PurgeOrphanEmbeddingsResult {
   readonly purgedCount: number;
   readonly remainingCount: number;
+  /** `refused` never mutates: the canonical pair is not provably `consistent`. */
+  readonly status?: PurgeOrphanEmbeddingsStatus;
+  readonly reason?: string;
+}
+
+const PURGE_NOOP: PurgeOrphanEmbeddingsResult = { purgedCount: 0, remainingCount: 0, status: "unchanged" };
+
+function purgeRefused(reason: string): PurgeOrphanEmbeddingsResult {
+  return { purgedCount: 0, remainingCount: 0, status: "refused", reason };
 }
 
 /**
  * Safely removes or invalidates canonical embedding records that have become orphans
  * (e.g. after notes or chunks were excluded or deleted), preserving canonical coherence.
  *
+ * The caller must hold the canonical-maintenance lease and a fence acquired without
+ * auto-claim (see `purgeOrphanEmbeddingsCoordinated`); this function re-reads the
+ * canonical state itself, so the decision is always taken inside that lease.
+ *
  * Invariants:
- * - If embeddings file or manifest does not exist or embeddings are not enabled, returns { purgedCount: 0, remainingCount: 0 }.
+ * - Acts only on a provably `consistent` canonical pair; any other state is refused without writing.
+ * - If embeddings file or manifest does not exist or embeddings are not enabled, nothing is written.
  * - Drops records whose chunkId is not in validChunks or whose path matches active exclusion rules.
  * - If remaining records > 0, republishes via publishCanonicalEmbeddings, which generates a fresh publicationId
  *   and automatically marks derived binary copies as outdated.
- * - If all records were purged, removes embeddings.jsonl and disables embeddings in manifest.json.
+ * - If all records were purged, the manifest is republished (tmp + backup + rename, never in place) with
+ *   embeddings disabled and the JSONL is moved to its deterministic backup, removed only after the commit.
  */
 export async function purgeOrphanEmbeddingRecords(
   app: App,
@@ -1097,32 +1116,41 @@ export async function purgeOrphanEmbeddingRecords(
   const manifestExists = await fileExists(app, files.canonicalManifest);
 
   if (!embeddingsExist || !manifestExists) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return PURGE_NOOP;
   }
 
   let manifestValue: unknown;
   try {
     manifestValue = await readJson(app, files.canonicalManifest);
   } catch {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-manifest-unreadable");
   }
 
   if (!isRecord(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord(manifestValue.embeddings)) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return PURGE_NOOP;
   }
 
   let rawContent: string;
   try {
+    const stat = await app.vault.adapter.stat(files.canonicalEmbeddings);
+    if (stat && !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+      return purgeRefused("resource-limit-exceeded");
+    }
     rawContent = await app.vault.adapter.read(files.canonicalEmbeddings);
   } catch {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-unreadable");
+  }
+
+  const pairState = inspectCanonicalPair(rawContent, manifestValue);
+  if (pairState !== "consistent") {
+    return purgeRefused(`canonical-pair-${pairState}`);
   }
 
   const dimensions = typeof manifestValue.embeddings.dimensions === "number" ? manifestValue.embeddings.dimensions : undefined;
   const parsed = parseEmbeddingRecords(rawContent, undefined, dimensions, false);
 
   if (!parsed.valid || parsed.records.length === 0) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-records-invalid");
   }
 
   const validChunkIds = new Set(validChunks.map((chunk) => chunk.chunkId));
@@ -1144,7 +1172,7 @@ export async function purgeOrphanEmbeddingRecords(
 
   const purgedCount = parsed.records.length - remainingRecords.length;
   if (purgedCount === 0) {
-    return { purgedCount: 0, remainingCount: parsed.records.length };
+    return { purgedCount: 0, remainingCount: parsed.records.length, status: "unchanged" };
   }
 
   if (remainingRecords.length > 0) {
@@ -1167,12 +1195,11 @@ export async function purgeOrphanEmbeddingRecords(
     if (!pubResult.success) {
       throw new Error(`Failed to publish reconciled canonical embeddings: ${pubResult.error ?? "unknown"}`);
     }
-    return { purgedCount, remainingCount: remainingRecords.length };
+    return { purgedCount, remainingCount: remainingRecords.length, status: "purged" };
   }
 
-  // All records were purged
-  await assertWriteFence(fence);
-  await removeIfExists(app, files.canonicalEmbeddings);
+  // All records were purged: disable embeddings in the shared manifest through the
+  // same tmp + backup + rename protocol as a publication (never an in-place write).
   const nextManifest: Record<string, unknown> = {
     ...manifestValue,
     embeddingsEnabled: false,
@@ -1180,9 +1207,111 @@ export async function purgeOrphanEmbeddingRecords(
   };
   delete nextManifest.embeddings;
   delete nextManifest.embeddingInput;
-  await assertWriteFence(fence);
-  await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
+  await publishEmbeddingsDisabledManifest(app, nextManifest, fence);
   await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
 
-  return { purgedCount, remainingCount: 0 };
+  return { purgedCount, remainingCount: 0, status: "purged" };
+}
+
+async function publishEmbeddingsDisabledManifest(
+  app: App,
+  nextManifest: Record<string, unknown>,
+  fence?: EmbeddingWriteFence,
+): Promise<void> {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  const adapter = app.vault.adapter;
+  let embeddingsBackedUp = false;
+  let manifestBackedUp = false;
+  let manifestPublished = false;
+  try {
+    await assertWriteFence(fence);
+    await ensureProducerWorkDirectories(app);
+    await adapter.write(files.manifestPublishTemporary, JSON.stringify(nextManifest, null, 2));
+    const staged = await readJson(app, files.manifestPublishTemporary);
+    if (!isRecord(staged) || staged.embeddingsEnabled !== false || staged.embeddings !== undefined) {
+      throw new Error("Disabled-embeddings manifest candidate validation failed.");
+    }
+
+    await removeIfExists(app, files.embeddingsPublishBackup);
+    await removeIfExists(app, files.manifestPublishBackup);
+    // The JSONL leaves the canonical location first so every crash window is one the
+    // existing recovery already understands (backups restore the previous coherent pair).
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup);
+    embeddingsBackedUp = true;
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup);
+    manifestBackedUp = true;
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest);
+    manifestPublished = true;
+
+    const finalManifest = await readJson(app, files.canonicalManifest);
+    if (!isRecord(finalManifest) || finalManifest.embeddingsEnabled !== false || await fileExists(app, files.canonicalEmbeddings)) {
+      throw new Error("Disabled-embeddings publication validation failed.");
+    }
+    await cleanupPaths(app, [files.manifestPublishBackup, files.embeddingsPublishBackup], []);
+  } catch (error) {
+    try {
+      if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
+      if (manifestBackedUp && await fileExists(app, files.manifestPublishBackup)) {
+        await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishBackup, files.canonicalManifest);
+      }
+      if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
+        await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      }
+    } catch {
+      // Backups are preserved on disk for the startup recovery.
+    }
+    await cleanupPaths(app, [files.manifestPublishTemporary], []);
+    throw error;
+  }
+}
+
+export type CanonicalMaintenanceOutcome<T> =
+  | { readonly status: "completed"; readonly value: T }
+  | { readonly status: "refused"; readonly reason: "index-write-busy" | "ownership-fence-rejected" | "disposed" };
+
+/**
+ * Runs destructive canonical maintenance under the existing writer exclusion. The lease is
+ * acquired first and covers the whole cycle (fence, read, validate, publish); the fence is
+ * acquired without auto-claim and is independent of the lease (exclusion vs. authority).
+ */
+export async function runCanonicalMaintenance<T>(
+  coordinator: IndexWriteCoordinator,
+  acquireFence: () => Promise<EmbeddingWriteFence | undefined>,
+  task: (fence: EmbeddingWriteFence) => Promise<T>,
+): Promise<CanonicalMaintenanceOutcome<T>> {
+  const lease = coordinator.startCanonicalMaintenance();
+  if (lease.status !== "accepted") {
+    return { status: "refused", reason: lease.status === "disposed" ? "disposed" : "index-write-busy" };
+  }
+  try {
+    const fence = await acquireFence();
+    if (!fence || !await fence.assertCurrent()) return { status: "refused", reason: "ownership-fence-rejected" };
+    return { status: "completed", value: await task(fence) };
+  } finally {
+    coordinator.finish(lease.token);
+  }
+}
+
+export interface CoordinatedPurgeHooks {
+  /** Called only after a purge that actually mutated the canonical publication. */
+  readonly onPurged?: () => void;
+  readonly getProvenance?: (fence: EmbeddingWriteFence) => ArtifactProvenance | undefined;
+}
+
+export async function purgeOrphanEmbeddingsCoordinated(
+  app: App,
+  coordinator: IndexWriteCoordinator,
+  acquireFence: () => Promise<EmbeddingWriteFence | undefined>,
+  validChunks: readonly FilterableChunk[],
+  activePolicy?: Parameters<typeof purgeOrphanEmbeddingRecords>[2],
+  hooks: CoordinatedPurgeHooks = {},
+): Promise<PurgeOrphanEmbeddingsResult> {
+  const outcome = await runCanonicalMaintenance(coordinator, acquireFence, (fence) =>
+    purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, hooks.getProvenance?.(fence), fence));
+  if (outcome.status === "refused") return purgeRefused(outcome.reason);
+  if (outcome.value.status === "purged") hooks.onPurged?.();
+  return outcome.value;
 }

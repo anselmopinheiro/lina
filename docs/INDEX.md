@@ -73,11 +73,12 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 | **LINA-15E** | Alinhamento da Sidebar com Decisão Canónica & Limpeza | **CONCLUÍDA** | `docs/audits/architecture/LINA-15E-IMPLEMENT-SIDEBAR-CANONICAL-DECISION-001.md` |
 | **LINA-15F** | Configuração / Runtime Configuration Consistency (localidade por endpoint; geração sempre incremental) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15F-IMPLEMENT-CONFIG-RUNTIME-CONSISTENCY-001.md` (Findings F-11, F-12) |
 | **LINA-15G** | Settings Defaults & Compatibility — Opção B (UI == runtime; instalações existentes preservadas; defaults documentados para novas) | **CONCLUÍDA** | `docs/audits/architecture/LINA-15G-IMPLEMENT-SETTINGS-DEFAULTS-COMPATIBILITY-001.md` (CR-03 da 15F) |
-| **LINA-15H** | Persistência, Recuperação e Validação | **ABERTA** (15H-B implementada; 15H-C não iniciada) | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 (renumerada; antes 15G) |
+| **LINA-15H** | Persistência, Recuperação e Validação | **ABERTA** (15H-B e 15H-C implementadas; 15H-D não iniciada) | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 (renumerada; antes 15G) |
 | **LINA-15H-A** | Auditoria da persistência | **CONCLUÍDA** | `docs/audits/architecture/LINA-15H-A-AUDIT-PERSISTENCE-001.md` (commit `89b4764`) |
 | **LINA-15H-B-A** | Auditoria do recovery e par canónico | **CONCLUÍDA** | `docs/audits/architecture/LINA-15H-B-AUDIT-RECOVERY-PAIR-001.md` (commit `fa83d02`) |
 | **LINA-15H-B** | Recovery no arranque, validação factual do par e fencing de manutenção | **IMPLEMENTADA** (limites residuais documentados) | `docs/audits/architecture/LINA-15H-B-IMPLEMENT-RECOVERY-PAIR-001.md` |
-| **LINA-15H-C** | Continuação da persistência | **NÃO INICIADA** | Não executada no âmbito da 15H-B |
+| **LINA-15H-C-A** | Auditoria da publicação atómica, purge e coordenação | **CONCLUÍDA** | `docs/audits/architecture/LINA-15H-C-AUDIT-ATOMIC-PUBLICATION-001.md` |
+| **LINA-15H-C** | Purge coordenado, coordenador endurecido, ramo "tudo purgado" (P1) | **IMPLEMENTADA** (C-03/C-05/C-08/C-11 adiados para 15H-D) | `docs/audits/architecture/LINA-15H-C-IMPLEMENT-ATOMIC-PUBLICATION-001.md` |
 | **LINA-15I** | Arranque Leve e Otimização de Performance | ABERTA | Finding F-13 na auditoria global pós-LINA-14 |
 | **LINA-15J** | Cobertura de Testes e Reconciliação Documental; limpeza de dívida de configuração (CR-05/06/07/09, F-15, F-22) | ABERTA | Findings F-24, D1–D12 e `docs/audits/architecture/LINA-15F-AUDIT-CONFIG-RUNTIME-CONSISTENCY-001.md` §12 |
 ---

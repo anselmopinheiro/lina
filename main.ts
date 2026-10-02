@@ -80,7 +80,15 @@ import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
 import { recoverCanonicalEmbeddingsAtStartup } from "./src/index/embeddingPersistence";
-import { purgeOrphanEmbeddingRecords } from "./src/index/embeddingPersistence";
+import { createArtifactProvenance } from "./src/device/artifactProvenance";
+import {
+  purgeOrphanEmbeddingRecords,
+  purgeOrphanEmbeddingsCoordinated,
+  runCanonicalMaintenance,
+  type CanonicalMaintenanceOutcome,
+  type EmbeddingWriteFence,
+  type PurgeOrphanEmbeddingsResult,
+} from "./src/index/embeddingPersistence";
 import { BINARY_EMBEDDING_FILES, createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
@@ -2211,44 +2219,44 @@ export default class LinaPlugin extends Plugin {
       const activePolicy = this.getCanonicalExclusionPolicy();
       const manifestHash = status.manifest?.exclusionPolicyHash;
       if (activePolicy && manifestHash !== activePolicy.policyHash) {
-        const gate = this.getOwnershipGate();
-        const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : undefined;
-        if (typeof gate.acquireFence === "function" && !fenceToken) return;
-        const provenance = gate.getProvenance();
-        const pathExclusions = this.getIndexPathExclusions();
-        const excludedContentContains = this.getExcludedContentTerms();
-        await persistAndActivateTextIndexCandidate(
-          () => saveTextIndex(
-            this.app,
-            this.indexedNotes,
-            this.indexedChunks,
-            { enabled: true, chunkSize: 1200, overlap: 150 },
-            status.excludedNotes ?? 0,
-            {
-              enabled: true,
-              alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-              excludedFoldersCount: pathExclusions.excludedFolders.length,
-              excludedPathContainsCount: pathExclusions.excludedPathContains.length,
-              excludedContentContainsCount: excludedContentContains.length,
-            },
-            provenance,
-            activePolicy
-          ),
-          () => {
-            this.textIndexLoaded = true;
+        // The manifest is shared with the embeddings publication: the policy stamp and the
+        // purge run under the canonical-maintenance lease, so no generation can publish
+        // between the manifest read and its republication.
+        const outcome = await runCanonicalMaintenance(
+          this.getIndexWriteCoordinator(),
+          () => this.acquireCanonicalMaintenanceFence(),
+          async (fence) => {
+            const provenance = fence.identity ? createArtifactProvenance(fence.identity.producerDeviceId, fence.identity.epoch) : undefined;
+            const pathExclusions = this.getIndexPathExclusions();
+            const excludedContentContains = this.getExcludedContentTerms();
+            await persistAndActivateTextIndexCandidate(
+              () => saveTextIndex(
+                this.app,
+                this.indexedNotes,
+                this.indexedChunks,
+                { enabled: true, chunkSize: 1200, overlap: 150 },
+                status.excludedNotes ?? 0,
+                {
+                  enabled: true,
+                  alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+                  excludedFoldersCount: pathExclusions.excludedFolders.length,
+                  excludedPathContainsCount: pathExclusions.excludedPathContains.length,
+                  excludedContentContainsCount: excludedContentContains.length,
+                },
+                provenance,
+                activePolicy
+              ),
+              () => {
+                this.textIndexLoaded = true;
+              }
+            );
+            return purgeOrphanEmbeddingRecords(this.app, this.indexedChunks, activePolicy, provenance, fence);
           }
-        );
-        try {
-          await purgeOrphanEmbeddingRecords(
-            this.app,
-            this.indexedChunks,
-            activePolicy,
-            provenance,
-            fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : undefined
-          );
-        } catch (purgeError) {
+        ).catch((purgeError: unknown) => {
           console.warn("Lina: failed to purge orphan embedding records:", purgeError);
-        }
+          return undefined;
+        });
+        this.finishCanonicalPurge(outcome);
       }
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
         timestamp: new Date().toISOString(),
@@ -2266,18 +2274,18 @@ export default class LinaPlugin extends Plugin {
     });
 
     try {
-      const activePolicy = this.getCanonicalExclusionPolicy();
-      const gate = this.getOwnershipGate();
-      const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : undefined;
-      if (typeof gate.acquireFence === "function" && !fenceToken) return;
-      const provenance = gate.getProvenance();
-      await purgeOrphanEmbeddingRecords(
+      const result = await purgeOrphanEmbeddingsCoordinated(
         this.app,
+        this.getIndexWriteCoordinator(),
+        () => this.acquireCanonicalMaintenanceFence(),
         this.indexedChunks,
-        activePolicy,
-        provenance,
-        fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : undefined
+        this.getCanonicalExclusionPolicy(),
+        {
+          getProvenance: (fence) => fence.identity ? createArtifactProvenance(fence.identity.producerDeviceId, fence.identity.epoch) : undefined,
+          onPurged: () => this.invalidateAfterCanonicalPurge(),
+        }
       );
+      this.logCanonicalPurgeRefusal(result);
       try {
         await this.getBinaryEmbeddingCopyController().check(true);
       } catch {
@@ -2286,6 +2294,42 @@ export default class LinaPlugin extends Plugin {
     } catch (purgeError) {
       console.warn("Lina: failed to purge orphan embedding records after exclusion reconciliation:", purgeError);
     }
+  }
+
+  /** Purge never claims ownership: without a valid current Active Producer it must not write. */
+  private async acquireCanonicalMaintenanceFence(): Promise<EmbeddingWriteFence | undefined> {
+    const gate = this.getOwnershipGate();
+    const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+    return token ? { assertCurrent: () => gate.assertFence(token), identity: { producerDeviceId: token.producerDeviceId, epoch: token.epoch } } : undefined;
+  }
+
+  private invalidateAfterCanonicalPurge(): void {
+    this.invalidateRuntimeEmbeddingIndex("canonical-published");
+    this.markEmbeddingWorkStatusDirty("embeddings-published");
+  }
+
+  private logCanonicalPurgeRefusal(result: PurgeOrphanEmbeddingsResult): void {
+    if (result.status === "refused") {
+      this.logAutomaticUpdateDiagnostic("orphan embedding purge refused", {
+        reason: result.reason ?? "unknown",
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  private finishCanonicalPurge(
+    outcome: CanonicalMaintenanceOutcome<PurgeOrphanEmbeddingsResult> | undefined
+  ): void {
+    if (!outcome) return;
+    if (outcome.status === "refused") {
+      this.logAutomaticUpdateDiagnostic("orphan embedding purge refused", {
+        reason: outcome.reason,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    if (outcome.value.status === "purged") this.invalidateAfterCanonicalPurge();
+    else this.logCanonicalPurgeRefusal(outcome.value);
   }
 
   onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {

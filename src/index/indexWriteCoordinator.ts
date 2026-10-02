@@ -1,4 +1,4 @@
-export type IndexWriteOperationKind = "text-rebuild" | "text-automatic-batch" | "embedding-generation" | "binary-maintenance";
+export type IndexWriteOperationKind = "text-rebuild" | "text-automatic-batch" | "embedding-generation" | "binary-maintenance" | "canonical-maintenance";
 
 export interface IndexWriteCoordinatorState {
   activeOperation: IndexWriteOperationKind | null;
@@ -27,6 +27,14 @@ export interface StartAutomaticBatchOptions {
 export interface IndexWriteCoordinatorToken {
   kind: IndexWriteOperationKind;
   startedAt: string;
+  /** Unique per started operation; `finish` only releases the operation that owns it. */
+  id: number;
+}
+
+let nextTokenId = 1;
+
+function createToken(kind: IndexWriteOperationKind, startedAt: string): IndexWriteCoordinatorToken {
+  return { kind, startedAt, id: nextTokenId++ };
 }
 
 function createIdleState(): IndexWriteCoordinatorState {
@@ -40,6 +48,7 @@ function createIdleState(): IndexWriteCoordinatorState {
 
 export class IndexWriteCoordinator {
   private state: IndexWriteCoordinatorState = createIdleState();
+  private activeTokenId: number | null = null;
 
   getState(): IndexWriteCoordinatorState {
     return { ...this.state };
@@ -60,7 +69,7 @@ export class IndexWriteCoordinator {
       };
     }
 
-    if (this.state.activeOperation === "text-rebuild") {
+    if (this.state.activeOperation === "text-rebuild" || this.state.activeOperation === "canonical-maintenance") {
       return {
         status: "text-index-busy",
         state: this.getState(),
@@ -105,10 +114,8 @@ export class IndexWriteCoordinator {
     }
 
     const startedAt = new Date().toISOString();
-    const token: IndexWriteCoordinatorToken = {
-      kind: "embedding-generation",
-      startedAt,
-    };
+    const token = createToken("embedding-generation", startedAt);
+    this.activeTokenId = token.id;
 
     this.state = {
       activeOperation: token.kind,
@@ -129,12 +136,30 @@ export class IndexWriteCoordinator {
     if (this.state.disposed) return { status: "disposed", state: this.getState() };
     if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
       return {
-        status: this.state.activeOperation?.startsWith("text-") ? "text-index-busy" : "embedding-generation-active",
+        status: this.state.activeOperation?.startsWith("text-") || this.state.activeOperation === "canonical-maintenance" ? "text-index-busy" : "embedding-generation-active",
         state: this.getState(),
       };
     }
     const startedAt = new Date().toISOString();
-    const token: IndexWriteCoordinatorToken = { kind: "binary-maintenance", startedAt };
+    const token = createToken("binary-maintenance", startedAt);
+    this.activeTokenId = token.id;
+    this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
+    return { status: "accepted", state: this.getState(), token };
+  }
+
+  /**
+   * Exclusive lease for destructive canonical maintenance (purge). It covers the
+   * whole read-validate-publish cycle, so it is refused while any other writer
+   * (including a pending generation reservation) is active, and it blocks all of them.
+   */
+  startCanonicalMaintenance(): IndexWriteCoordinatorResult {
+    if (this.state.disposed) return { status: "disposed", state: this.getState() };
+    if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
+      return { status: "text-index-busy", state: this.getState() };
+    }
+    const startedAt = new Date().toISOString();
+    const token = createToken("canonical-maintenance", startedAt);
+    this.activeTokenId = token.id;
     this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
     return { status: "accepted", state: this.getState(), token };
   }
@@ -154,11 +179,18 @@ export class IndexWriteCoordinator {
       };
     }
 
+    // Any other active writer (automatic batch, another rebuild, canonical
+    // maintenance) is incompatible with a rebuild of the shared manifest.
+    if (this.state.activeOperation !== null) {
+      return {
+        status: "text-index-busy",
+        state: this.getState(),
+      };
+    }
+
     const startedAt = new Date().toISOString();
-    const token: IndexWriteCoordinatorToken = {
-      kind: "text-rebuild",
-      startedAt,
-    };
+    const token = createToken("text-rebuild", startedAt);
+    this.activeTokenId = token.id;
 
     this.state = {
       ...this.state,
@@ -190,7 +222,9 @@ export class IndexWriteCoordinator {
       };
     }
 
-    if (this.state.activeOperation === "text-rebuild") {
+    // Text rebuild, another automatic batch and canonical maintenance all write
+    // the shared manifest: a single automatic batch may run at a time.
+    if (this.state.activeOperation !== null) {
       return {
         status: "text-index-busy",
         state: this.getState(),
@@ -198,10 +232,8 @@ export class IndexWriteCoordinator {
     }
 
     const startedAt = new Date().toISOString();
-    const token: IndexWriteCoordinatorToken = {
-      kind: "text-automatic-batch",
-      startedAt,
-    };
+    const token = createToken("text-automatic-batch", startedAt);
+    this.activeTokenId = token.id;
 
     this.state = {
       ...this.state,
@@ -221,10 +253,11 @@ export class IndexWriteCoordinator {
       return;
     }
 
-    if (this.state.activeOperation !== token.kind || this.state.activeStartedAt !== token.startedAt) {
+    if (this.activeTokenId !== token.id || this.state.activeOperation !== token.kind) {
       return;
     }
 
+    this.activeTokenId = null;
     this.state = {
       activeOperation: null,
       activeStartedAt: null,
