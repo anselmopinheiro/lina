@@ -11,6 +11,22 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe("reconciliation worker", () => {
+  it("R-01 recovers canonical embeddings before startup text and binary maintenance", async () => {
+    const calls: string[] = [];
+    const recoveryPort = { runStartupEmbeddingRecovery: async () => { calls.push("recovery"); } };
+    const worker = new ReconciliationWorker({
+      ...recoveryPort,
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      canPublish: () => true,
+      runStartupReconciliation: async () => { calls.push("text"); },
+      runStartupBinaryArtifactMigration: async () => { calls.push("binary"); },
+      runExclusionReconciliation: async () => {},
+      waitForAutomaticUpdates: async () => {},
+    });
+    worker.start();
+    await worker.runStartupReconciliation();
+    expect(calls).toEqual(["recovery", "text", "binary"]);
+  });
   it("starts and exposes reconciling state on a desktop producer", async () => {
     const deferred = createDeferred();
     const worker = new ReconciliationWorker({

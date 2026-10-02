@@ -155,7 +155,7 @@ export async function evaluateOwnershipGate(
 export interface IOwnershipGate {
   canPublish(): Promise<boolean>;
   evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision>;
-  acquireFence(): Promise<OwnershipFenceToken | undefined>;
+  acquireFence(options?: EvaluateOwnershipGateOptions): Promise<OwnershipFenceToken | undefined>;
   assertFence(token: OwnershipFenceToken): Promise<boolean>;
   isAuthorizedSync(): boolean;
   isStandbyProducerSync(): boolean;
@@ -207,8 +207,10 @@ export class OwnershipGate implements IOwnershipGate {
     return decision.authorized;
   }
 
-  async acquireFence(): Promise<OwnershipFenceToken | undefined> {
-    const decision = await this.evaluate();
+  async acquireFence(options?: EvaluateOwnershipGateOptions): Promise<OwnershipFenceToken | undefined> {
+    const decision = options && this.adapter
+      ? await evaluateOwnershipGate(this.adapter, this.getDeviceId(), this.getRole(), undefined, options)
+      : await this.evaluate();
     if (!decision.authorized || !decision.activeProducerId || !decision.epoch) {
       return undefined;
     }

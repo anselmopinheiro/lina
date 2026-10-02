@@ -73,6 +73,7 @@ function createRuntimeTab(jsonlMode: "readable" | "resource-limited" | "read-fai
         provider: "openrouter",
         model: "openai/text-embedding-3-small",
         dimensions: 3,
+        totalEmbeddings: 1,
         updatedAt: "2026-08-18T20:00:00.000Z",
       },
       embeddingInput: { version: EMBEDDING_INPUT_VERSION, prefixMode: getPrefixModeForModel(record.model) },

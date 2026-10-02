@@ -156,6 +156,8 @@ Lina coordinates multi-device vaults seamlessly across Desktop and Mobile:
 - **Changing the active Producer:** In **Settings > Geral / General**, use the existing role action or the Command Palette to request the transfer. Lina asks for confirmation before applying it.
 - **Synchronisation guidance:** Synchronise the published Lina search data between participating devices. Keep `data.json` local to each installation and configure your sync provider to exclude the Producer operational area when appropriate.
 
+At startup, the active Producer recovers interrupted embedding publications under the existing ownership and writer protections. Companion and standby devices do not repair shared artefacts. Lina checks the canonical JSONL and manifest before repairing the derived binary copy; detected incomplete or inconsistent publications disable semantic search and automatic embedding updates until recovery or a confirmed rebuild. The JSONL format is unchanged. These checks use existing counts and identities; they cannot distinguish different JSONL generations with the same count and vector identity without a canonical content digest.
+
 
 ---
 

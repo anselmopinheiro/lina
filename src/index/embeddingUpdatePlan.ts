@@ -15,6 +15,7 @@ export type EmbeddingUpdatePlanReason =
   | "canonical-missing"
   | "canonical-empty"
   | "canonical-unreadable"
+  | "canonical-pair-inconsistent"
   | "canonical-resource-limit-exceeded"
   | "published-identity-incomplete"
   | "target-identity-incomplete"
@@ -79,6 +80,7 @@ export interface CalculateEmbeddingUpdatePlanInput {
   canonicalRecords: readonly unknown[];
   canonicalExists?: boolean;
   canonicalReadability?: CanonicalEmbeddingReadability;
+  canonicalPairState?: import("./embeddingPersistence").CanonicalPairState;
   checkpointRecords?: readonly EmbeddingRecord[];
   publishedIdentity: PublishedEmbeddingIdentity;
   targetIdentity: EmbeddingSpaceIdentity;
@@ -257,7 +259,10 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
     : [];
   for (const reason of mismatchReasons) addReason(reasons, reason);
 
-  if (canonicalReadability === "missing") {
+  if (input.canonicalPairState === "inconsistent") {
+    mode = "full-rebuild";
+    addReason(reasons, "canonical-pair-inconsistent");
+  } else if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason(reasons, "canonical-missing");
   } else if (canonicalReadability === "empty") {

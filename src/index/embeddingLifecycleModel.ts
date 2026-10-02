@@ -175,6 +175,7 @@ export interface EmbeddingLifecycleSnapshot {
   };
 
   readonly info: {
+    readonly canonicalPairState?: import("./embeddingPersistence").CanonicalPairState;
     readonly embeddingsPublishedAt?: string;
     readonly provenance?: "valid" | "stale" | "future" | "unknown";
   };
@@ -206,6 +207,7 @@ export interface ClassifyEmbeddingWorkInput {
 }
 
 export interface ResolveEmbeddingLifecycleInput {
+  readonly canonicalPairState?: import("./embeddingPersistence").CanonicalPairState;
   readonly revision: number;
   readonly computedAt?: number;
 
@@ -700,6 +702,7 @@ export function resolveEmbeddingLifecycle(
   };
 
   const infoRegion: EmbeddingLifecycleSnapshot["info"] = {
+    canonicalPairState: input.canonicalPairState,
     embeddingsPublishedAt: history?.lastSuccess?.at,
     provenance,
   };

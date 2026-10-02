@@ -12,6 +12,9 @@ import {
   FilterableChunk,
 } from "./exclusionPolicy";
 import { shouldExcludePath } from "./indexExclusions";
+import { IndexWriteCoordinator } from "./indexWriteCoordinator";
+import { evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
+import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
@@ -48,9 +51,11 @@ export interface EmbeddingWriteFence {
   assertCurrent(): Promise<boolean>;
 }
 
+class OwnershipFenceRejectedError extends Error {}
+
 async function assertWriteFence(fence: EmbeddingWriteFence | undefined): Promise<void> {
   if (fence && !await fence.assertCurrent()) {
-    throw new Error("Ownership fence rejected the embedding write.");
+    throw new OwnershipFenceRejectedError("Ownership fence rejected the embedding write.");
   }
 }
 
@@ -372,6 +377,20 @@ function getManifestEmbeddingInfo(manifest: Record<string, unknown>): Record<str
   return isRecord(embeddings) ? embeddings : null;
 }
 
+export type CanonicalPairState = "absent" | "consistent" | "inconsistent" | "unreadable" | "resource-limit-exceeded" | "unverifiable-legacy";
+
+/** Pure inspection of existing publication fields; never decides dispatch or mutates files. */
+export function inspectCanonicalPair(content: string | undefined, manifest: unknown): CanonicalPairState {
+  const declared = isRecord(manifest) && (manifest.embeddingsEnabled === true || isRecord(manifest.embeddings));
+  if (content === undefined) return declared ? "inconsistent" : "absent";
+  if (!declared) return content.length === 0 ? "absent" : "inconsistent";
+  const validation = validateCanonicalContent(content, manifest);
+  if (!validation.valid) return "inconsistent";
+  const info = isRecord(manifest) ? getManifestEmbeddingInfo(manifest) : null;
+  return typeof info?.publicationId === "string" && info.publicationId.trim().length > 0
+    ? "consistent" : "unverifiable-legacy";
+}
+
 function validateCanonicalContent(embeddingsContent: string, manifestValue: unknown): CanonicalValidationResult {
   if (!isRecord(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
@@ -392,7 +411,12 @@ function validateCanonicalContent(embeddingsContent: string, manifestValue: unkn
     return { valid: false, reason: "manifest-identity-invalid" };
   }
 
-  const parsed = parseEmbeddingRecords(embeddingsContent, count as number, dimensions as number, false);
+  if (embeddingsInfo.publicationId !== undefined &&
+    (typeof embeddingsInfo.publicationId !== "string" || embeddingsInfo.publicationId.trim().length === 0)) {
+    return { valid: false, reason: "manifest-publication-invalid" };
+  }
+  const parsed = parseEmbeddingRecords(embeddingsContent, count as number, dimensions as number,
+    typeof embeddingsInfo.publicationId === "string");
   if (!parsed.valid) {
     return { valid: false, reason: parsed.reason };
   }
@@ -400,15 +424,22 @@ function validateCanonicalContent(embeddingsContent: string, manifestValue: unkn
     return { valid: false, reason: "canonical-record-identity-mismatch" };
   }
 
-  const rawContract = manifestValue.vectorContract ?? embeddingsInfo.vectorContract;
-  if (rawContract !== undefined && rawContract !== null) {
+  const input = isRecord(manifestValue.embeddingInput) ? manifestValue.embeddingInput : undefined;
+  if (typeof embeddingsInfo.publicationId === "string" && (!input ||
+    !Number.isInteger(input.version) || typeof input.version !== "number" || input.version <= 0 ||
+    (input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document"))) {
+    return { valid: false, reason: "manifest-input-identity-invalid" };
+  }
+  for (const rawContract of [manifestValue.vectorContract, embeddingsInfo.vectorContract]) {
+    if (rawContract === undefined || rawContract === null) continue;
     if (!isValidVectorContract(rawContract)) {
       return { valid: false, reason: "manifest-vector-contract-invalid" };
     }
     if (
       rawContract.provider !== provider.trim().toLowerCase() ||
       rawContract.model !== model.trim().toLowerCase() ||
-      rawContract.dimensions !== dimensions
+      rawContract.dimensions !== dimensions ||
+      (input !== undefined && (rawContract.inputVersion !== input.version || rawContract.prefixMode !== input.prefixMode))
     ) {
       return { valid: false, reason: "manifest-vector-contract-mismatch" };
     }
@@ -427,8 +458,15 @@ async function validateCanonicalFiles(
   }
 
   try {
+    const stat = await app.vault.adapter.stat(embeddingsPath);
+    if (stat && !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+      return { valid: false, reason: "canonical-resource-limit-exceeded" };
+    }
     const embeddingsContent = await app.vault.adapter.read(embeddingsPath);
-    const manifest = await readJson(app, manifestPath);
+    const manifestContent = await app.vault.adapter.read(manifestPath);
+    let manifest: unknown;
+    try { manifest = JSON.parse(manifestContent); }
+    catch { return { valid: false, reason: "canonical-manifest-invalid" }; }
     return validateCanonicalContent(embeddingsContent, manifest);
   } catch {
     return { valid: false, reason: "canonical-read-error" };
@@ -440,6 +478,7 @@ async function cleanupPaths(app: App, paths: string[], warnings: string[]): Prom
     try {
       await removeIfExists(app, path);
     } catch (error) {
+      if (error instanceof OwnershipFenceRejectedError) throw error;
       warnings.push(`${path}: ${errorMessage(error)}`);
     }
   }
@@ -449,11 +488,17 @@ async function restoreCheckpointBackups(app: App): Promise<boolean> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const backup = await validateCheckpointPair(app, files.checkpointBackup, files.checkpointMetadataBackup);
   if (!backup.valid) return false;
+  await ensureProducerWorkDirectories(app);
 
+  await app.vault.adapter.write(files.checkpointTemporary, await app.vault.adapter.read(files.checkpointBackup));
+  await app.vault.adapter.write(files.checkpointMetadataTemporary, await app.vault.adapter.read(files.checkpointMetadataBackup));
   await removeIfExists(app, files.checkpoint);
   await removeIfExists(app, files.checkpointMetadata);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointBackup, files.checkpoint);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataBackup, files.checkpointMetadata);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointTemporary, files.checkpoint);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataTemporary, files.checkpointMetadata);
+  if (!(await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata)).valid) return false;
+  await removeIfExists(app, files.checkpointBackup);
+  await removeIfExists(app, files.checkpointMetadataBackup);
   return true;
 }
 
@@ -461,10 +506,18 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const bothBackupsValid = await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
   if (bothBackupsValid.valid) {
+    await ensureProducerWorkDirectories(app);
+    // Retain both backups until a coherent restored publication is observed.
+    // A revoked fence between the two promotions must remain recoverable.
+    await app.vault.adapter.write(files.embeddingsPublishTemporary, await app.vault.adapter.read(files.embeddingsPublishBackup));
+    await app.vault.adapter.write(files.manifestPublishTemporary, await app.vault.adapter.read(files.manifestPublishBackup));
     await removeIfExists(app, files.canonicalEmbeddings);
     await removeIfExists(app, files.canonicalManifest);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
+    if (!(await validateCanonicalFiles(app)).valid) return false;
+    await removeIfExists(app, files.embeddingsPublishBackup);
+    await removeIfExists(app, files.manifestPublishBackup);
     return true;
   }
 
@@ -475,8 +528,12 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
       files.canonicalManifest
     );
     if (backupWithCurrentManifest.valid) {
+      await ensureProducerWorkDirectories(app);
+      await app.vault.adapter.write(files.embeddingsPublishTemporary, await app.vault.adapter.read(files.embeddingsPublishBackup));
       await removeIfExists(app, files.canonicalEmbeddings);
-      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+      if (!(await validateCanonicalFiles(app)).valid) return false;
+      await removeIfExists(app, files.embeddingsPublishBackup);
       return true;
     }
   }
@@ -487,13 +544,17 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
   ) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord(manifestBackup) && manifestBackup.indexType === "text" && manifestBackup.embeddingsEnabled !== true) {
+        await ensureProducerWorkDirectories(app);
+        await app.vault.adapter.write(files.manifestPublishTemporary, JSON.stringify(manifestBackup));
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
-        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
+        await removeIfExists(app, files.manifestPublishBackup);
         return true;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof OwnershipFenceRejectedError) throw error;
       return false;
     }
   }
@@ -501,47 +562,11 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
   return false;
 }
 
-async function completeInterruptedFirstPublication(app: App): Promise<boolean> {
-  const files = EMBEDDING_PERSISTENCE_FILES;
-  if (
-    !(await fileExists(app, files.canonicalEmbeddings))
-    || !(await fileExists(app, files.canonicalManifest))
-    || !(await fileExists(app, files.manifestPublishTemporary))
-  ) {
-    return false;
-  }
-
-  const currentCanonical = await validateCanonicalFiles(app);
-  if (currentCanonical.valid) return false;
-
-  const candidate = await validateCanonicalFiles(
-    app,
-    files.canonicalEmbeddings,
-    files.manifestPublishTemporary
-  );
-  if (!candidate.valid) return false;
-
-  await ensureProducerWorkDirectories(app);
-  await removeIfExists(app, files.manifestPublishBackup);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
-  const published = await validateCanonicalFiles(app);
-  if (!published.valid) {
-    await removeIfExists(app, files.canonicalManifest);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
-    await removeIfExists(app, files.canonicalEmbeddings);
-    return false;
-  }
-
-  await removeIfExists(app, files.manifestPublishBackup);
-  return true;
-}
-
 export async function recoverEmbeddingPersistenceArtifacts(
   app: App,
   onDiagnostic?: EmbeddingPersistenceDiagnosticCallback,
   fence?: EmbeddingWriteFence
-): Promise<{ warnings: string[] }> {
+): Promise<{ warnings: string[]; changed?: boolean }> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const warnings: string[] = [];
   onDiagnostic?.({ stage: "recovery", result: "started" });
@@ -552,53 +577,76 @@ export async function recoverEmbeddingPersistenceArtifacts(
     return { warnings: ["ownership-fence-rejected"] };
   }
 
-  const publicationBackupExistsAtStart = await fileExists(app, files.embeddingsPublishBackup)
-    || await fileExists(app, files.manifestPublishBackup);
-  if (!publicationBackupExistsAtStart) {
-    try {
-      await completeInterruptedFirstPublication(app);
-    } catch (error) {
-      warnings.push(`first-publication-completion: ${errorMessage(error)}`);
-    }
-  }
+  // Fence every actual mutable adapter call, including each bounded rename retry.
+  // Binding reads to the original adapter preserves DataAdapter implementations.
+  const originalAdapter = app.vault.adapter;
+  let changed = false;
+  const guardedAdapter = new Proxy(originalAdapter, {
+    get(target, key) {
+      const value: unknown = Reflect.get(target, key);
+      if (typeof value !== "function") return value;
+      if (["write", "remove", "rename", "mkdir"].includes(String(key))) {
+        return async (...args: unknown[]) => {
+          await assertWriteFence(fence);
+          const result: unknown = await Reflect.apply(value, target, args);
+          changed = true;
+          return result;
+        };
+      }
+      return value.bind(target) as unknown;
+    },
+  });
+  const guardedVault = new Proxy(app.vault, { get: (target, key) => key === "adapter" ? guardedAdapter : Reflect.get(target, key) as unknown });
+  app = new Proxy(app, { get: (target, key) => key === "vault" ? guardedVault : Reflect.get(target, key) as unknown });
 
-  await cleanupPaths(app, [
-    files.checkpointTemporary,
-    files.checkpointMetadataTemporary,
-    files.embeddingsPublishTemporary,
-    files.manifestPublishTemporary,
-  ], warnings);
+  // Orphan temporaries are never commit markers and are never auto-promoted.
 
-  const checkpointBackupExists = await fileExists(app, files.checkpointBackup)
-    || await fileExists(app, files.checkpointMetadataBackup);
-  if (checkpointBackupExists) {
-    const currentCheckpoint = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata);
-    if (currentCheckpoint.valid) {
-      await cleanupPaths(app, [files.checkpointBackup, files.checkpointMetadataBackup], warnings);
-    } else {
-      try {
-        const restored = await restoreCheckpointBackups(app);
-        if (!restored) warnings.push("checkpoint-backup-invalid");
-      } catch (error) {
-        warnings.push(`checkpoint-backup-restore: ${errorMessage(error)}`);
+  try {
+    await cleanupPaths(app, [
+      files.checkpointTemporary,
+      files.checkpointMetadataTemporary,
+      files.embeddingsPublishTemporary,
+      files.manifestPublishTemporary,
+    ], warnings);
+
+    const checkpointBackupExists = await fileExists(app, files.checkpointBackup)
+      || await fileExists(app, files.checkpointMetadataBackup);
+    if (checkpointBackupExists) {
+      const currentCheckpoint = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata);
+      if (currentCheckpoint.valid) {
+        await cleanupPaths(app, [files.checkpointBackup, files.checkpointMetadataBackup], warnings);
+      } else {
+        try {
+          const restored = await restoreCheckpointBackups(app);
+          if (!restored) warnings.push("checkpoint-backup-invalid");
+        } catch (error) {
+          if (error instanceof OwnershipFenceRejectedError) throw error;
+          warnings.push(`checkpoint-backup-restore: ${errorMessage(error)}`);
+        }
       }
     }
-  }
 
-  const publishBackupExists = await fileExists(app, files.embeddingsPublishBackup)
-    || await fileExists(app, files.manifestPublishBackup);
-  if (publishBackupExists) {
-    const canonical = await validateCanonicalFiles(app);
-    if (canonical.valid) {
-      await cleanupPaths(app, [files.embeddingsPublishBackup, files.manifestPublishBackup], warnings);
-    } else {
-      try {
-        const restored = await restoreCanonicalBackups(app);
-        if (!restored) warnings.push("canonical-backup-invalid");
-      } catch (error) {
-        warnings.push(`canonical-backup-restore: ${errorMessage(error)}`);
+    const publishBackupExists = await fileExists(app, files.embeddingsPublishBackup)
+      || await fileExists(app, files.manifestPublishBackup);
+    if (publishBackupExists) {
+      const canonical = await validateCanonicalFiles(app);
+      if (canonical.valid) {
+        await cleanupPaths(app, [files.embeddingsPublishBackup, files.manifestPublishBackup], warnings);
+      } else if (canonical.reason === "canonical-resource-limit-exceeded" || canonical.reason === "canonical-read-error") {
+        warnings.push(canonical.reason);
+      } else {
+        try {
+          const restored = await restoreCanonicalBackups(app);
+          if (!restored) warnings.push("canonical-backup-invalid");
+        } catch (error) {
+          if (error instanceof OwnershipFenceRejectedError) throw error;
+          warnings.push(`canonical-backup-restore: ${errorMessage(error)}`);
+        }
       }
     }
+  } catch (error) {
+    if (!(error instanceof OwnershipFenceRejectedError)) throw error;
+    warnings.push("ownership-fence-rejected");
   }
 
   onDiagnostic?.({
@@ -606,7 +654,21 @@ export async function recoverEmbeddingPersistenceArtifacts(
     result: warnings.length === 0 ? "succeeded" : "failed",
     cleanupWarnings: warnings.length,
   });
-  return { warnings };
+  return { warnings, changed };
+}
+
+/** Startup is maintenance under the existing writer lease, never a generation or an ownership claim. */
+export async function recoverCanonicalEmbeddingsAtStartup(
+  app: App,
+  coordinator: IndexWriteCoordinator,
+  acquireFence: () => Promise<EmbeddingWriteFence | undefined>,
+): Promise<{ warnings: string[]; changed?: boolean }> {
+  const fence = await acquireFence();
+  if (!fence || !await fence.assertCurrent()) return { warnings: ["ownership-fence-rejected"] };
+  const lease = coordinator.startBinaryMaintenance();
+  if (lease.status !== "accepted") return { warnings: ["index-write-busy"] };
+  try { return await recoverEmbeddingPersistenceArtifacts(app, undefined, fence); }
+  finally { coordinator.finish(lease.token); }
 }
 
 export async function loadEmbeddingCheckpoint(

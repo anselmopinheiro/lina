@@ -49,6 +49,7 @@ export interface CurrentEmbeddingStateInputs {
   readonly factsChecking?: boolean;
   readonly canonicalExists?: boolean;
   readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
+  readonly canonicalPairState?: import("./embeddingPersistence").CanonicalPairState;
   readonly validForSearchCount?: number;
   readonly activeSource?: "jsonl" | "binary" | "none";
   readonly isExternalProvider?: boolean;
@@ -143,6 +144,15 @@ export function adaptCurrentStateToLifecycleSnapshot(
   }
 
   // Extract history from producerState or operationState
+  if (inputs.canonicalPairState === "inconsistent") {
+    workAssessment = {
+      kind: "pending", mode: "full-rebuild", updateRequired: true,
+      severity: "blocking", cost: inputs.isExternalProvider ? "external" : "local",
+      reasons: ["canonical-pair-inconsistent"],
+    };
+  } else if (inputs.canonicalPairState === "unreadable") {
+    workAssessment = { kind: "indeterminate", updateRequired: false, severity: "none", cost: "none", reasons: ["canonical-pair-unreadable"] };
+  }
   const history = {
     lastSuccess: inputs.producerState?.embeddings?.lastSuccessfulPublicationAt
       ? {
@@ -185,8 +195,9 @@ export function adaptCurrentStateToLifecycleSnapshot(
     upstreamTextIndex,
     publishedIdentity: effectivePublishedIdentity,
     deviceIdentity: effectiveDeviceIdentity,
-    canonicalExists,
-    validForSearchCount,
+    canonicalExists: inputs.canonicalPairState === "inconsistent" ? true : canonicalExists,
+    validForSearchCount: inputs.canonicalPairState === "inconsistent" || inputs.canonicalPairState === "unreadable" ? 0 : validForSearchCount,
+    canonicalPairState: inputs.canonicalPairState,
     activeSource,
     workAssessment,
     factsChecking: inputs.factsChecking,

@@ -1136,7 +1136,7 @@ describe("known embedding artifact recovery and coordination", () => {
     });
   });
 
-  it("completes an interrupted first publication from the validated manifest candidate", async () => {
+  it("never promotes an orphan manifest candidate for an interrupted first publication", async () => {
     const adapter = new FakeAdapter();
     const record = makeRecord(makeChunk("New"));
     adapter.setFile(files.canonicalEmbeddings, recordsContent([record]));
@@ -1145,7 +1145,8 @@ describe("known embedding artifact recovery and coordination", () => {
 
     await recoverEmbeddingPersistenceArtifacts(makeApp(adapter) as never);
 
-    expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(true);
+    expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(false);
+    expect(adapter.getFile(files.canonicalManifest)).toBe(JSON.stringify(makeTextManifest()));
     expect(adapter.hasFile(files.manifestPublishTemporary)).toBe(false);
     expect(adapter.hasFile(files.manifestPublishBackup)).toBe(false);
   });

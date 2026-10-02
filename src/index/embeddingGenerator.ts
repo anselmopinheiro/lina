@@ -26,6 +26,8 @@ import {
   type EmbeddingPersistenceRetryOptions,
   type EmbeddingWriteFence,
   EmbeddingRecord,
+  CanonicalPairState,
+  inspectCanonicalPair,
   loadEmbeddingCheckpoint,
   publishCanonicalEmbeddings,
   recoverEmbeddingPersistenceArtifacts,
@@ -312,6 +314,7 @@ export async function readCanonicalEmbeddingRecords(app: App, resourceProfile: E
 
 interface CanonicalEmbeddingFileState {
   readability: CanonicalEmbeddingReadability;
+  canonicalPairState: CanonicalPairState;
   records: unknown[];
   resourceLimitCode?: string;
   error?: string;
@@ -324,13 +327,22 @@ async function readCanonicalEmbeddingFileState(app: App, resourceProfile: Embedd
   try {
     stat = await adapter.stat(embeddingsPath);
   } catch (error) {
-    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+    return { readability: "unreadable", canonicalPairState: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
-  if (!stat || stat.type !== "file") return { readability: "missing", records: [] };
+  if (!stat || stat.type !== "file") {
+    try {
+      const manifestStat = await adapter.stat(normalizePath(".lina/index/manifest.json"));
+      const manifest: unknown = manifestStat ? JSON.parse(await adapter.read(normalizePath(".lina/index/manifest.json"))) : undefined;
+      return { readability: "missing", canonicalPairState: inspectCanonicalPair(undefined, manifest), records: [] };
+    } catch {
+      return { readability: "unreadable", canonicalPairState: "unreadable", records: [] };
+    }
+  }
   const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
   if (!bridgeDecision.allowed) {
     return {
       readability: "resource-limit-exceeded",
+      canonicalPairState: "resource-limit-exceeded",
       records: [],
       resourceLimitCode: bridgeDecision.code,
       error: bridgeDecision.code,
@@ -338,6 +350,9 @@ async function readCanonicalEmbeddingFileState(app: App, resourceProfile: Embedd
   }
   try {
     const content = await adapter.read(embeddingsPath);
+    const manifestStat = await adapter.stat(normalizePath(".lina/index/manifest.json"));
+    const manifest: unknown = manifestStat ? JSON.parse(await adapter.read(normalizePath(".lina/index/manifest.json"))) : undefined;
+    const canonicalPairState = inspectCanonicalPair(content, manifest);
     const records = content
       .split("\n")
       .filter((line) => line.trim().length > 0)
@@ -348,9 +363,9 @@ async function readCanonicalEmbeddingFileState(app: App, resourceProfile: Embedd
           return undefined;
         }
       });
-    return { readability: records.length === 0 ? "empty" : "readable", records };
+    return { readability: records.length === 0 ? "empty" : "readable", canonicalPairState, records };
   } catch (error) {
-    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+    return { readability: "unreadable", canonicalPairState: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -1013,6 +1028,7 @@ export async function generateEmbeddingsForChunks(
     canonicalRecords: options.incremental ? canonicalFile.records : [],
     canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: options.incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords: checkpointRecordsForPlan,
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity: preliminaryTargetIdentity,
@@ -1222,6 +1238,7 @@ export async function generateEmbeddingsForChunks(
     canonicalRecords: options.incremental ? canonicalFile.records : [],
     canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: options.incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions
       ? checkpointLoad.records
       : [],
@@ -1564,6 +1581,7 @@ export interface ReadEmbeddingUpdatePreviewOptions {
 
 export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   exists: boolean;
+  canonicalPairState: CanonicalPairState;
   canonicalReadability: CanonicalEmbeddingReadability;
   totalEmbeddings: number;
   model: string;
@@ -1604,6 +1622,7 @@ export async function readEmbeddingUpdatePreview(
     canonicalRecords: incremental ? canonicalFile.records : [],
     canonicalExists: incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords,
     publishedIdentity: incremental ? publishedIdentity : {},
     targetIdentity,
@@ -1692,6 +1711,7 @@ export async function readEmbeddingStatus(
           manifestPrefixMode: publishedIdentity.prefixMode,
           isPrefixModeMismatch: false,
           canonicalReadability: canonicalFile.readability,
+          canonicalPairState: canonicalFile.canonicalPairState,
           detailsAvailable: false,
           resourceLimitCode: canonicalFile.resourceLimitCode,
           error: canonicalFile.error,
@@ -1733,6 +1753,8 @@ export async function readEmbeddingStatus(
 
     return {
       ...state.summary,
+      canonicalPairState: canonicalFile.canonicalPairState,
+      ...(canonicalFile.canonicalPairState === "inconsistent" ? { validForSearchCount: 0, validCount: 0 } : {}),
       exists: canonicalFile.readability !== "missing",
       totalEmbeddings: state.summary.totalCanonicalRecords,
       model: publishedIdentity.model ?? "",
@@ -1740,7 +1762,7 @@ export async function readEmbeddingStatus(
       dimensions: publishedIdentity.dimensions ?? 0,
       updatedAt,
       publishedIdentity,
-      validForSearchChunkIds: state.validForSearchChunkIds,
+      validForSearchChunkIds: canonicalFile.canonicalPairState === "inconsistent" ? new Set<string>() : state.validForSearchChunkIds,
       expectedPrefixMode,
       manifestPrefixMode,
       isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
@@ -1771,6 +1793,7 @@ export async function readEmbeddingStatus(
       publishedIdentity: {},
       validForSearchChunkIds: new Set(),
       canonicalReadability: "unreadable",
+      canonicalPairState: "unreadable",
       detailsAvailable: false,
       error: msg,
     };

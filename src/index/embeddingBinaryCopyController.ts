@@ -1,5 +1,7 @@
-import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingDigest, BinaryEmbeddingPublisher, readBinaryEmbeddingStorage } from "./embeddingBinaryStorage";
-import { EmbeddingRecord } from "./embeddingPersistence";
+import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingDigest, BinaryEmbeddingPublisher, readBinaryEmbeddingStorage, recoverBinaryEmbeddingPublication, getEmbeddingBinaryResourceLimits } from "./embeddingBinaryStorage";
+import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { CanonicalPairState, EmbeddingRecord, EmbeddingWriteFence, inspectCanonicalPair } from "./embeddingPersistence";
+import { evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { EmbeddingSpaceIdentity } from "./embeddingUpdatePlan";
 import { IndexWriteCoordinator, IndexWriteCoordinatorToken } from "./indexWriteCoordinator";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
@@ -9,7 +11,7 @@ export interface BinaryEmbeddingCopySummary { status: BinaryEmbeddingCopyStatus;
 export type BinaryEmbeddingMaintenancePhase = "idle" | "queued" | "reading-jsonl" | "building" | "digesting" | "publishing" | "validating" | "completed" | "failed" | "cancelled" | "superseded" | "disposed";
 export interface BinaryEmbeddingMaintenanceState { phase: BinaryEmbeddingMaintenancePhase; summary?: BinaryEmbeddingCopySummary; expectedPublicationId?: string; }
 
-interface CanonicalEmbeddingManifest { publicationId?: string; provider: string; model: string; dimensions: number; inputVersion: number; prefixMode: "none" | "nomic-search-query-document"; provenance?: ArtifactProvenance; }
+interface CanonicalEmbeddingManifest { publicationId?: string; totalEmbeddings?: number; provider: string; model: string; dimensions: number; inputVersion: number; prefixMode: "none" | "nomic-search-query-document"; provenance?: ArtifactProvenance; raw: unknown; }
 interface PendingMaintenance { expectedPublicationId: string; resolve: (summary: BinaryEmbeddingCopySummary) => void; promise: Promise<BinaryEmbeddingCopySummary>; }
 const canonicalManifest = ".lina/index/manifest.json";
 const canonicalJsonl = ".lina/index/embeddings.jsonl";
@@ -33,6 +35,7 @@ export class BinaryEmbeddingCopyController {
     private readonly digest: BinaryEmbeddingDigest,
     private readonly coordinator?: IndexWriteCoordinator,
     private readonly onState?: (state: BinaryEmbeddingMaintenanceState) => void,
+    private readonly acquireFence?: () => Promise<EmbeddingWriteFence | undefined>,
   ) {}
 
   dispose(): void {
@@ -61,11 +64,32 @@ export class BinaryEmbeddingCopyController {
       const runtime = await readBinaryEmbeddingStorage(this.adapter, this.digest);
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       if (runtime.sourceIdentity.publicationId !== canonical.publicationId) return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
+      const pairState = await this.readCanonicalPairState(canonical);
+      if (pairState === "resource-limit-exceeded") return { status: "unsupported", reason: "Não foi possível validar o par canónico dentro do limite de recursos." };
+      if (pairState !== "consistent" || runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A cópia binária não corresponde à publicação canónica." };
       return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
     } catch (error) { return { status: "invalid", reason: sanitize(error) }; }
   }
 
   async createOrUpdate(): Promise<BinaryEmbeddingCopySummary> { return this.runWrite(false); }
+
+  async recover(): Promise<void> {
+    if (this.disposed || this.running) return;
+    const fence = await this.acquireFence?.();
+    if (this.acquireFence && (!fence || !await fence.assertCurrent())) return;
+    const lease = this.coordinator?.startBinaryMaintenance();
+    if (lease && lease.status !== "accepted") return;
+    this.running = true;
+    try {
+      let canonical: CanonicalEmbeddingManifest;
+      try { canonical = await this.readCanonicalManifest(); } catch { return; }
+      if (await this.readCanonicalPairState(canonical) !== "consistent") return;
+      await this.recoverDerived(canonical, this.fencedAdapter(fence));
+    } finally {
+      this.running = false;
+      if (lease?.status === "accepted") this.coordinator?.finish(lease.token);
+    }
+  }
 
   /** Queues exactly one derived maintenance per canonical publication id. */
   maintainAfterCanonicalPublication(expectedPublicationId: string): Promise<BinaryEmbeddingCopySummary> {
@@ -118,6 +142,8 @@ export class BinaryEmbeddingCopyController {
     this.running = true;
     let token: IndexWriteCoordinatorToken | undefined;
     try {
+      const fence = await this.acquireFence?.();
+      if (this.acquireFence && (!fence || !await fence.assertCurrent())) throw new Error("ownership-fence-rejected");
       // Validate the canonical commit marker before taking the write lease or
       // touching the potentially large JSONL payload.
       const manifest = await this.assertExpectedPublication(expectedPublicationId);
@@ -138,20 +164,37 @@ export class BinaryEmbeddingCopyController {
       token = acquired?.token;
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });
+      const stat = await this.adapter.stat(canonicalJsonl);
+      if (!stat || !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+        const summary: BinaryEmbeddingCopySummary = { status: "unsupported", reason: "Não foi possível validar o par canónico dentro do limite de recursos." };
+        this.setState({ phase: "failed", expectedPublicationId: sourcePublicationId, summary });
+        return summary;
+      }
       const text = await this.adapter.read(canonicalJsonl);
+      const currentManifest = await this.assertExpectedPublication(sourcePublicationId);
+      if (inspectCanonicalPair(text, currentManifest.raw) !== "consistent") {
+        const summary: BinaryEmbeddingCopySummary = { status: "invalid", reason: "Par canónico de embeddings inconsistente." };
+        this.setState({ phase: "failed", expectedPublicationId: sourcePublicationId, summary });
+        return summary;
+      }
       const records = text.split("\n").filter(Boolean).map((line) => JSON.parse(line) as EmbeddingRecord);
       if (!records.length) return { status: "invalid", reason: "Índice JSONL inválido." };
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       await this.assertExpectedPublication(sourcePublicationId);
+      await this.recoverDerived(currentManifest, this.fencedAdapter(fence));
       const identity: EmbeddingSpaceIdentity = { provider: manifest.provider, model: manifest.model, dimensions: manifest.dimensions, inputVersion: manifest.inputVersion, prefixMode: manifest.prefixMode };
       this.setState({ phase: "building", expectedPublicationId: sourcePublicationId });
       this.setState({ phase: "digesting", expectedPublicationId: sourcePublicationId });
       this.setState({ phase: "publishing", expectedPublicationId: sourcePublicationId });
-      await new BinaryEmbeddingPublisher(this.adapter, this.digest, {
+      await new BinaryEmbeddingPublisher(this.fencedAdapter(fence), this.digest, {
         onStage: async (stage) => {
           if (this.disposed) throw new Error("disposed");
+          if (fence && !await fence.assertCurrent()) throw new Error("ownership-fence-rejected");
           // The manifest is the commit marker: verify immediately before it.
-          if (stage === "canonical-metadata") await this.assertExpectedPublication(sourcePublicationId);
+          if (stage === "canonical-metadata") {
+            const current = await this.assertExpectedPublication(sourcePublicationId);
+            if (await this.readCanonicalPairState(current) !== "consistent") throw new Error("canonical-pair-inconsistent");
+          }
         },
       }).publish(records, {
         format: "binary-v1",
@@ -197,7 +240,10 @@ export class BinaryEmbeddingCopyController {
     if (acquired && acquired.status !== "accepted") throw new Error("index-write-busy");
     this.running = true; this.setState({ phase: "publishing" });
     try {
-      for (const path of Object.values(BINARY_EMBEDDING_FILES)) if (await this.adapter.exists(path)) await this.adapter.remove(path);
+      const fence = await this.acquireFence?.();
+      if (this.acquireFence && (!fence || !await fence.assertCurrent())) throw new Error("ownership-fence-rejected");
+      const adapter = this.fencedAdapter(fence);
+      for (const path of Object.values(BINARY_EMBEDDING_FILES)) if (await adapter.exists(path)) await adapter.remove(path);
       this.setState({ phase: "completed", summary: { status: "absent" } });
     } finally {
       this.running = false;
@@ -213,6 +259,8 @@ export class BinaryEmbeddingCopyController {
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || (input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")) throw new Error("invalid");
     const provenance = isValidArtifactProvenance(embeddings.provenance) ? embeddings.provenance : undefined;
     return {
+      raw: value,
+      totalEmbeddings: typeof embeddings.totalEmbeddings === "number" ? embeddings.totalEmbeddings : undefined,
       publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined,
       provider: embeddings.provider,
       model: embeddings.model,
@@ -221,5 +269,41 @@ export class BinaryEmbeddingCopyController {
       prefixMode: input.prefixMode,
       ...(provenance ? { provenance } : {}),
     };
+  }
+
+  private async readCanonicalPairState(manifest: CanonicalEmbeddingManifest): Promise<CanonicalPairState> {
+    const stat = await this.adapter.stat(canonicalJsonl);
+    if (!stat || stat.type !== "file") return "inconsistent";
+    // A resource refusal is not corruption. Do not bypass the bridge to prove correspondence.
+    if (!evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) return "resource-limit-exceeded";
+    return inspectCanonicalPair(await this.adapter.read(canonicalJsonl), manifest.raw);
+  }
+
+  private async recoverDerived(canonical: CanonicalEmbeddingManifest, adapter: BinaryEmbeddingDataAdapter): Promise<void> {
+    const recovered = await recoverBinaryEmbeddingPublication(adapter, this.digest, false, (manifest) =>
+      manifest.sourcePublicationId === canonical.publicationId && manifest.recordCount === canonical.totalEmbeddings &&
+      manifest.dimensions === canonical.dimensions && manifest.provider === canonical.provider && manifest.model === canonical.model &&
+      manifest.inputFormatVersion === String(canonical.inputVersion) && manifest.prefixMode === canonical.prefixMode,
+    { limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
+    if (recovered === "none") {
+      // Only the derivative is discarded, after a coherent canonical source was proved.
+      for (const path of [BINARY_EMBEDDING_FILES.manifest, BINARY_EMBEDDING_FILES.metadata, BINARY_EMBEDDING_FILES.vectors]) {
+        if (await adapter.exists(path)) await adapter.remove(path);
+      }
+    }
+  }
+
+  private fencedAdapter(fence?: EmbeddingWriteFence): BinaryEmbeddingDataAdapter {
+    return new Proxy(this.adapter, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        if (["write", "writeBinary", "remove", "rename", "mkdir"].includes(String(key))) return async (...args: unknown[]) => {
+          if (fence && !await fence.assertCurrent()) throw new Error("ownership-fence-rejected");
+          return Reflect.apply(value, target, args) as unknown;
+        };
+        return value.bind(target) as unknown;
+      },
+    });
   }
 }

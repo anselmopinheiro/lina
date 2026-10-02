@@ -24,6 +24,74 @@ function seed(adapter: Adapter, publicationId = "publication-a"): void {
 }
 
 describe("binary copy maintenance", () => {
+  it("fences derived writes and recovery without claiming authority", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    const coordinator = new IndexWriteCoordinator();
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, coordinator, undefined, async () => undefined);
+    await controller.recover();
+    expect((await controller.createOrUpdate()).status).toBe("error");
+    expect(await adapter.exists(BINARY_EMBEDDING_FILES.manifest)).toBe(false);
+    expect(coordinator.getState().activeOperation).toBeNull();
+  });
+
+  it("stops all derived mutations after ownership is lost between promotion steps", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    let authorized = true;
+    const renamed: string[] = [];
+    adapter.beforeRename = (from) => { renamed.push(from); if (from === BINARY_EMBEDDING_FILES.vectorsTemporary) authorized = false; };
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, new IndexWriteCoordinator(), undefined,
+      async () => ({ assertCurrent: async () => authorized }));
+    expect((await controller.createOrUpdate()).status).toBe("error");
+    expect(renamed).toEqual([BINARY_EMBEDDING_FILES.vectorsTemporary]);
+    expect(await adapter.exists(BINARY_EMBEDDING_FILES.manifest)).toBe(false);
+    expect(adapter.text.get(".lina/index/manifest.json")).toContain("publication-a");
+  });
+
+  it("restores a corresponding binary backup at startup and removes only derived orphans", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, new IndexWriteCoordinator(), undefined,
+      async () => ({ assertCurrent: async () => true }));
+    await controller.createOrUpdate();
+    await adapter.rename(BINARY_EMBEDDING_FILES.vectors, BINARY_EMBEDDING_FILES.vectorsBackup);
+    await adapter.rename(BINARY_EMBEDDING_FILES.metadata, BINARY_EMBEDDING_FILES.metadataBackup);
+    await adapter.rename(BINARY_EMBEDDING_FILES.manifest, BINARY_EMBEDDING_FILES.manifestBackup);
+    adapter.text.set(BINARY_EMBEDDING_FILES.manifestTemporary, "orphan");
+    await controller.recover();
+    expect((await controller.check(true)).status).toBe("valid");
+    expect(await adapter.exists(BINARY_EMBEDDING_FILES.manifestTemporary)).toBe(false);
+    await controller.recover();
+    expect((await controller.check(true)).status).toBe("valid");
+  });
+
+  it("does not promote a binary backup for a different publication", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, new IndexWriteCoordinator());
+    await controller.createOrUpdate();
+    await adapter.rename(BINARY_EMBEDDING_FILES.vectors, BINARY_EMBEDDING_FILES.vectorsBackup);
+    await adapter.rename(BINARY_EMBEDDING_FILES.metadata, BINARY_EMBEDDING_FILES.metadataBackup);
+    await adapter.rename(BINARY_EMBEDDING_FILES.manifest, BINARY_EMBEDDING_FILES.manifestBackup);
+    seed(adapter, "publication-b");
+    await controller.recover();
+    expect((await controller.check(true)).status).toBe("absent");
+    expect(adapter.text.get(".lina/index/manifest.json")).toContain("publication-b");
+  });
+  it("R-02 refuses JSONL new plus old manifest before deriving binary", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    adapter.text.set(".lina/index/embeddings.jsonl", `${JSON.stringify(record)}\n${JSON.stringify({ ...record, chunkId: "b" })}\n`);
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, new IndexWriteCoordinator());
+    expect((await controller.createOrUpdate()).status).not.toBe("valid");
+    expect(await adapter.exists(BINARY_EMBEDDING_FILES.manifest)).toBe(false);
+  });
+
+  it("rejects binary whose record count no longer corresponds to canonical publication", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    const controller = new BinaryEmbeddingCopyController(adapter, digest);
+    await controller.createOrUpdate();
+    const manifest = JSON.parse(adapter.text.get(".lina/index/manifest.json")!);
+    manifest.embeddings.totalEmbeddings = 2;
+    adapter.text.set(".lina/index/manifest.json", JSON.stringify(manifest));
+    expect((await controller.check(true)).status).not.toBe("valid");
+  });
   it("builds a valid copy from the current JSONL publication and preserves canonical files", async () => {
     const adapter = new Adapter(); seed(adapter); const coordinator = new IndexWriteCoordinator();
     const controller = new BinaryEmbeddingCopyController(adapter, digest, coordinator);

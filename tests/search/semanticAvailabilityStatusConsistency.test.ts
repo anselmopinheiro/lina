@@ -63,7 +63,7 @@ describe("semantic availability after local text-index changes", () => {
       ".lina/index/embeddings.jsonl": `${JSON.stringify(record)}\n`,
       ".lina/index/manifest.json": JSON.stringify({
         embeddingsEnabled: true,
-        embeddings: { enabled: true, provider: publishedProvider, model: publishedModel, dimensions: 3, updatedAt: "2026-08-18T18:00:00.000Z" },
+        embeddings: { enabled: true, provider: publishedProvider, model: publishedModel, dimensions: 3, totalEmbeddings: 1, updatedAt: "2026-08-18T18:00:00.000Z" },
         embeddingInput: { version: EMBEDDING_INPUT_VERSION, prefixMode: getPrefixModeForModel(publishedModel) },
       }),
     });
@@ -110,6 +110,7 @@ describe("semantic availability after local text-index changes", () => {
           provider,
           model,
           dimensions: 3,
+          totalEmbeddings: 1,
           updatedAt: "2026-08-18T18:00:00.000Z",
           sourceTotalChunks: 1,
         },
@@ -196,7 +197,7 @@ describe("semantic availability after local text-index changes", () => {
       ".lina/index/embeddings.jsonl": `${JSON.stringify(record)}\n`,
       ".lina/index/manifest.json": JSON.stringify({
         embeddingsEnabled: true,
-        embeddings: { provider, model, dimensions: 3, updatedAt: "2026-08-19T00:00:00.000Z", publicationId: "publication-a" },
+        embeddings: { provider, model, dimensions: 3, totalEmbeddings: 1, updatedAt: "2026-08-19T00:00:00.000Z", publicationId: "publication-a" },
         embeddingInput: { version: EMBEDDING_INPUT_VERSION, prefixMode: "none" },
       }),
     });

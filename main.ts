@@ -79,6 +79,7 @@ import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
+import { recoverCanonicalEmbeddingsAtStartup } from "./src/index/embeddingPersistence";
 import { purgeOrphanEmbeddingRecords } from "./src/index/embeddingPersistence";
 import { BINARY_EMBEDDING_FILES, createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
@@ -913,6 +914,7 @@ export default class LinaPlugin extends Plugin {
       deviceRuntimeState: runtime,
       operationState,
       upstreamTextIndex: this.textIndexLoaded ? "ready" : undefined,
+      canonicalPairState: summary?.canonicalPairState,
       isExternalProvider: !providerCapability.isLocal,
       // Without a trustworthy work summary the state is unknown, never "no work" (LINA-15D-B / S9).
       workAssessment: {
@@ -1601,6 +1603,18 @@ export default class LinaPlugin extends Plugin {
         capabilities: getDeviceCapabilities(),
         canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runStartupEmbeddingRecovery: async () => {
+          const recovery = await recoverCanonicalEmbeddingsAtStartup(this.app, this.getIndexWriteCoordinator(), async () => {
+            const gate = this.getOwnershipGate();
+            const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+            return token ? { assertCurrent: () => gate.assertFence(token) } : undefined;
+          });
+          await this.getBinaryEmbeddingCopyController().recover();
+          if (recovery.changed) {
+            this.invalidateRuntimeEmbeddingIndex("canonical-recovered");
+            this.markEmbeddingWorkStatusDirty("embeddings-published");
+          }
+        },
         runStartupBinaryArtifactMigration: async () => {
           await this.getMaintenanceEngine().migrateBinaryArtifactsAtStartup();
         },
@@ -1692,6 +1706,12 @@ export default class LinaPlugin extends Plugin {
       this.app.vault.adapter,
       createWebCryptoEmbeddingDigest(),
       this.getIndexWriteCoordinator(),
+      undefined,
+      async () => {
+        const gate = this.getOwnershipGate();
+        const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+        return token ? { assertCurrent: () => gate.assertFence(token) } : undefined;
+      },
     );
     return this.binaryEmbeddingCopyController;
   }

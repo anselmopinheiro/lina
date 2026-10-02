@@ -95,6 +95,7 @@ function createPluginHarness(overrides: {
         provider,
         model,
         dimensions: 768,
+        totalEmbeddings: embeddingsCount,
       },
       embeddingInput: {
         version: 1,

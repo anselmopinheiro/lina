@@ -556,17 +556,39 @@ export class BinaryEmbeddingPublisher {
   }
 }
 
-export async function recoverBinaryEmbeddingPublication(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, allowTemporaryPromotion = false): Promise<"canonical" | "backup" | "temporary" | "none"> {
-  try { await validateSet(adapter, digest, canonicalPaths); for (const path of [...Object.values(temporaryPaths), ...Object.values(backupPaths)]) await removeIfExists(adapter, path); return "canonical"; } catch { /* inspect alternatives */ }
-  try {
-    await validateSet(adapter, digest, backupPaths);
+export async function recoverBinaryEmbeddingPublication(
+  adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, allowTemporaryPromotion = false,
+  corresponds: (manifest: BinaryEmbeddingManifestV1) => boolean = () => true,
+  options: BinaryEmbeddingReadOptions = {},
+): Promise<"canonical" | "backup" | "temporary" | "none"> {
+  const valid = async (paths: BinarySetPaths): Promise<boolean> => {
+    try { return corresponds((await validateSet(adapter, digest, paths, options)).manifest); }
+    catch { return false; }
+  };
+  if (await valid(canonicalPaths)) {
+    for (const path of [...Object.values(temporaryPaths), ...Object.values(backupPaths)]) await removeIfExists(adapter, path);
+    return "canonical";
+  }
+  if (await valid(backupPaths)) {
+    // Copy to staging so a revoked fence during promotion leaves a complete backup.
+    await adapter.writeBinary(temporaryPaths.vectors, await adapter.readBinary(backupPaths.vectors));
+    await adapter.write(temporaryPaths.metadata, await adapter.read(backupPaths.metadata));
+    await adapter.write(temporaryPaths.manifest, await adapter.read(backupPaths.manifest));
     for (const path of Object.values(canonicalPaths)) await removeIfExists(adapter, path);
-    await adapter.rename(backupPaths.vectors, canonicalPaths.vectors); await adapter.rename(backupPaths.metadata, canonicalPaths.metadata); await adapter.rename(backupPaths.manifest, canonicalPaths.manifest);
-    for (const path of Object.values(temporaryPaths)) await removeIfExists(adapter, path); return "backup";
-  } catch { /* no valid backup */ }
-  try {
-    if (allowTemporaryPromotion) { await validateSet(adapter, digest, temporaryPaths); for (const path of Object.values(canonicalPaths)) await removeIfExists(adapter, path); await adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors); await adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata); await adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest); return "temporary"; }
-  } catch { /* incomplete temporary remains invalid */ }
+    await adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+    await adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+    await adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+    if (!await valid(canonicalPaths)) return "none";
+    for (const path of Object.values(backupPaths)) await removeIfExists(adapter, path);
+    return "backup";
+  }
+  if (allowTemporaryPromotion && await valid(temporaryPaths)) {
+    for (const path of Object.values(canonicalPaths)) await removeIfExists(adapter, path);
+    await adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+    await adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+    await adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+    return "temporary";
+  }
   for (const path of [...Object.values(temporaryPaths), ...Object.values(backupPaths)]) await removeIfExists(adapter, path);
   return "none";
 }

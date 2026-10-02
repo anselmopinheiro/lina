@@ -65,6 +65,7 @@ export interface EmbeddingWorkStatusControllerOptions {
 export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => void;
 
 export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
+  canonicalPairState?: import("./embeddingPersistence").CanonicalPairState;
   detailsAvailable?: boolean;
   canonicalReadability?: "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
   resourceLimitCode?: string;
@@ -223,6 +224,7 @@ export function buildEmbeddingWorkLifecycleSnapshot(
     // Real count of vectors valid for search; the plan's reusable canonical records when the status has none.
     validForSearchCount: safeSummary.validForSearchCount ?? safeSummary.updatePlan?.reusableCanonicalCount,
     canonicalReadability: safeSummary.canonicalReadability ?? "readable",
+    canonicalPairState: safeSummary.canonicalPairState,
     upstreamTextIndex: safeSummary.textIndexStatus,
     operationState: operationState ?? undefined,
   });

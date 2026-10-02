@@ -57,7 +57,7 @@ function makeRecord(chunk: Chunk, vector: number[]): EmbeddingRecord {
 function makeApp(chunks: Chunk[], records: EmbeddingRecord[], delay = 0, publicationId?: string): { vault: { adapter: FakeAdapter } } {
   const manifest = {
     embeddingsEnabled: true,
-    embeddings: { provider, model, dimensions, updatedAt: "2026-07-24T00:00:00.000Z", ...(publicationId ? { publicationId } : {}) },
+    embeddings: { provider, model, dimensions, totalEmbeddings: records.length, updatedAt: "2026-07-24T00:00:00.000Z", ...(publicationId ? { publicationId } : {}) },
     embeddingInput: { version: 1, prefixMode: "none" },
   };
   const adapter = new FakeAdapter({
@@ -68,7 +68,7 @@ function makeApp(chunks: Chunk[], records: EmbeddingRecord[], delay = 0, publica
 }
 
 async function makeBinaryApp(chunks: Chunk[], jsonlRecords: EmbeddingRecord[], jsonlPublicationId: string, binaryRecords: EmbeddingRecord[], binaryPublicationId: string): Promise<{ vault: { adapter: BinaryRuntimeAdapter } }> {
-  const manifest = { embeddingsEnabled: true, embeddings: { provider, model, dimensions, updatedAt: "2026-07-24T00:00:00.000Z", publicationId: jsonlPublicationId }, embeddingInput: { version: 1, prefixMode: "none" } };
+  const manifest = { embeddingsEnabled: true, embeddings: { provider, model, dimensions, totalEmbeddings: jsonlRecords.length, updatedAt: "2026-07-24T00:00:00.000Z", publicationId: jsonlPublicationId }, embeddingInput: { version: 1, prefixMode: "none" } };
   const adapter = new BinaryRuntimeAdapter({ ".lina/index/manifest.json": JSON.stringify(manifest), ".lina/index/embeddings.jsonl": `${jsonlRecords.map((record) => JSON.stringify(record)).join("\n")}\n` });
   await new BinaryEmbeddingPublisher(adapter, createWebCryptoEmbeddingDigest()).publish(binaryRecords, { format: "binary-v1", identity: { provider, model, dimensions, inputVersion: 1, prefixMode: "none" }, recordCount: binaryRecords.length, dimensions, generationId: `binary-${binaryPublicationId}`, sourcePublicationId: binaryPublicationId });
   return { vault: { adapter } };
@@ -79,6 +79,24 @@ function canonicalReadCount(adapter: FakeAdapter): number {
 }
 
 describe("RuntimeEmbeddingIndexCache", () => {
+  it("refuses a matching binary marker when the small canonical pair has a divergent count", async () => {
+    const chunks = [makeChunk(1), makeChunk(2)];
+    const records = chunks.map((chunk) => makeRecord(chunk, [1, 0, 0]));
+    const app = await makeBinaryApp(chunks, records.slice(0, 1), "publication-a", records.slice(0, 1), "publication-a");
+    app.vault.adapter.setFile(".lina/index/embeddings.jsonl", `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+    const cache = new RuntimeEmbeddingIndexCache(app as never);
+    expect(await cache.getOrLoad(chunks)).toBeNull();
+    expect(cache.getDiagnosticState().lastErrorCode).toBe("canonical-pair-inconsistent");
+  });
+
+  it("rejects a binary count mismatch even with valid digests and publication id", async () => {
+    const chunks = [makeChunk(1), makeChunk(2)];
+    const records = chunks.map((chunk) => makeRecord(chunk, [1, 0, 0]));
+    const app = await makeBinaryApp(chunks, records, "publication-a", records.slice(0, 1), "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never);
+    expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).not.toBe("binary-v1");
+    expect(cache.getDiagnosticState().effectiveSource).toBe("jsonl");
+  });
   it("a abertura e actualização da sidebar não pedem o índice runtime", () => {
     const source = readFileSync(resolve(process.cwd(), "src/search/linaSearchView.ts"), "utf8");
     const onOpenStart = source.indexOf("async onOpen(): Promise<void>");
@@ -158,14 +176,14 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(canonicalReadCount(app.vault.adapter)).toBe(2);
   });
 
-  it("uses a current binary source before JSONL for the default preference and caches it", async () => {
+  it("validates the small canonical pair before accepting and caching its binary source", async () => {
     const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
     const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
     const cache = new RuntimeEmbeddingIndexCache(app as never);
     const index = await cache.getOrLoad(chunks);
     expect(index?.sourceIdentity.storageFormat).toBe("binary-v1");
     expect(index?.sourceIdentity.publicationId).toBe("publication-a");
-    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    expect(canonicalReadCount(app.vault.adapter)).toBe(1);
     const binaryReads = app.vault.adapter.binaryReadCount;
     await cache.getOrLoad(chunks);
     expect(app.vault.adapter.binaryReadCount).toBe(binaryReads);
@@ -273,7 +291,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const content = `${realisticRecords.map((record) => JSON.stringify(record)).join("\n")}\n`;
     const adapter = new FakeAdapter({
       ".lina/index/manifest.json": JSON.stringify({ embeddingsEnabled: true,
-        embeddings: { provider, model, dimensions: realisticDimensions, updatedAt: "2026-07-24T00:00:00.000Z" },
+        embeddings: { provider, model, dimensions: realisticDimensions, totalEmbeddings: realisticRecords.length, updatedAt: "2026-07-24T00:00:00.000Z" },
         embeddingInput: { version: 1, prefixMode: "none" } }),
       ".lina/index/embeddings.jsonl": content,
     });

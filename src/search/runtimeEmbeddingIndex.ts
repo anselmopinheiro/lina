@@ -1,7 +1,7 @@
 import { App, normalizePath } from "obsidian";
 import { isValidEmbeddingVector } from "../ai/embeddingTypes";
 import { buildEmbeddingInput } from "../index/embeddingGenerator";
-import { EmbeddingRecord } from "../index/embeddingPersistence";
+import { EmbeddingRecord, inspectCanonicalPair } from "../index/embeddingPersistence";
 import { calculateEmbeddingState, PublishedEmbeddingIdentity } from "../index/embeddingState";
 import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
@@ -17,6 +17,7 @@ export interface RuntimeEmbeddingMetadata {
 }
 
 export interface RuntimeEmbeddingSourceIdentity extends Required<PublishedEmbeddingIdentity> {
+  totalEmbeddings?: number;
   updatedAt: string;
   canonicalMtime: number;
   canonicalSize: number;
@@ -156,6 +157,7 @@ function countJsonlRecords(content: string): number {
 }
 
 interface ManifestEmbeddingInfo {
+  totalEmbeddings?: number;
   provider: string;
   model: string;
   dimensions: number;
@@ -187,6 +189,7 @@ function parseManifestEmbeddingInfo(value: unknown): ManifestEmbeddingInfo | nul
     return null;
   }
   return {
+    totalEmbeddings: typeof embeddings.totalEmbeddings === "number" ? embeddings.totalEmbeddings : undefined,
     provider: embeddings.provider,
     model: embeddings.model,
     dimensions: embeddings.dimensions,
@@ -211,6 +214,7 @@ function sameSourceIdentity(
     // publicationId is the canonical commit marker for any derived binary set.
     // It must participate in cache identity even when timestamps/sizes collide.
     && left.publicationId === right.publicationId
+    && left.totalEmbeddings === right.totalEmbeddings
     && left.canonicalMtime === right.canonicalMtime
     && left.canonicalSize === right.canonicalSize;
 }
@@ -432,9 +436,8 @@ export class RuntimeEmbeddingIndexCache {
   ): Promise<RuntimeEmbeddingIndex | null> {
     const preference = this.getStoragePreference();
     // Binary is a derived runtime artifact, not a user-selected alternative
-    // publication. A current canonical publication ID lets us validate it
-    // without reading embeddings.jsonl, so it is always the first safe
-    // runtime source on both desktop and mobile.
+    // publication. Verify existing publication fields and, within the bridge
+    // limits, the canonical pair before accepting the derivative.
     let fallbackReason: EmbeddingReadFallbackReason = source.publicationId ? "none" : "legacy-manifest";
     let binaryFailureReason: EmbeddingReadDiagnosticState["binaryFailureReason"];
     let binarySourcePublicationId: string | undefined;
@@ -456,7 +459,17 @@ export class RuntimeEmbeddingIndexCache {
             this.debug?.("binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
             return sourceAfterBinary ? this.load(sourceAfterBinary, chunks, revision) : null;
           }
-          if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
+          if (Number.isInteger(source.totalEmbeddings) && binary.count === source.totalEmbeddings && binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model && binary.sourceIdentity.inputVersion === source.inputVersion && binary.sourceIdentity.prefixMode === source.prefixMode) {
+            if (evaluateEmbeddingBridgeRead(source.canonicalSize, profile).allowed) {
+              const content = await this.app.vault.adapter.read(normalizePath(".lina/index/embeddings.jsonl"));
+              const manifest: unknown = JSON.parse(await this.app.vault.adapter.read(normalizePath(".lina/index/manifest.json")));
+              if (inspectCanonicalPair(content, manifest) !== "consistent") {
+                this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", lastResolvedAt: Date.now(), lastErrorCode: "canonical-pair-inconsistent" });
+                return null;
+              }
+              const afterValidation = await readRuntimeEmbeddingSourceIdentity(this.app);
+              if (!sameSourceIdentity(source, afterValidation)) return null;
+            }
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
             this.loadedPreference = preference;
@@ -523,7 +536,9 @@ export class RuntimeEmbeddingIndexCache {
         return null;
       }
       const records = parseJsonlRecords(content);
-      if (!records) {
+      const manifest: unknown = JSON.parse(await this.app.vault.adapter.read(normalizePath(".lina/index/manifest.json")));
+      const pairState = inspectCanonicalPair(content, manifest);
+      if (!records || pairState === "inconsistent") {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
         this.debug?.("load-failed", { reason: "invalid-jsonl" });
         return null;
