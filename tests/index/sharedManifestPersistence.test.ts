@@ -93,6 +93,45 @@ describe("LINA-15H-D — shared manifest persistence", () => {
       expect(residue(adapter)).toEqual([]);
     });
 
+    it("preserves first creation when manifest.json is absent", async () => {
+      const adapter = new FakeAdapter();
+      expect(await saveV(adapter, "new")).toBe(true);
+      expect(manifestOf(adapter)).toMatchObject({ embeddingsEnabled: false, indexType: "text" });
+    });
+
+    it("preserves a valid manifest without embeddings", async () => {
+      const adapter = await createIndex(false);
+      expect(await saveV(adapter, "new")).toBe(true);
+      expect(manifestOf(adapter)).toMatchObject({ embeddingsEnabled: false, indexType: "text" });
+      expect(manifestOf(adapter)).not.toHaveProperty("embeddings");
+    });
+
+    it("fails closed without publishing a new triple when manifest.json is corrupt (P2)", async () => {
+      const adapter = await createIndex();
+      adapter.setFile(text.manifest, "{");
+      const before = Object.fromEntries(adapter.listFiles().sort().map((path) => [path, adapter.getFile(path)]));
+      adapter.writeCount = adapter.removeCount = adapter.renameCount = adapter.mkdirCount = 0;
+
+      expect(await saveV(adapter, "new")).toBe(false);
+      expect(Object.fromEntries(adapter.listFiles().sort().map((path) => [path, adapter.getFile(path)]))).toEqual(before);
+      expect(adapter.writeCount + adapter.removeCount + adapter.renameCount + adapter.mkdirCount).toBe(0);
+    });
+
+    it("fails closed when an existing manifest cannot be read", async () => {
+      const adapter = await createIndex();
+      const originalRead = adapter.read.bind(adapter);
+      adapter.read = async (path) => {
+        if (path === text.manifest) throw new Error("simulated manifest read failure");
+        return originalRead(path);
+      };
+      const before = Object.fromEntries(adapter.listFiles().sort().map((path) => [path, adapter.getFile(path)]));
+      adapter.writeCount = adapter.removeCount = adapter.renameCount = adapter.mkdirCount = 0;
+
+      expect(await saveV(adapter, "new")).toBe(false);
+      expect(Object.fromEntries(adapter.listFiles().sort().map((path) => [path, adapter.getFile(path)]))).toEqual(before);
+      expect(adapter.writeCount + adapter.removeCount + adapter.renameCount + adapter.mkdirCount).toBe(0);
+    });
+
     it("aborts instead of last-write-wins when the shared manifest embeddings section changes meanwhile", async () => {
       const adapter = await createIndex();
       const before = adapter.getFile(text.manifest)!;

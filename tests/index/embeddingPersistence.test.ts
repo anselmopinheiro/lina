@@ -1003,6 +1003,38 @@ describe("canonical embedding publication and rollback", () => {
     expect(adapter.getFile(files.canonicalEmbeddings)).toBe(recordsContent([oldRecord]));
   });
 
+  it("does not roll back after a rejected ownership fence and leaves recovery-owned artifacts (P5)", async () => {
+    const adapter = new FakeAdapter();
+    const oldRecord = makeRecord(makeChunk("Old"));
+    seedCanonical(adapter, [oldRecord]);
+    let checks = 0;
+    let rejected = false;
+    let mutationsAfterRejection = 0;
+    const fence = { assertCurrent: async () => {
+      const current = ++checks <= 4;
+      if (!current) rejected = true;
+      return current;
+    } };
+    adapter.setOptions({ beforeOperation: (operation) => {
+      if (rejected && ["write", "remove", "rename", "mkdir"].includes(operation)) mutationsAfterRejection++;
+    } });
+
+    const result = await publishCanonicalEmbeddings(
+      makeApp(adapter) as never,
+      [makeRecord(makeChunk("New"))],
+      { ...publicationInfo(), fence },
+    );
+    adapter.setOptions({ beforeOperation: undefined });
+
+    expect(result).toMatchObject({ success: false, rollbackSucceeded: false });
+    expect(rejected).toBe(true);
+    expect(mutationsAfterRejection).toBe(0);
+    expect(adapter.hasFile(files.embeddingsPublishBackup)).toBe(true);
+    await recoverEmbeddingPersistenceArtifacts(makeApp(adapter) as never);
+    expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(true);
+    expect(adapter.getFile(files.canonicalEmbeddings)).toBe(recordsContent([oldRecord]));
+  });
+
   it("reports cleanup failure as a warning without invalidating successful publication", async () => {
     const adapter = new FakeAdapter();
     seedCanonical(adapter, [makeRecord(makeChunk("Old"))]);

@@ -1023,6 +1023,25 @@ export async function publishCanonicalEmbeddings(
     const publicationId = (manifestCandidate.embeddings as Record<string, unknown>).publicationId;
     return { success: true, publicationId: typeof publicationId === "string" ? publicationId : undefined, warnings };
   } catch (error) {
+    if (error instanceof OwnershipFenceRejectedError) {
+      // Once authority is lost, neither rollback nor cleanup may mutate durable
+      // artifacts. Leave the deterministic tmp/backup state for an authorized
+      // recovery pass.
+      onDiagnostic?.({
+        stage: "publication",
+        result: "failed",
+        reason: errorMessage(error),
+        rollbackStarted: false,
+        rollbackSucceeded: false,
+        cleanupWarnings: warnings.length,
+      });
+      return {
+        success: false,
+        warnings,
+        error: errorMessage(error),
+        rollbackSucceeded: false,
+      };
+    }
     let rollbackSucceeded = true;
     onDiagnostic?.({
       stage: "publication",
@@ -1268,6 +1287,11 @@ async function publishEmbeddingsDisabledManifest(
     }
     await cleanupPaths(app, [files.manifestPublishBackup, files.embeddingsPublishBackup], []);
   } catch (error) {
+    if (error instanceof OwnershipFenceRejectedError) {
+      // See publishCanonicalEmbeddings: a rejected fence forbids every durable
+      // mutation, including rollback and temporary-file cleanup.
+      throw error;
+    }
     try {
       if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
       if (manifestBackedUp && await fileExists(app, files.manifestPublishBackup)) {

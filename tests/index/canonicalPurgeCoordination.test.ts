@@ -138,6 +138,34 @@ describe("LINA-15H-C — coordinated canonical purge", () => {
         expect(["a,b,c", "a,b"]).toContain(jsonlIds(adapter).join(","));
       }
     });
+
+    it("does not roll back the all-purged publication after fence rejection (P6)", async () => {
+      const adapter = await createPair();
+      let checks = 0;
+      let rejected = false;
+      let mutationsAfterRejection = 0;
+      const fence: EmbeddingWriteFence = { assertCurrent: async () => {
+        const current = ++checks <= 4;
+        if (!current) rejected = true;
+        return current;
+      } };
+      adapter.setOptions({ beforeOperation: (operation) => {
+        if (rejected && ["write", "remove", "rename", "mkdir"].includes(operation)) mutationsAfterRejection++;
+      } });
+
+      await expect(purgeOrphanEmbeddingsCoordinated(
+        app(adapter), new IndexWriteCoordinator(), async () => fence, chunks("zzz"),
+      )).rejects.toThrow("Ownership fence rejected");
+      adapter.setOptions({ beforeOperation: undefined });
+
+      expect(rejected).toBe(true);
+      expect(mutationsAfterRejection).toBe(0);
+      expect(adapter.hasFile(files.embeddingsPublishBackup)).toBe(true);
+      expect(adapter.hasFile(files.manifestPublishBackup)).toBe(true);
+      await recoverEmbeddingPersistenceArtifacts(app(adapter), undefined, okFence);
+      expect(pairState(adapter)).toBe("consistent");
+      expect(jsonlIds(adapter)).toEqual(["a", "b", "c"]);
+    });
   });
 
   describe("purge × generation (probe q2-A) and purge × saveTextIndex (probe q2-B)", () => {

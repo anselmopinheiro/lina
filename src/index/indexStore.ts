@@ -366,6 +366,11 @@ const EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP = ".lina/producer/backups/manifest.
 
 type EmbeddingManifestSection = Record<string, unknown>;
 
+type EmbeddingSectionReadResult =
+  | { readonly status: "absent" }
+  | { readonly status: "available"; readonly section: EmbeddingManifestSection }
+  | { readonly status: "unreadable" };
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -389,12 +394,15 @@ function extractEmbeddingSection(value: unknown): EmbeddingManifestSection {
   return {};
 }
 
-async function readEmbeddingSectionFrom(adapter: App["vault"]["adapter"], path: string): Promise<EmbeddingManifestSection | undefined> {
+async function readEmbeddingSectionFrom(adapter: App["vault"]["adapter"], path: string): Promise<EmbeddingSectionReadResult> {
   try {
-    if (!await adapterFileExists(adapter, path)) return undefined;
-    return extractEmbeddingSection(JSON.parse(await adapter.read(path)) as unknown);
+    if (!await adapterFileExists(adapter, path)) return { status: "absent" };
+    return { status: "available", section: extractEmbeddingSection(JSON.parse(await adapter.read(path)) as unknown) };
   } catch {
-    return undefined;
+    // An existing shared manifest which cannot be read is not equivalent to a
+    // manifest without embeddings. The caller must fail closed rather than
+    // publish a replacement which would erase an unknown embedding identity.
+    return { status: "unreadable" };
   }
 }
 
@@ -620,13 +628,25 @@ export async function saveTextIndex(
 
     // The embeddings identity is read inside the lease, from the committed manifest or,
     // when it is absent, from the deterministic backup of the interrupted publication.
-    const committedSection = await readEmbeddingSectionFrom(adapter, paths.manifest);
+    const committedManifest = await readEmbeddingSectionFrom(adapter, paths.manifest);
+    if (committedManifest.status === "unreadable") {
+      throw new Error("Shared manifest is unreadable; refusing to replace its embeddings identity.");
+    }
+    const committedSection = committedManifest.status === "available" ? committedManifest.section : undefined;
+    const textBackupManifest = await readEmbeddingSectionFrom(adapter, paths.manifestBackup);
+    if (textBackupManifest.status === "unreadable") {
+      throw new Error("Text manifest backup is unreadable; refusing to replace its embeddings identity.");
+    }
+    const embeddingsBackupManifest = await readEmbeddingSectionFrom(adapter, EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP);
+    if (embeddingsBackupManifest.status === "unreadable") {
+      throw new Error("Embeddings manifest backup is unreadable; refusing to replace its embeddings identity.");
+    }
     const preservedEmbeddingManifest: EmbeddingManifestSection =
       committedSection
-      ?? await readEmbeddingSectionFrom(adapter, paths.manifestBackup)
+      ?? (textBackupManifest.status === "available" ? textBackupManifest.section : undefined)
       // An interrupted embeddings publication (manifest absent between its two renames)
       // leaves the identity here; the embeddings recovery completes it afterwards.
-      ?? await readEmbeddingSectionFrom(adapter, EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP)
+      ?? (embeddingsBackupManifest.status === "available" ? embeddingsBackupManifest.section : undefined)
       ?? {};
     // Whatever the recovery could not resolve has already contributed its identity above.
     for (const path of [paths.notesBackup, paths.chunksBackup, paths.manifestBackup]) await adapterRemoveIfExists(adapter, path);
@@ -672,7 +692,11 @@ export async function saveTextIndex(
         throw new Error("Text index manifest candidate validation failed.");
       }
       // Never last-write-wins over a shared manifest that changed after it was read.
-      const current = await readEmbeddingSectionFrom(adapter, paths.manifest);
+      const currentManifest = await readEmbeddingSectionFrom(adapter, paths.manifest);
+      if (currentManifest.status === "unreadable") {
+        throw new Error("Shared manifest became unreadable during the text index publication.");
+      }
+      const current = currentManifest.status === "available" ? currentManifest.section : undefined;
       // Read from the committed manifest: it must be unchanged. Read from a backup (manifest
       // absent): the manifest must still be absent, otherwise someone published meanwhile.
       const unchanged = committedSection !== undefined

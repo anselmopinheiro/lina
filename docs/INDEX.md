@@ -80,6 +80,8 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 | **LINA-15H-C-A** | Auditoria da publicação atómica, purge e coordenação | **CONCLUÍDA** | `docs/audits/architecture/LINA-15H-C-AUDIT-ATOMIC-PUBLICATION-001.md` |
 | **LINA-15H-C** | Purge coordenado, coordenador endurecido, ramo "tudo purgado" (P1) | **IMPLEMENTADA** (C-03/C-05/C-08/C-11 adiados para 15H-D) | `docs/audits/architecture/LINA-15H-C-IMPLEMENT-ATOMIC-PUBLICATION-001.md` |
 | **LINA-15H-D** | Persistência crash-safe do manifesto partilhado (`saveTextIndex`), fence e recovery | **IMPLEMENTADA** (C-03, C-05, C-08, C-11) | `docs/audits/architecture/LINA-15H-D-IMPLEMENT-SHARED-MANIFEST-PERSISTENCE-001.md` |
+| **LINA-15H-E** | Auditoria de fecho de persistência | **CONCLUÍDA** (N-01/N-03 classificados como bugs reais; N-02/N-04 como riscos arquiteturais) | `docs/audits/architecture/LINA-15H-E-AUDIT-PERSISTENCE-CLOSURE-001.md` |
+| **LINA-15H-F** | Correções cirúrgicas de fence/manifesto | **IMPLEMENTADA** (N-01 e N-03; sem alterações a N-02/N-04) | `docs/audits/architecture/LINA-15H-F-IMPLEMENT-PERSISTENCE-BUGFIXES-001.md` |
 | **LINA-15I** | Arranque Leve e Otimização de Performance | ABERTA | Finding F-13 na auditoria global pós-LINA-14 |
 | **LINA-15J** | Cobertura de Testes e Reconciliação Documental; limpeza de dívida de configuração (CR-05/06/07/09, F-15, F-22) | ABERTA | Findings F-24, D1–D12 e `docs/audits/architecture/LINA-15F-AUDIT-CONFIG-RUNTIME-CONSISTENCY-001.md` §12 |
 ---
