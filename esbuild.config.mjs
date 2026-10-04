@@ -24,6 +24,7 @@ try {
     external: [
       "obsidian",
       "electron",
+      "node:sqlite",
       "@codemirror/autocomplete",
       "@codemirror/collab",
       "@codemirror/commands",

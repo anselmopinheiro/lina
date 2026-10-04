@@ -138,6 +138,7 @@ export interface LinaSettings extends Record<string, unknown> {
   generateEmbeddingsOnStartup: boolean;
   generateOnlyMissingEmbeddings: boolean;
   embeddingUpdateMode?: EmbeddingUpdateMode;
+  producerSqliteShadowWriteEnabled?: boolean;
 
   // Índice
   checkSyncOnStartup?: boolean;

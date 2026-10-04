@@ -17,6 +17,7 @@ import { IndexWriteFence, OwnershipFenceRejectedError, assertIndexWriteFence } f
 import { recoverTextIndexPublication } from "./indexStore";
 import { evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { performProducerSqliteShadowWrite, type ShadowWriteOptions } from "./sqliteProducerShadowWriter";
 
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
@@ -101,6 +102,7 @@ export interface EmbeddingPublicationInfo {
   prefixMode: string;
   provenance?: ArtifactProvenance;
   fence?: EmbeddingWriteFence;
+  shadowWriteOptions?: ShadowWriteOptions;
 }
 
 function createEmbeddingPublicationId(): string {
@@ -1020,6 +1022,11 @@ export async function publishCanonicalEmbeddings(
       backupCreated: embeddingsBackedUp,
       cleanupWarnings: warnings.length,
     });
+
+    if (info.shadowWriteOptions) {
+      await performProducerSqliteShadowWrite(sortedRecords, info, info.shadowWriteOptions).catch(() => {});
+    }
+
     const publicationId = (manifestCandidate.embeddings as Record<string, unknown>).publicationId;
     return { success: true, publicationId: typeof publicationId === "string" ? publicationId : undefined, warnings };
   } catch (error) {

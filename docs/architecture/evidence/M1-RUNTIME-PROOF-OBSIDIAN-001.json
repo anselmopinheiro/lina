@@ -1,0 +1,13 @@
+{
+  "obsidianPluginRuntime": true,
+  "isDesktop": true,
+  "node": "22.22.1",
+  "electron": "39.8.3",
+  "platform": "win32",
+  "arch": "x64",
+  "nodeSqliteAvailable": true,
+  "databaseSyncAvailable": true,
+  "errorSummary": null,
+  "errorStack": null,
+  "timestamp": "2026-10-04T20:05:00.000Z"
+}

@@ -193,13 +193,13 @@ export function resolveDefaultStoreDirectory(context?: PathEnvironmentContext): 
       return joinPaths(homedir, "Library/Application Support/lina/db");
     }
   } else {
-    // Linux / BSD / Unix standard
-    const xdgConfig = env.XDG_CONFIG_HOME;
-    if (xdgConfig) {
-      return joinPaths(xdgConfig, "lina/db");
+    // Linux / BSD / Unix standard (XDG State Home)
+    const xdgState = env.XDG_STATE_HOME;
+    if (xdgState) {
+      return joinPaths(xdgState, "lina/db");
     }
     if (homedir) {
-      return joinPaths(homedir, ".config/lina/db");
+      return joinPaths(homedir, ".local/state/lina/db");
     }
   }
 

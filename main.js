@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:44:35.716Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-04T20:06:45.671Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -959,6 +959,7 @@ var PT_PT = {
   confirmEmbeddingUpdateCostWarningTitle: "Aviso de custos de API externa",
   confirmEmbeddingUpdateCostWarningText: "Esta opera\xE7\xE3o ir\xE1 contactar a API do provider externo ({provider}) e poder\xE1 consumir cr\xE9ditos ou saldo da sua conta.",
   confirmEmbeddingUpdateLocalNoCost: "Processamento local sem consumo de cr\xE9ditos externos de API.",
+  confirmEmbeddingUpdateRemoteEndpointWarningText: "O endere\xE7o configurado n\xE3o \xE9 desta m\xE1quina: o conte\xFAdo das notas ser\xE1 enviado para um servidor remoto.",
   confirmEmbeddingUpdateButtonCancel: "Cancelar",
   confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Os embeddings j\xE1 se encontram atualizados.",
@@ -1938,6 +1939,7 @@ var EN = {
   confirmEmbeddingUpdateCostWarningTitle: "External API Cost Warning",
   confirmEmbeddingUpdateCostWarningText: "This operation will contact the external provider API ({provider}) and may consume account credits or billing balance.",
   confirmEmbeddingUpdateLocalNoCost: "Local processing with no external API credit consumption.",
+  confirmEmbeddingUpdateRemoteEndpointWarningText: "The configured address is not on this machine: your note content will be sent to a remote server.",
   confirmEmbeddingUpdateButtonCancel: "Cancel",
   confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",
@@ -2347,8 +2349,8 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
         };
       }
       const data = response.json;
-      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
-      if (typeof text !== "string" || text.trim().length === 0) {
+      const text2 = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      if (typeof text2 !== "string" || text2.trim().length === 0) {
         return {
           success: false,
           message: "A Mistral devolveu uma resposta vazia ou num formato inesperado."
@@ -2357,7 +2359,7 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
       return {
         success: true,
         message: "Resposta gerada com sucesso.",
-        text
+        text: text2
       };
     })();
     return await Promise.race([requestPromise, timeoutPromise]);
@@ -3012,11 +3014,11 @@ async function generateOpenRouterText(baseUrl, apiKey, model, prompt, timeoutMs 
         };
       }
       const data = response.json;
-      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
-      if (typeof text !== "string" || text.trim().length === 0) {
+      const text2 = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      if (typeof text2 !== "string" || text2.trim().length === 0) {
         return { success: false, errorCategory: "invalid-response", message: "OpenRouter devolveu uma resposta vazia ou num formato inesperado." };
       }
-      return { success: true, message: "Resposta gerada com sucesso.", text };
+      return { success: true, message: "Resposta gerada com sucesso.", text: text2 };
     })();
     return await Promise.race([request, timeout]);
   } catch (e) {
@@ -3652,6 +3654,49 @@ function createCredentialRuntimeBridge(storage, executors) {
   };
 }
 
+// src/settings/effectiveAiConfig.ts
+function text(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function resolveProvider(...candidates) {
+  var _a;
+  for (const candidate of candidates) {
+    const value = text(candidate);
+    if (value) return (_a = resolvePureLocalProviderId(value)) != null ? _a : "ollama";
+  }
+  return "ollama";
+}
+function resolveEffectiveEmbeddingsConfig(local, persistedSettings) {
+  const settings = persistedSettings;
+  const provider = resolveProvider(local.provider, settings.embeddingProvider);
+  const defaults = getEmbeddingProviderDefaults(provider);
+  const baseUrl = chooseProviderDefaultBaseUrl(
+    text(local.baseUrl) || text(settings.embeddingBaseUrl) || text(settings.embeddingLocalBaseUrl) || (provider === "ollama" ? text(settings.aiBaseUrl) : "") || defaults.baseUrl,
+    provider
+  );
+  const model = chooseProviderDefaultModel(
+    text(local.model) || text(settings.embeddingModel) || text(settings.embeddingLocalModel) || defaults.model,
+    provider,
+    "embedding"
+  );
+  return { provider, model, baseUrl };
+}
+function resolveEffectiveAnalysisConfig(local, persistedSettings) {
+  const settings = persistedSettings;
+  const provider = resolveProvider(local.provider, settings.aiProvider);
+  const defaults = getAnalysisProviderDefaults(provider);
+  const baseUrl = chooseProviderDefaultBaseUrl(
+    text(local.baseUrl) || text(settings.aiBaseUrl) || defaults.baseUrl,
+    provider
+  );
+  const model = chooseProviderDefaultModel(
+    text(local.model) || text(settings.aiAnalysisModel) || defaults.model,
+    provider,
+    "analysis"
+  );
+  return { provider, model, baseUrl };
+}
+
 // src/settings/declarativeSettingsConnectionCredentialBindings.ts
 var lifecycleDomain = (domain) => domain;
 var credentialLifecycleDomain = (domain) => domain === "analysis" ? "credentials-analysis" : "credentials-embeddings";
@@ -3878,14 +3923,14 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
       setting.setName(options.strings.settingsApiKey).setDesc(options.strings.settingsApiKeyDescription);
       const statusEl = setting.descEl.createEl("p", { text: "" });
       const feedbackEl = setting.descEl.createEl("p", { text: "", attr: { "aria-live": "polite" } });
-      setting.addText((text) => {
-        draftInput = text;
-        text.setPlaceholder(currentCredential(domain).available ? options.strings.settingsApiKeyLocalSaved : options.strings.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
+      setting.addText((text2) => {
+        draftInput = text2;
+        text2.setPlaceholder(currentCredential(domain).available ? options.strings.settingsApiKeyLocalSaved : options.strings.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
           if (rendererDisposed || disposed) return;
           draft = value;
           applyState();
         });
-        text.inputEl.type = "password";
+        text2.inputEl.type = "password";
       });
       setting.addButton((button) => {
         controls.push(button);
@@ -3942,10 +3987,10 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
     rendererCount += 1;
     return (setting, _group) => {
       if (disposed) return;
-      const text = connectionFeedbackText(options.strings, domain, currentConnection(domain));
-      if (!text) return;
+      const text2 = connectionFeedbackText(options.strings, domain, currentConnection(domain));
+      if (!text2) return;
       setting.descEl.createEl("p", {
-        text,
+        text: text2,
         attr: { "aria-live": "polite" }
       });
     };
@@ -4137,7 +4182,7 @@ var INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
 var openExternalUrl = (url) => {
   window.open(url, "_blank");
 };
-var writeToClipboard = (text) => navigator.clipboard.writeText(text);
+var writeToClipboard = (text2) => navigator.clipboard.writeText(text2);
 var showNotice = (message) => {
   new import_obsidian4.Notice(message);
 };
@@ -4324,9 +4369,9 @@ function createDetachedInformationalSettingDefinitions(strings, configDir) {
 var clampDetachedInboxMaxNotes = normalizePureInboxMaxNotes;
 function createDetachedInboxFolderRenderer(strings, ports) {
   return (setting, _group) => {
-    setting.setName(strings.settingsInboxFolder).setDesc(strings.settingsInboxFolderDesc).addText((text) => {
+    setting.setName(strings.settingsInboxFolder).setDesc(strings.settingsInboxFolderDesc).addText((text2) => {
       var _a;
-      return text.setPlaceholder(INBOX_FOLDER_PLACEHOLDER).setValue((_a = ports.getGlobal("inboxFolderPath")) != null ? _a : INBOX_FOLDER_PLACEHOLDER).onChange(async (value) => {
+      return text2.setPlaceholder(INBOX_FOLDER_PLACEHOLDER).setValue((_a = ports.getGlobal("inboxFolderPath")) != null ? _a : INBOX_FOLDER_PLACEHOLDER).onChange(async (value) => {
         await ports.setGlobal("inboxFolderPath", value.trim());
       });
     });
@@ -4334,24 +4379,24 @@ function createDetachedInboxFolderRenderer(strings, ports) {
 }
 function createDetachedInboxMaxNotesRenderer(strings, ports) {
   return (setting, _group) => {
-    setting.setName(strings.settingsInboxMaxNotes).setDesc(strings.settingsInboxMaxNotesDesc).addText((text) => {
+    setting.setName(strings.settingsInboxMaxNotes).setDesc(strings.settingsInboxMaxNotesDesc).addText((text2) => {
       var _a;
-      return text.setPlaceholder("10").setValue(String((_a = ports.getGlobal("maxInboxNotesToAnalyze")) != null ? _a : 10)).onChange(async (value) => {
+      return text2.setPlaceholder("10").setValue(String((_a = ports.getGlobal("maxInboxNotesToAnalyze")) != null ? _a : 10)).onChange(async (value) => {
         const next = clampDetachedInboxMaxNotes(value);
         await ports.setGlobal("maxInboxNotesToAnalyze", next);
-        text.setValue(String(next));
+        text2.setValue(String(next));
       });
     });
   };
 }
 function createDetachedHybridWeightRenderer(key, name, description, placeholder, fallback, ports) {
   return (setting, _group) => {
-    setting.setName(name).setDesc(description).addText((text) => {
+    setting.setName(name).setDesc(description).addText((text2) => {
       var _a;
-      return text.setPlaceholder(placeholder).setValue(String((_a = ports.getGlobal(key)) != null ? _a : fallback)).onChange(async (value) => {
+      return text2.setPlaceholder(placeholder).setValue(String((_a = ports.getGlobal(key)) != null ? _a : fallback)).onChange(async (value) => {
         const next = clampDetachedWeight(value, fallback);
         await ports.setGlobal(key, next);
-        text.setValue(String(next));
+        text2.setValue(String(next));
       });
     });
   };
@@ -4425,12 +4470,21 @@ function createDetachedIndexYamlSettingDefinitions(strings, ports) {
 }
 var DETACHED_CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 function detachedProviderValue(ports, key) {
-  return ports.getLocal(key) || "ollama";
+  var _a, _b;
+  const domain = key === "analysisProvider" ? "analysis" : "embedding";
+  return (_b = (_a = ports.getEffectiveAiConfig) == null ? void 0 : _a.call(ports, domain).provider) != null ? _b : ports.getLocal(key) || "ollama";
 }
 function detachedModelValue(ports, key, provider, domain) {
+  var _a;
+  const effective = (_a = ports.getEffectiveAiConfig) == null ? void 0 : _a.call(ports, domain);
+  if (effective && effective.provider === provider) return effective.model;
   return chooseProviderDefaultModel(ports.getLocal(key), provider, domain === "analysis" ? "analysis" : "embedding");
 }
 function detachedBaseUrlValue(ports, key, provider) {
+  var _a;
+  const domain = key === "analysisBaseUrl" ? "analysis" : "embedding";
+  const effective = (_a = ports.getEffectiveAiConfig) == null ? void 0 : _a.call(ports, domain);
+  if (effective && effective.provider === provider) return effective.baseUrl;
   return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
 }
 function detachedProviderEffects(domain) {
@@ -4596,12 +4650,12 @@ function createDetachedModelRenderer(domain, strings, ports) {
         });
       });
       if (adapter.showManualControl || manualProvider === provider) {
-        setting.addText((text) => text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
+        setting.addText((text2) => text2.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
           await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
         }));
       }
     } else {
-      setting.addText((text) => text.setValue(adapter.value).onChange(async (value) => {
+      setting.addText((text2) => text2.setValue(adapter.value).onChange(async (value) => {
         await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
       }));
     }
@@ -4635,10 +4689,10 @@ function createDetachedNumericRenderer(kind, key, strings, ports) {
       batchSize: strings.settingsBatchSize,
       batchSizeDescription: strings.settingsBatchSizeDesc
     });
-    setting.setName(adapter.name).setDesc(adapter.desc).addText((text) => text.setPlaceholder(adapter.fallback).setValue(adapter.value).onChange(async (value) => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addText((text2) => text2.setPlaceholder(adapter.fallback).setValue(adapter.value).onChange(async (value) => {
       const next = normalizePureLocalNumericValue(kind, value);
       await ports.setLocal(key, next);
-      text.setValue(next);
+      text2.setValue(next);
     }));
   };
 }
@@ -5260,6 +5314,13 @@ function assessDeclarativeSettingsParity(blueprint) {
 var DEFAULT_EMBEDDING_UPDATE_SETTINGS = Object.freeze({
   mode: "manual"
 });
+var EMBEDDING_GENERATION_INCREMENTAL = true;
+function isLegacyFullRegenerationPreferenceSet(settings) {
+  if (settings.generateOnlyMissingEmbeddings !== void 0) {
+    return settings.generateOnlyMissingEmbeddings === false;
+  }
+  return settings.autoGenerateEmbeddingsOnlyWhenNeeded === false;
+}
 function isEmbeddingUpdateMode(value) {
   return value === "manual" || value === "automatic-local-only";
 }
@@ -5616,15 +5677,17 @@ function cloneWithLocalValue(snapshot, deviceId, key, value) {
   };
 }
 function getEffectiveEmbeddingIdentity(snapshot, deviceId) {
-  var _a, _b;
+  var _a;
   const device = (_a = snapshot.settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
-  const storedProvider = typeof (device == null ? void 0 : device.embeddingsProvider) === "string" ? device.embeddingsProvider : "";
-  const provider = (_b = resolvePureLocalProviderId(storedProvider)) != null ? _b : "ollama";
   const storedModel = typeof (device == null ? void 0 : device.embeddingsModel) === "string" ? device.embeddingsModel.trim() : "";
-  return {
-    provider,
-    model: storedModel || getEmbeddingProviderDefaults(provider).model
-  };
+  const { provider, model } = resolveEffectiveEmbeddingsConfig(
+    {
+      provider: typeof (device == null ? void 0 : device.embeddingsProvider) === "string" ? device.embeddingsProvider : void 0,
+      model: void 0
+    },
+    snapshot.settings
+  );
+  return { provider, model: storedModel || model };
 }
 function effectsForEmbeddingIdentityChange(previous, next, deviceId, effects) {
   const before = getEffectiveEmbeddingIdentity(previous, deviceId);
@@ -5640,11 +5703,18 @@ function hasSameEffectiveProviderTuple(snapshot, deviceId, domain, provider, mod
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
   const rawProvider = device == null ? void 0 : device[providerKey];
   const storedProvider = typeof rawProvider === "string" ? resolvePureLocalProviderId(rawProvider) : void 0;
-  const defaults = domain === "analysis" ? getAnalysisProviderDefaults(storedProvider != null ? storedProvider : "ollama") : getEmbeddingProviderDefaults(storedProvider != null ? storedProvider : "ollama");
   const rawModel = device == null ? void 0 : device[modelKey];
-  const storedModel = typeof rawModel === "string" && rawModel.trim() ? rawModel.trim() : defaults.model;
   const rawBaseUrl = device == null ? void 0 : device[baseUrlKey];
-  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim() ? rawBaseUrl.trim() : defaults.baseUrl;
+  const effective = (domain === "analysis" ? resolveEffectiveAnalysisConfig : resolveEffectiveEmbeddingsConfig)(
+    {
+      provider: storedProvider,
+      model: typeof rawModel === "string" ? rawModel : void 0,
+      baseUrl: typeof rawBaseUrl === "string" ? rawBaseUrl : void 0
+    },
+    snapshot.settings
+  );
+  const storedModel = typeof rawModel === "string" && rawModel.trim() ? rawModel.trim() : effective.model;
+  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim() ? rawBaseUrl.trim() : effective.baseUrl;
   return storedProvider === provider && storedModel === model && storedBaseUrl === baseUrl;
 }
 function createSettingsRuntimeAdapters(host, options = {}) {
@@ -5842,11 +5912,18 @@ function staticDefinition(id, name, description) {
     render: createDetachedStaticTextRenderer(name, description)
   };
 }
-function baseUrlFor(runtimeAdapters, key) {
-  var _a;
-  const providerKey = key === "analysisBaseUrl" ? "analysisProvider" : "embeddingsProvider";
-  const provider = runtimeAdapters.getLocalValue(providerKey) || "ollama";
-  return chooseProviderDefaultBaseUrl((_a = runtimeAdapters.getLocalValue(key)) != null ? _a : "", provider);
+function effectiveAiConfigFor(runtimeAdapters, getSettings, domain) {
+  const analysis = domain === "analysis";
+  const local = {
+    provider: runtimeAdapters.getLocalValue(analysis ? "analysisProvider" : "embeddingsProvider"),
+    model: runtimeAdapters.getLocalValue(analysis ? "analysisModel" : "embeddingsModel"),
+    baseUrl: runtimeAdapters.getLocalValue(analysis ? "analysisBaseUrl" : "embeddingsBaseUrl")
+  };
+  const settings = getSettings();
+  return analysis ? resolveEffectiveAnalysisConfig(local, settings) : resolveEffectiveEmbeddingsConfig(local, settings);
+}
+function baseUrlFor(effective, key) {
+  return effective(key === "analysisBaseUrl" ? "analysis" : "embedding").baseUrl;
 }
 function createDeclarativeSettingsCandidateComposition(options) {
   var _a, _b, _c, _d;
@@ -5873,6 +5950,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
     strings: options.strings,
     ownerPrefix: "candidate-binary"
   });
+  const effectiveAiConfig = (domain) => effectiveAiConfigFor(runtimeAdapters, () => options.runtimeHost.getSnapshot().settings, domain);
   const invalidateConnectionForLocalSetting = (key) => {
     switch (key) {
       case "analysisProvider":
@@ -5946,12 +6024,15 @@ function createDeclarativeSettingsCandidateComposition(options) {
     getEffectiveEmbeddingContract() {
       var _a2, _b2;
       return (_b2 = (_a2 = options.getEffectiveEmbeddingContract) == null ? void 0 : _a2.call(options)) != null ? _b2 : null;
+    },
+    getEffectiveAiConfig(domain) {
+      return effectiveAiConfig(domain);
     }
   };
   const localDefinitions = createPureLocalSettingDefinitions({
     strings: options.strings,
-    analysisBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "analysisBaseUrl"),
-    embeddingsBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "embeddingsBaseUrl")
+    analysisBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "analysisBaseUrl"),
+    embeddingsBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "embeddingsBaseUrl")
   });
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
   const staticDefinitions = [
@@ -6190,7 +6271,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
   const refreshDynamicDefinitions = () => {
     for (const [key, definition] of baseUrlControlDefinitions) {
       if (!("control" in definition) || !definition.control || definition.control.type !== "text") continue;
-      definition.control.placeholder = baseUrlFor(runtimeAdapters, key);
+      definition.control.placeholder = baseUrlFor(effectiveAiConfig, key);
     }
   };
   const definitions = [
@@ -6698,12 +6779,16 @@ function getActiveDeviceSettingsId() {
   return activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
 }
 var activeDeviceNameGetter;
-function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorage, getDeviceRole, getDeviceName) {
+function getDeviceRole() {
+  var _a;
+  return (_a = activeDeviceRoleGetter == null ? void 0 : activeDeviceRoleGetter()) != null ? _a : "producer";
+}
+function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorage, getDeviceRole2, getDeviceName) {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || activeDeviceSettingsId || getCurrentDeviceSettingsId();
   activeSecretStorage = secretStorage;
-  activeDeviceRoleGetter = getDeviceRole;
+  activeDeviceRoleGetter = getDeviceRole2;
   activeDeviceNameGetter = getDeviceName;
   ensureCurrentDeviceSettings();
 }
@@ -6849,7 +6934,7 @@ var DEFAULT_SETTINGS = {
   aiProvider: "ollama",
   aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   aiApiKey: "",
-  aiAnalysisModel: "gemma4:12b",
+  aiAnalysisModel: getAnalysisProviderDefaults("ollama").model,
   aiRequestTimeoutSeconds: 60,
   aiOutputLanguage: "pt-PT",
   aiProfiles: [
@@ -6879,7 +6964,7 @@ var DEFAULT_SETTINGS = {
   embeddingProvider: "ollama",
   embeddingBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   embeddingApiKey: "",
-  embeddingModel: "nomic-embed-text",
+  embeddingModel: getEmbeddingProviderDefaults("ollama").model,
   embeddingBatchSize: 10,
   embeddingRequestTimeoutSeconds: 60,
   generateEmbeddingsOnStartup: false,
@@ -6913,6 +6998,16 @@ var DEFAULT_SETTINGS = {
   // Configurações por dispositivo
   deviceSettingsById: {}
 };
+var LEGACY_COMPATIBILITY_DEFAULTS = Object.freeze({
+  embeddingModel: "nomic-embed-text",
+  aiAnalysisModel: "gemma4:12b"
+});
+function resolveLoadedSettings(rawSettings) {
+  if (!rawSettings) {
+    return Object.assign({}, DEFAULT_SETTINGS);
+  }
+  return Object.assign({}, DEFAULT_SETTINGS, LEGACY_COMPATIBILITY_DEFAULTS, rawSettings);
+}
 var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -6936,8 +7031,10 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         return deviceName ? `${roleLabel} \xB7 ${deviceName}` : roleLabel;
       }
       case "ai-analysis": {
-        const provider = getLocalAnalysisProvider() || "ollama";
-        const model = getLocalAnalysisModel() || "gemma4:e2b";
+        const { provider, model } = resolveEffectiveAnalysisConfig(
+          { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
+          this.plugin.settings
+        );
         return `${provider} \xB7 ${model}`;
       }
       case "search": {
@@ -6952,8 +7049,10 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
           }
           return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
         }
-        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
-        const provider = getLocalEmbeddingsProvider() || "ollama";
+        const { provider, model } = resolveEffectiveEmbeddingsConfig(
+          { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
+          this.plugin.settings
+        );
         return `\u{1F7E2} ${strings.settingsSummaryEmbeddingsEnabled} \xB7 ${provider} (${model})`;
       }
       case "producer": {
@@ -7123,11 +7222,18 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
           credentialAvailable: credentialRuntime.getAvailability(ref, provider2).available
         };
       }
-      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
+      const effective = analysis ? resolveEffectiveAnalysisConfig(
+        { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
+        this.plugin.settings
+      ) : resolveEffectiveEmbeddingsConfig(
+        { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
+        this.plugin.settings
+      );
+      const provider = effective.provider;
       return {
         provider,
-        model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
-        baseUrl: analysis ? getLocalAnalysisBaseUrl() : getLocalEmbeddingsBaseUrl(),
+        model: effective.model,
+        baseUrl: effective.baseUrl,
         timeout: analysis ? getLocalAnalysisTimeout() : getLocalEmbeddingsTimeout(),
         credentialAvailable: credentialRuntime.getAvailability(ref, provider).available
       };
@@ -7366,6 +7472,552 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     return getStrings((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
   }
 };
+
+// src/index/producerLocalStoreTypes.ts
+var PRODUCER_STORE_SCHEMA_VERSION = 1;
+var PRODUCER_STORE_DEFAULT_DB_NAME = "lina-producer.db";
+
+// src/index/producerLocalStorePathResolver.ts
+function getRuntimeProcess() {
+  if (typeof window !== "undefined") {
+    const win = window;
+    if (win.process && typeof win.process === "object") {
+      return win.process;
+    }
+  }
+  return void 0;
+}
+function getRuntimePlatform() {
+  const proc = getRuntimeProcess();
+  const plat = proc == null ? void 0 : proc.platform;
+  if (plat === "win32" || plat === "darwin" || plat === "linux") {
+    return plat;
+  }
+  return "other";
+}
+function getRuntimeEnv() {
+  var _a;
+  const proc = getRuntimeProcess();
+  return (_a = proc == null ? void 0 : proc.env) != null ? _a : {};
+}
+function getRuntimeHomedir() {
+  var _a;
+  const env = getRuntimeEnv();
+  const platform = getRuntimePlatform();
+  if (platform === "win32") {
+    if (env.USERPROFILE) return env.USERPROFILE;
+    if (env.HOMEDRIVE && env.HOMEPATH) return `${env.HOMEDRIVE}${env.HOMEPATH}`;
+  }
+  return (_a = env.HOME) != null ? _a : "";
+}
+function canonicalizePath(rawPath) {
+  if (!rawPath || rawPath.trim().length === 0) {
+    return "";
+  }
+  let normalized = rawPath.trim().replace(/\\/g, "/");
+  let drivePrefix = "";
+  const driveMatch = normalized.match(/^([a-zA-Z]:)(\/|$)/);
+  if (driveMatch && driveMatch[1]) {
+    drivePrefix = driveMatch[1].toUpperCase();
+    normalized = normalized.slice(driveMatch[1].length);
+  }
+  const isAbsolute = normalized.startsWith("/");
+  const segments = normalized.split("/").filter((s) => s.length > 0 && s !== ".");
+  const resolvedSegments = [];
+  for (const segment of segments) {
+    if (segment === "..") {
+      if (resolvedSegments.length > 0 && resolvedSegments[resolvedSegments.length - 1] !== "..") {
+        resolvedSegments.pop();
+      } else if (!isAbsolute && !drivePrefix) {
+        resolvedSegments.push("..");
+      }
+    } else {
+      resolvedSegments.push(segment);
+    }
+  }
+  const joined = resolvedSegments.join("/");
+  if (drivePrefix) {
+    return joined.length > 0 ? `${drivePrefix}/${joined}` : `${drivePrefix}/`;
+  }
+  if (isAbsolute) {
+    return `/${joined}`;
+  }
+  return joined.length > 0 ? joined : ".";
+}
+function joinPaths(...parts) {
+  const filtered = parts.filter((p) => typeof p === "string" && p.trim().length > 0);
+  if (filtered.length === 0) {
+    return "";
+  }
+  const raw = filtered.join("/");
+  return canonicalizePath(raw);
+}
+function computeRelativePath(fromPath, toPath) {
+  const from = canonicalizePath(fromPath).split("/").filter(Boolean);
+  const to = canonicalizePath(toPath).split("/").filter(Boolean);
+  let common = 0;
+  while (common < from.length && common < to.length && from[common] === to[common]) {
+    common++;
+  }
+  const up = from.length - common;
+  const down = to.slice(common);
+  const resultParts = [];
+  for (let i = 0; i < up; i++) {
+    resultParts.push("..");
+  }
+  resultParts.push(...down);
+  return resultParts.length > 0 ? resultParts.join("/") : ".";
+}
+function checkPathSeparationFromVault(vaultBasePath, targetPath, platform = getRuntimePlatform()) {
+  const canonicalVault = canonicalizePath(vaultBasePath);
+  const canonicalTarget = canonicalizePath(targetPath);
+  const isCaseInsensitive = platform === "win32" || platform === "darwin";
+  const normVault = isCaseInsensitive ? canonicalVault.toLowerCase() : canonicalVault;
+  const normTarget = isCaseInsensitive ? canonicalTarget.toLowerCase() : canonicalTarget;
+  const isInside = normVault === normTarget || normTarget.startsWith(`${normVault}/`);
+  return {
+    insideVault: isInside,
+    canonicalVaultPath: canonicalVault,
+    canonicalTargetPath: canonicalTarget,
+    relativePath: computeRelativePath(canonicalVault, canonicalTarget)
+  };
+}
+function resolveDefaultStoreDirectory(context) {
+  var _a, _b, _c;
+  const platform = (_a = context == null ? void 0 : context.platform) != null ? _a : getRuntimePlatform();
+  const env = (_b = context == null ? void 0 : context.env) != null ? _b : getRuntimeEnv();
+  const homedir = (_c = context == null ? void 0 : context.homedir) != null ? _c : getRuntimeHomedir();
+  if (platform === "win32") {
+    const localAppData = env.LOCALAPPDATA || (homedir ? joinPaths(homedir, "AppData/Local") : "");
+    if (localAppData) {
+      return joinPaths(localAppData, "lina/db");
+    }
+  } else if (platform === "darwin") {
+    if (homedir) {
+      return joinPaths(homedir, "Library/Application Support/lina/db");
+    }
+  } else {
+    const xdgState = env.XDG_STATE_HOME;
+    if (xdgState) {
+      return joinPaths(xdgState, "lina/db");
+    }
+    if (homedir) {
+      return joinPaths(homedir, ".local/state/lina/db");
+    }
+  }
+  return homedir ? joinPaths(homedir, ".lina/db") : canonicalizePath(".lina-local/db");
+}
+var DefaultProducerLocalStorePathResolver = class {
+  constructor(vaultBasePath, context) {
+    this.vaultBasePath = vaultBasePath;
+    this.context = context;
+  }
+  resolveStorePath(customPath) {
+    const isCustom = typeof customPath === "string" && customPath.trim().length > 0;
+    let storeDirectory;
+    let databasePath;
+    if (isCustom && customPath) {
+      const trimmed = customPath.trim();
+      const canonical = canonicalizePath(trimmed);
+      if (canonical.toLowerCase().endsWith(".db")) {
+        databasePath = canonical;
+        const lastSlash = canonical.lastIndexOf("/");
+        storeDirectory = lastSlash > 0 ? canonical.slice(0, lastSlash) : canonical.startsWith("/") ? "/" : ".";
+      } else {
+        storeDirectory = canonical;
+        databasePath = joinPaths(canonical, PRODUCER_STORE_DEFAULT_DB_NAME);
+      }
+    } else {
+      storeDirectory = resolveDefaultStoreDirectory(this.context);
+      databasePath = joinPaths(storeDirectory, PRODUCER_STORE_DEFAULT_DB_NAME);
+    }
+    const separation = this.isPathInsideVault(databasePath);
+    return {
+      storeDirectory: canonicalizePath(storeDirectory),
+      databasePath: canonicalizePath(databasePath),
+      isCustomPath: isCustom,
+      separation
+    };
+  }
+  isPathInsideVault(targetPath) {
+    var _a, _b;
+    const platform = (_b = (_a = this.context) == null ? void 0 : _a.platform) != null ? _b : getRuntimePlatform();
+    return checkPathSeparationFromVault(this.vaultBasePath, targetPath, platform);
+  }
+};
+
+// src/index/sqliteProducerLocalStore.ts
+function getFsAndPathHelpers() {
+  try {
+    const req = typeof require === "function" ? require : null;
+    if (req) {
+      const fsMod = req("fs");
+      const pathMod = req("path");
+      return {
+        existsSync: (p) => fsMod.existsSync ? fsMod.existsSync(p) : false,
+        mkdirSync: (p, opts) => {
+          if (fsMod.mkdirSync) fsMod.mkdirSync(p, opts);
+        },
+        dirname: (p) => pathMod.dirname ? pathMod.dirname(p) : p.split("/").slice(0, -1).join("/")
+      };
+    }
+  } catch (e) {
+  }
+  return {
+    existsSync: () => false,
+    mkdirSync: () => {
+    },
+    dirname: (p) => p.split("/").slice(0, -1).join("/") || "."
+  };
+}
+function resolveNodeSqliteConstructor() {
+  try {
+    const req = typeof require === "function" ? require : null;
+    if (!req) return null;
+    let mod = null;
+    try {
+      mod = req("node:sqlite");
+    } catch (e) {
+      try {
+        mod = req("sqlite");
+      } catch (e2) {
+        return null;
+      }
+    }
+    if (mod && typeof mod === "object") {
+      const dbSync = mod.DatabaseSync;
+      if (typeof dbSync === "function") {
+        return dbSync;
+      }
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+}
+var SqliteProducerLocalStore = class {
+  constructor(options) {
+    this.db = null;
+    this.currentSchemaVersion = 0;
+    this.databasePath = options.databasePath;
+    this.dbConstructor = options.dbConstructor;
+    if (options.customDbInstance) {
+      this.db = options.customDbInstance;
+    }
+  }
+  get isOpen() {
+    return this.db !== null;
+  }
+  getStorePath() {
+    return this.databasePath;
+  }
+  getSchemaVersion() {
+    return this.currentSchemaVersion;
+  }
+  open() {
+    var _a;
+    if (this.db) {
+      this.applyPragmasAndMigrations();
+      return;
+    }
+    const ctor = (_a = this.dbConstructor) != null ? _a : resolveNodeSqliteConstructor();
+    if (!ctor) {
+      throw new Error(`node:sqlite DatabaseSync module is unavailable in this runtime environment (${this.databasePath}).`);
+    }
+    const helpers = getFsAndPathHelpers();
+    const dir = helpers.dirname(this.databasePath);
+    if (!helpers.existsSync(dir)) {
+      helpers.mkdirSync(dir, { recursive: true });
+    }
+    this.db = new ctor(this.databasePath);
+    this.applyPragmasAndMigrations();
+  }
+  close() {
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch (e) {
+      } finally {
+        this.db = null;
+        this.currentSchemaVersion = 0;
+      }
+    }
+  }
+  applyPragmasAndMigrations() {
+    if (!this.db) return;
+    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA synchronous = FULL;");
+    this.db.exec("PRAGMA foreign_keys = ON;");
+    this.runMigrations();
+  }
+  runMigrations() {
+    if (!this.db) return;
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL,
+        description TEXT NOT NULL
+      );
+    `);
+    const versionRow = this.db.prepare("SELECT MAX(version) as maxVersion FROM schema_migrations;").get();
+    const activeVersion = typeof (versionRow == null ? void 0 : versionRow.maxVersion) === "number" ? versionRow.maxVersion : 0;
+    if (activeVersion < 1) {
+      this.db.exec("BEGIN TRANSACTION;");
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS embedding_spaces (
+            space_id TEXT PRIMARY KEY,
+            vector_contract_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            dimension INTEGER NOT NULL,
+            dtype TEXT NOT NULL,
+            input_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS embedding_records (
+            chunk_id TEXT PRIMARY KEY,
+            space_id TEXT NOT NULL,
+            note_path TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            text_hash TEXT NOT NULL,
+            vector_contract_id TEXT NOT NULL,
+            embedding_blob BLOB NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (space_id) REFERENCES embedding_spaces (space_id) ON DELETE CASCADE
+          );
+
+          INSERT INTO schema_migrations (version, applied_at, description)
+          VALUES (1, '${(/* @__PURE__ */ new Date()).toISOString()}', 'Phase M1 initial schema for embedding spaces and records');
+        `);
+        this.db.exec("COMMIT;");
+        this.currentSchemaVersion = PRODUCER_STORE_SCHEMA_VERSION;
+      } catch (err) {
+        this.db.exec("ROLLBACK;");
+        throw err;
+      }
+    } else {
+      this.currentSchemaVersion = activeVersion;
+    }
+  }
+  upsertEmbeddingSpace(space) {
+    if (!this.db) {
+      throw new Error("Cannot upsert embedding space: SQLite store is not open.");
+    }
+    const stmt = this.db.prepare(`
+      INSERT INTO embedding_spaces (
+        space_id, vector_contract_id, provider, model, dimension, dtype, input_version, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(space_id) DO UPDATE SET
+        vector_contract_id = excluded.vector_contract_id,
+        provider = excluded.provider,
+        model = excluded.model,
+        dimension = excluded.dimension,
+        dtype = excluded.dtype,
+        input_version = excluded.input_version,
+        updated_at = excluded.updated_at;
+    `);
+    stmt.run(
+      space.spaceId,
+      space.vectorContractId,
+      space.provider,
+      space.model,
+      space.dimensions,
+      "float32",
+      space.inputVersion,
+      space.createdAt,
+      space.updatedAt
+    );
+  }
+  upsertEmbeddingRecord(record) {
+    if (!this.db) {
+      throw new Error("Cannot upsert embedding record: SQLite store is not open.");
+    }
+    const blob = record.embeddingBlob instanceof Float32Array ? new Uint8Array(record.embeddingBlob.buffer, record.embeddingBlob.byteOffset, record.embeddingBlob.byteLength) : new Uint8Array(record.embeddingBlob);
+    const stmt = this.db.prepare(`
+      INSERT INTO embedding_records (
+        chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_blob, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(chunk_id) DO UPDATE SET
+        space_id = excluded.space_id,
+        note_path = excluded.note_path,
+        chunk_index = excluded.chunk_index,
+        text_hash = excluded.text_hash,
+        vector_contract_id = excluded.vector_contract_id,
+        embedding_blob = excluded.embedding_blob,
+        updated_at = excluded.updated_at;
+    `);
+    stmt.run(
+      record.chunkId,
+      record.spaceId,
+      record.notePath,
+      record.chunkIndex,
+      record.textHash,
+      record.inputHash,
+      blob,
+      record.createdAt,
+      record.updatedAt
+    );
+  }
+  upsertEmbeddingBatch(space, records) {
+    if (!this.db) {
+      throw new Error("Cannot upsert embedding batch: SQLite store is not open.");
+    }
+    this.db.exec("BEGIN TRANSACTION;");
+    try {
+      this.upsertEmbeddingSpace(space);
+      for (const record of records) {
+        this.upsertEmbeddingRecord(record);
+      }
+      this.db.exec("COMMIT;");
+    } catch (err) {
+      this.db.exec("ROLLBACK;");
+      throw err;
+    }
+  }
+  getEmbeddingRecord(chunkId) {
+    if (!this.db) return null;
+    const row = this.db.prepare(`
+      SELECT chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_blob, created_at, updated_at
+      FROM embedding_records WHERE chunk_id = ?;
+    `).get(chunkId);
+    if (!row) return null;
+    let blobBuffer;
+    if (row.embedding_blob instanceof ArrayBuffer) {
+      blobBuffer = row.embedding_blob;
+    } else if (ArrayBuffer.isView(row.embedding_blob)) {
+      blobBuffer = row.embedding_blob.buffer.slice(row.embedding_blob.byteOffset, row.embedding_blob.byteOffset + row.embedding_blob.byteLength);
+    } else {
+      const u8 = new Uint8Array(row.embedding_blob);
+      blobBuffer = u8.buffer;
+    }
+    const float32 = new Float32Array(blobBuffer);
+    return {
+      chunkId: row.chunk_id,
+      spaceId: row.space_id,
+      notePath: row.note_path,
+      chunkIndex: row.chunk_index,
+      textHash: row.text_hash,
+      inputHash: row.vector_contract_id,
+      embeddingBlob: float32,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+  countRecords(spaceId) {
+    var _a, _b;
+    if (!this.db) return 0;
+    if (spaceId) {
+      const row = this.db.prepare("SELECT COUNT(*) as cnt FROM embedding_records WHERE space_id = ?;").get(spaceId);
+      return (_a = row == null ? void 0 : row.cnt) != null ? _a : 0;
+    } else {
+      const row = this.db.prepare("SELECT COUNT(*) as cnt FROM embedding_records;").get();
+      return (_b = row == null ? void 0 : row.cnt) != null ? _b : 0;
+    }
+  }
+  diagnose() {
+    let count = 0;
+    let errSummary = null;
+    if (this.db) {
+      try {
+        count = this.countRecords();
+      } catch (err) {
+        errSummary = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      errSummary = "Database connection is not open.";
+    }
+    return {
+      isAvailable: this.db !== null,
+      databasePath: this.databasePath,
+      isOpen: this.isOpen,
+      schemaVersion: this.currentSchemaVersion,
+      recordCount: count,
+      errorSummary: errSummary
+    };
+  }
+};
+
+// src/index/sqliteProducerShadowWriter.ts
+function buildSpaceRecordFromPublication(info, records) {
+  var _a, _b;
+  const spaceId = `${info.provider}:${info.model}:${info.dimensions}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    spaceId,
+    provider: info.provider,
+    model: info.model,
+    dimensions: info.dimensions,
+    vectorContractId: `vc-${info.provider}-${info.model}-${info.dimensions}`,
+    inputVersion: (_a = info.inputVersion) != null ? _a : 1,
+    prefixMode: (_b = info.prefixMode) != null ? _b : "none",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+function buildProducerRecordsFromPublication(spaceId, records) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return records.map((rec) => {
+    var _a;
+    const float32 = rec.embedding instanceof Float32Array ? rec.embedding : new Float32Array(rec.embedding);
+    return {
+      chunkId: rec.chunkId,
+      spaceId,
+      notePath: rec.path,
+      chunkIndex: rec.index,
+      textHash: rec.textHash,
+      inputHash: (_a = rec.embeddingInputHash) != null ? _a : rec.textHash,
+      embeddingBlob: float32,
+      createdAt: rec.createdAt || now,
+      updatedAt: now
+    };
+  });
+}
+async function performProducerSqliteShadowWrite(records, info, options) {
+  var _a, _b, _c, _d;
+  const isEnabled = (_a = options.enabled) != null ? _a : false;
+  const isProducer = ((_b = options.deviceRole) != null ? _b : "producer") === "producer";
+  if (!isEnabled || !isProducer) {
+    return { attempted: false, success: true, recordsCount: 0 };
+  }
+  const store = options.store;
+  if (!store) {
+    return { attempted: false, success: true, recordsCount: 0 };
+  }
+  try {
+    if (!store.isOpen) {
+      store.open();
+    }
+    const space = buildSpaceRecordFromPublication(info, records);
+    const producerRecords = buildProducerRecordsFromPublication(space.spaceId, records);
+    store.upsertEmbeddingBatch(space, producerRecords);
+    (_c = options.onDiagnostic) == null ? void 0 : _c.call(options, {
+      success: true,
+      recordsCount: producerRecords.length
+    });
+    return {
+      attempted: true,
+      success: true,
+      recordsCount: producerRecords.length
+    };
+  } catch (err) {
+    const errorSummary = err instanceof Error ? err.message : String(err);
+    (_d = options.onDiagnostic) == null ? void 0 : _d.call(options, {
+      success: false,
+      recordsCount: records.length,
+      errorSummary
+    });
+    return {
+      attempted: true,
+      success: false,
+      recordsCount: records.length,
+      errorSummary
+    };
+  }
+}
 
 // src/device/deviceIdentity.ts
 var LINA_DEVICE_ID_STORAGE_KEY = "lina_device_id";
@@ -9093,6 +9745,40 @@ var BinaryEmbeddingPublisher = class {
     }
   }
 };
+async function recoverBinaryEmbeddingPublication(adapter, digest, allowTemporaryPromotion = false, corresponds = () => true, options = {}) {
+  const valid = async (paths) => {
+    try {
+      return corresponds((await validateSet(adapter, digest, paths, options)).manifest);
+    } catch (e) {
+      return false;
+    }
+  };
+  if (await valid(canonicalPaths)) {
+    for (const path of [...Object.values(temporaryPaths), ...Object.values(backupPaths)]) await removeIfExists(adapter, path);
+    return "canonical";
+  }
+  if (await valid(backupPaths)) {
+    await adapter.writeBinary(temporaryPaths.vectors, await adapter.readBinary(backupPaths.vectors));
+    await adapter.write(temporaryPaths.metadata, await adapter.read(backupPaths.metadata));
+    await adapter.write(temporaryPaths.manifest, await adapter.read(backupPaths.manifest));
+    for (const path of Object.values(canonicalPaths)) await removeIfExists(adapter, path);
+    await adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+    await adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+    await adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+    if (!await valid(canonicalPaths)) return "none";
+    for (const path of Object.values(backupPaths)) await removeIfExists(adapter, path);
+    return "backup";
+  }
+  if (allowTemporaryPromotion && await valid(temporaryPaths)) {
+    for (const path of Object.values(canonicalPaths)) await removeIfExists(adapter, path);
+    await adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+    await adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+    await adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+    return "temporary";
+  }
+  for (const path of [...Object.values(temporaryPaths), ...Object.values(backupPaths)]) await removeIfExists(adapter, path);
+  return "none";
+}
 
 // src/device/producerState.ts
 var import_obsidian11 = require("obsidian");
@@ -9391,6 +10077,37 @@ function hashContent(content) {
   return Math.abs(hash).toString(16);
 }
 
+// src/index/writeFence.ts
+var OwnershipFenceRejectedError = class extends Error {
+};
+async function assertIndexWriteFence(fence) {
+  if (fence && !await fence.assertCurrent()) {
+    throw new OwnershipFenceRejectedError("Ownership fence rejected the index write.");
+  }
+}
+var MUTATING_ADAPTER_METHODS = /* @__PURE__ */ new Set(["write", "writeBinary", "remove", "rename", "mkdir"]);
+function withFencedAdapter(app, fence, onMutation) {
+  if (!fence) return app;
+  const original = app.vault.adapter;
+  const guardedAdapter = new Proxy(original, {
+    get(target, key) {
+      const value = Reflect.get(target, key);
+      if (typeof value !== "function") return value;
+      if (MUTATING_ADAPTER_METHODS.has(String(key))) {
+        return async (...args) => {
+          await assertIndexWriteFence(fence);
+          const result = await Reflect.apply(value, target, args);
+          onMutation == null ? void 0 : onMutation();
+          return result;
+        };
+      }
+      return value.bind(target);
+    }
+  });
+  const guardedVault = new Proxy(app.vault, { get: (target, key) => key === "adapter" ? guardedAdapter : Reflect.get(target, key) });
+  return new Proxy(app, { get: (target, key) => key === "vault" ? guardedVault : Reflect.get(target, key) });
+}
+
 // src/index/indexStore.ts
 function createTextGenerationId() {
   return `gen-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -9434,7 +10151,6 @@ async function ensureFolder(app, folderPath) {
 var MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
 var NOTES_INDEX_PATH = ".lina/index/notes.json";
 var CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
-var CHUNKS_FILE = "chunks.jsonl";
 var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
 var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
@@ -9567,8 +10283,139 @@ async function readChunksIndexFile(app, strict) {
     return { status: "unavailable", reason: "read-error" };
   }
 }
-async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance, policyIdentity) {
+var TEXT_INDEX_PUBLICATION_FILES = {
+  notes: NOTES_INDEX_PATH,
+  chunks: CHUNKS_INDEX_PATH,
+  manifest: MANIFEST_INDEX_PATH,
+  notesTemporary: ".lina/producer/staging/text-notes.publish.tmp",
+  chunksTemporary: ".lina/producer/staging/text-chunks.publish.tmp",
+  manifestTemporary: ".lina/producer/staging/text-manifest.publish.tmp",
+  notesBackup: ".lina/producer/backups/text-notes.publish.backup",
+  chunksBackup: ".lina/producer/backups/text-chunks.publish.backup",
+  manifestBackup: ".lina/producer/backups/text-manifest.publish.backup"
+};
+var EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP = ".lina/producer/backups/manifest.publish.backup";
+function isPlainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+async function adapterFileExists(adapter, path) {
   var _a;
+  return ((_a = await adapter.stat(path)) == null ? void 0 : _a.type) === "file";
+}
+async function adapterRemoveIfExists(adapter, path) {
+  if (await adapter.exists(path)) await adapter.remove(path);
+}
+function extractEmbeddingSection(value) {
+  if (isPlainRecord(value) && value.embeddingsEnabled === true && isPlainRecord(value.embeddings)) {
+    return {
+      embeddingsEnabled: true,
+      embeddings: value.embeddings,
+      ...isPlainRecord(value.embeddingInput) ? { embeddingInput: value.embeddingInput } : {}
+    };
+  }
+  return {};
+}
+async function readEmbeddingSectionFrom(adapter, path) {
+  try {
+    if (!await adapterFileExists(adapter, path)) return { status: "absent" };
+    return { status: "available", section: extractEmbeddingSection(JSON.parse(await adapter.read(path))) };
+  } catch (e) {
+    return { status: "unreadable" };
+  }
+}
+function isCompleteTextTriple(notesRaw, chunksRaw, manifestRaw) {
+  if (notesRaw === void 0 || chunksRaw === void 0 || manifestRaw === void 0) return false;
+  try {
+    const manifest = JSON.parse(manifestRaw);
+    if (!isTextIndexManifest(manifest)) return false;
+    const notes = JSON.parse(notesRaw);
+    if (!Array.isArray(notes) || !notes.every(isIndexedNote)) return false;
+    const lines = chunksRaw.split("\n").filter((line) => line.trim().length > 0);
+    if (!lines.every((line) => isTextChunk(JSON.parse(line)))) return false;
+    if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notes.length) return false;
+    if (typeof manifest.totalChunks === "number" && manifest.totalChunks !== lines.length) return false;
+    if (manifest.notesDigest !== void 0 && manifest.notesDigest !== computeTextArtifactDigest(notesRaw)) return false;
+    if (manifest.chunksDigest !== void 0 && manifest.chunksDigest !== computeTextArtifactDigest(chunksRaw)) return false;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+async function readOptionalText(adapter, path) {
+  try {
+    return await adapterFileExists(adapter, path) ? await adapter.read(path) : void 0;
+  } catch (e) {
+    return void 0;
+  }
+}
+async function recoverTextIndexPublication(app) {
+  const files = TEXT_INDEX_PUBLICATION_FILES;
+  const adapter = app.vault.adapter;
+  const warnings = [];
+  let changed = false;
+  const remove = async (path) => {
+    if (await adapter.exists(path)) {
+      await adapter.remove(path);
+      changed = true;
+    }
+  };
+  for (const path of [files.notesTemporary, files.chunksTemporary, files.manifestTemporary]) await remove(path);
+  const backups = {
+    notes: await adapterFileExists(adapter, files.notesBackup),
+    chunks: await adapterFileExists(adapter, files.chunksBackup),
+    manifest: await adapterFileExists(adapter, files.manifestBackup)
+  };
+  if (!backups.notes && !backups.chunks && !backups.manifest) return { warnings, changed };
+  const backupPaths2 = [files.notesBackup, files.chunksBackup, files.manifestBackup];
+  const [notesNow, chunksNow, manifestNow] = [
+    await readOptionalText(adapter, files.notes),
+    await readOptionalText(adapter, files.chunks),
+    await readOptionalText(adapter, files.manifest)
+  ];
+  if (isCompleteTextTriple(notesNow, chunksNow, manifestNow)) {
+    for (const path of backupPaths2) await remove(path);
+    return { warnings, changed };
+  }
+  if (backups.manifest && manifestNow !== void 0) {
+    warnings.push("text-backup-superseded");
+    return { warnings, changed };
+  }
+  const pick = async (current, backupPath, hasBackup) => hasBackup ? readOptionalText(adapter, backupPath) : current;
+  const candidate = {
+    notes: await pick(notesNow, files.notesBackup, backups.notes),
+    chunks: await pick(chunksNow, files.chunksBackup, backups.chunks),
+    manifest: await pick(manifestNow, files.manifestBackup, backups.manifest)
+  };
+  if (!isCompleteTextTriple(candidate.notes, candidate.chunks, candidate.manifest)) {
+    warnings.push("text-backup-invalid");
+    return { warnings, changed };
+  }
+  const restores = [
+    { canonical: files.notes, temporary: files.notesTemporary, backup: files.notesBackup, content: candidate.notes, has: backups.notes },
+    { canonical: files.chunks, temporary: files.chunksTemporary, backup: files.chunksBackup, content: candidate.chunks, has: backups.chunks },
+    { canonical: files.manifest, temporary: files.manifestTemporary, backup: files.manifestBackup, content: candidate.manifest, has: backups.manifest }
+  ];
+  for (const item2 of restores) {
+    if (!item2.has || item2.content === void 0) continue;
+    await adapter.write(item2.temporary, item2.content);
+    changed = true;
+    await remove(item2.canonical);
+    await adapter.rename(item2.temporary, item2.canonical);
+  }
+  const restored = [
+    await readOptionalText(adapter, files.notes),
+    await readOptionalText(adapter, files.chunks),
+    await readOptionalText(adapter, files.manifest)
+  ];
+  if (!isCompleteTextTriple(...restored)) {
+    warnings.push("text-backup-restore-invalid");
+    return { warnings, changed };
+  }
+  for (const path of backupPaths2) await remove(path);
+  return { warnings, changed };
+}
+async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance, policyIdentity, fence) {
+  var _a, _b;
   try {
     let stampedRevision;
     let stampedHash;
@@ -9606,36 +10453,38 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       stampedRevision = rawRevision;
       stampedHash = rawHash;
     }
+    await assertIndexWriteFence(fence);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
     const producerCheckpointsFolderPath = ".lina/producer/checkpoints";
     const producerStagingFolderPath = ".lina/producer/staging";
     const producerBackupsFolderPath = ".lina/producer/backups";
-    await ensureFolder(app, linaFolderPath);
-    await ensureFolder(app, indexFolderPath);
-    await ensureFolder(app, producerCheckpointsFolderPath);
-    await ensureFolder(app, producerStagingFolderPath);
-    await ensureFolder(app, producerBackupsFolderPath);
-    const manifestPath = (0, import_obsidian12.normalizePath)(`${indexFolderPath}/manifest.json`);
-    let preservedEmbeddingManifest = {};
-    try {
-      const existingManifestStat = await app.vault.adapter.stat(manifestPath);
-      if ((existingManifestStat == null ? void 0 : existingManifestStat.type) === "file") {
-        const parsedExisting = JSON.parse(await app.vault.adapter.read(manifestPath));
-        if (parsedExisting && typeof parsedExisting === "object" && !Array.isArray(parsedExisting)) {
-          const candidate = parsedExisting;
-          if (candidate.embeddingsEnabled === true && candidate.embeddings && typeof candidate.embeddings === "object") {
-            preservedEmbeddingManifest = {
-              embeddingsEnabled: true,
-              embeddings: candidate.embeddings,
-              ...candidate.embeddingInput && typeof candidate.embeddingInput === "object" ? { embeddingInput: candidate.embeddingInput } : {}
-            };
-          }
-        }
-      }
-    } catch (e) {
+    const fencedApp = withFencedAdapter(app, fence);
+    await ensureFolder(fencedApp, linaFolderPath);
+    await ensureFolder(fencedApp, indexFolderPath);
+    await ensureFolder(fencedApp, producerCheckpointsFolderPath);
+    await ensureFolder(fencedApp, producerStagingFolderPath);
+    await ensureFolder(fencedApp, producerBackupsFolderPath);
+    const adapter = fencedApp.vault.adapter;
+    const paths = TEXT_INDEX_PUBLICATION_FILES;
+    await recoverTextIndexPublication(fencedApp);
+    const committedManifest = await readEmbeddingSectionFrom(adapter, paths.manifest);
+    if (committedManifest.status === "unreadable") {
+      throw new Error("Shared manifest is unreadable; refusing to replace its embeddings identity.");
     }
+    const committedSection = committedManifest.status === "available" ? committedManifest.section : void 0;
+    const textBackupManifest = await readEmbeddingSectionFrom(adapter, paths.manifestBackup);
+    if (textBackupManifest.status === "unreadable") {
+      throw new Error("Text manifest backup is unreadable; refusing to replace its embeddings identity.");
+    }
+    const embeddingsBackupManifest = await readEmbeddingSectionFrom(adapter, EMBEDDINGS_PUBLICATION_MANIFEST_BACKUP);
+    if (embeddingsBackupManifest.status === "unreadable") {
+      throw new Error("Embeddings manifest backup is unreadable; refusing to replace its embeddings identity.");
+    }
+    const preservedEmbeddingManifest = (_b = (_a = committedSection != null ? committedSection : textBackupManifest.status === "available" ? textBackupManifest.section : void 0) != null ? _a : embeddingsBackupManifest.status === "available" ? embeddingsBackupManifest.section : void 0) != null ? _b : {};
+    for (const path of [paths.notesBackup, paths.chunksBackup, paths.manifestBackup]) await adapterRemoveIfExists(adapter, path);
+    const preservedSignature = JSON.stringify(preservedEmbeddingManifest);
     const notesContent = JSON.stringify(indexedNotes, null, 2);
     const chunksContent = chunks.map((item2) => JSON.stringify(item2)).join("\n");
     const generationId = createTextGenerationId();
@@ -9658,46 +10507,69 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {},
       ...stampedRevision !== void 0 && stampedHash !== void 0 ? { exclusionPolicyRevision: stampedRevision, exclusionPolicyHash: stampedHash } : {}
     };
-    const files = [
-      { path: (0, import_obsidian12.normalizePath)(`${indexFolderPath}/notes.json`), content: notesContent },
-      { path: (0, import_obsidian12.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
-      // Publish manifest last so a reader never observes a new identity with old
-      // notes/chunks. The old embedding section remains intact throughout.
-      { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
+    const items = [
+      { path: paths.notes, temporaryPath: paths.notesTemporary, backupPath: paths.notesBackup, content: notesContent, backedUp: false, published: false },
+      { path: paths.chunks, temporaryPath: paths.chunksTemporary, backupPath: paths.chunksBackup, content: chunksContent, backedUp: false, published: false },
+      // The manifest is published last: it is the logical commit point of the publication.
+      { path: paths.manifest, temporaryPath: paths.manifestTemporary, backupPath: paths.manifestBackup, content: JSON.stringify(manifest, null, 2), backedUp: false, published: false }
     ];
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const adapter = app.vault.adapter;
-    const prepared = files.map((file) => ({
-      ...file,
-      temporaryPath: (0, import_obsidian12.normalizePath)(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
-      backupPath: (0, import_obsidian12.normalizePath)(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
-      hadOriginal: false,
-      published: false
-    }));
     try {
-      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
-      for (const file of prepared) {
-        file.hadOriginal = ((_a = await adapter.stat(file.path)) == null ? void 0 : _a.type) === "file";
-        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
+      for (const item2 of items) await adapter.write(item2.temporaryPath, item2.content);
+      const staged = JSON.parse(await adapter.read(paths.manifestTemporary));
+      if (!isPlainRecord(staged) || staged.generationId !== generationId) {
+        throw new Error("Text index manifest candidate validation failed.");
       }
-      for (const file of prepared) {
-        await adapter.rename(file.temporaryPath, file.path);
-        file.published = true;
+      const currentManifest = await readEmbeddingSectionFrom(adapter, paths.manifest);
+      if (currentManifest.status === "unreadable") {
+        throw new Error("Shared manifest became unreadable during the text index publication.");
       }
-      for (const file of prepared) {
-        try {
-          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
-        } catch (cleanupError) {
-          console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${file.backupPath}:`, cleanupError);
+      const current = currentManifest.status === "available" ? currentManifest.section : void 0;
+      const unchanged = committedSection !== void 0 ? JSON.stringify(current != null ? current : {}) === preservedSignature : current === void 0;
+      if (!unchanged) {
+        throw new Error("Shared manifest embeddings section changed during the text index publication.");
+      }
+      for (const item2 of items) {
+        await assertIndexWriteFence(fence);
+        if (await adapterFileExists(adapter, item2.path)) {
+          await adapter.rename(item2.path, item2.backupPath);
+          item2.backedUp = true;
         }
+        await assertIndexWriteFence(fence);
+        await adapter.rename(item2.temporaryPath, item2.path);
+        item2.published = true;
+      }
+      const publishedManifest = JSON.parse(await adapter.read(paths.manifest));
+      if (!isPlainRecord(publishedManifest) || publishedManifest.generationId !== generationId || JSON.stringify(extractEmbeddingSection(publishedManifest)) !== preservedSignature) {
+        throw new Error("Published text index manifest validation failed.");
       }
     } catch (error) {
-      for (const file of prepared) {
-        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
-        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
-        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
+      if (error instanceof OwnershipFenceRejectedError) throw error;
+      for (const item2 of [...items].reverse()) {
+        try {
+          if (item2.backedUp) {
+            await adapterRemoveIfExists(adapter, item2.path);
+            if (await adapter.exists(item2.backupPath)) await adapter.rename(item2.backupPath, item2.path);
+          } else if (item2.published) {
+            await adapterRemoveIfExists(adapter, item2.path);
+          }
+        } catch (rollbackError) {
+          console.warn(`Lina: text index rollback incomplete for ${item2.path}; the backup remains for recovery.`, rollbackError);
+        }
+      }
+      for (const item2 of items) {
+        try {
+          await adapterRemoveIfExists(adapter, item2.temporaryPath);
+        } catch (e) {
+        }
       }
       throw error;
+    }
+    for (const item2 of items) {
+      try {
+        await adapterRemoveIfExists(adapter, item2.backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${item2.backupPath}:`, cleanupError);
+      }
     }
     return true;
   } catch (error) {
@@ -10111,8 +10983,8 @@ async function readCompanionConsumptionState(adapter, deviceId, role, activePoli
   let countMismatch = false;
   try {
     if (await adapter.exists(".lina/index/manifest.json")) {
-      const text = await adapter.read(".lina/index/manifest.json");
-      textManifestRaw = parseJsonSafely(text);
+      const text2 = await adapter.read(".lina/index/manifest.json");
+      textManifestRaw = parseJsonSafely(text2);
       if (isRecord9(textManifestRaw) && textManifestRaw.indexType === "text") {
         if (textManifestRaw.notesDigest !== void 0 || textManifestRaw.chunksDigest !== void 0 || textManifestRaw.generationId !== void 0) {
           if (await adapter.exists(".lina/index/notes.json")) {
@@ -10140,8 +11012,8 @@ async function readCompanionConsumptionState(adapter, deviceId, role, activePoli
   let binaryManifestRaw = null;
   try {
     if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
-      const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
-      binaryManifestRaw = parseJsonSafely(text);
+      const text2 = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+      binaryManifestRaw = parseJsonSafely(text2);
     }
   } catch (e) {
     binaryManifestRaw = null;
@@ -10174,24 +11046,24 @@ var DEFAULT_OPTIONS = {
 function normaliseSearchText(value) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
 }
-function createSnippet(text, query, maxContext = 120) {
-  const lowerText = normaliseSearchText(text);
+function createSnippet(text2, query, maxContext = 120) {
+  const lowerText = normaliseSearchText(text2);
   const lowerQuery = normaliseSearchText(query);
   const idx = lowerText.indexOf(lowerQuery);
   if (idx === -1) {
-    return text.substring(0, maxContext) + (text.length > maxContext ? "..." : "");
+    return text2.substring(0, maxContext) + (text2.length > maxContext ? "..." : "");
   }
   const start = Math.max(0, idx - 40);
-  const end = Math.min(text.length, idx + lowerQuery.length + 40);
-  let snippet = text.substring(start, end);
+  const end = Math.min(text2.length, idx + lowerQuery.length + 40);
+  let snippet = text2.substring(start, end);
   if (start > 0) snippet = "..." + snippet;
-  if (end < text.length) snippet = snippet + "...";
+  if (end < text2.length) snippet = snippet + "...";
   return snippet;
 }
 var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
-function tokenizeSearchWords(text) {
+function tokenizeSearchWords(text2) {
   var _a;
-  return (_a = normaliseSearchText(text).match(/[a-z0-9]+/g)) != null ? _a : [];
+  return (_a = normaliseSearchText(text2).match(/[a-z0-9]+/g)) != null ? _a : [];
 }
 function matchTermInWords(term, words) {
   const detail = {
@@ -10222,8 +11094,8 @@ function scoreDetails(details, weights) {
     return sum + wordScore + prefixScore + substringScore;
   }, 0);
 }
-function scoreTextMatches(terms, text, weights) {
-  const words = tokenizeSearchWords(text);
+function scoreTextMatches(terms, text2, weights) {
+  const words = tokenizeSearchWords(text2);
   const details = terms.map((term) => matchTermInWords(term, words));
   const matchedTerms = matchedTermsFromDetails(details);
   return {
@@ -10238,14 +11110,14 @@ function getFullWordMatchedTerms(details) {
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function hasFullWordPhrase(text, normalisedQuery) {
+function hasFullWordPhrase(text2, normalisedQuery) {
   const phrase = normalisedQuery.split(/\s+/).map(escapeRegExp).join("\\s+");
   const pattern = new RegExp(`(?:^|[^a-z0-9])${phrase}(?:$|[^a-z0-9])`);
-  return pattern.test(normaliseSearchText(text));
+  return pattern.test(normaliseSearchText(text2));
 }
-function hasHeadingMatch(text, fullWordTerms) {
+function hasHeadingMatch(text2, fullWordTerms) {
   if (fullWordTerms.length === 0) return false;
-  const normalised = normaliseSearchText(text);
+  const normalised = normaliseSearchText(text2);
   const headingPattern = /(?:^|\s)#{1,6}\s+/g;
   let match;
   while ((match = headingPattern.exec(normalised)) !== null) {
@@ -10256,9 +11128,9 @@ function hasHeadingMatch(text, fullWordTerms) {
   }
   return false;
 }
-function hasYamlOrTagMatch(text, fullWordTerms) {
+function hasYamlOrTagMatch(text2, fullWordTerms) {
   if (fullWordTerms.length === 0) return false;
-  const normalised = normaliseSearchText(text);
+  const normalised = normaliseSearchText(text2);
   if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
     return true;
   }
@@ -10633,8 +11505,8 @@ var DEFAULT_CHUNKER_OPTIONS = {
   overlap: 150
 };
 var MIN_CHUNK_LENGTH = 30;
-function cleanChunkText(text) {
-  return text.trim().replace(/\s+/g, " ");
+function cleanChunkText(text2) {
+  return text2.trim().replace(/\s+/g, " ");
 }
 function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
@@ -10693,449 +11565,6 @@ function chunkText(filePath, content, options) {
     });
   }
   return chunks;
-}
-
-// src/index/embeddingLifecycleModel.ts
-function normalizeString2(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-function hasCompleteIdentity(identity) {
-  if (!identity) return false;
-  return normalizeString2(identity.provider).length > 0 && normalizeString2(identity.model).length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && normalizeString2(identity.prefixMode).length > 0;
-}
-function compareEmbeddingIdentity(published, target) {
-  const publishedSummary = published != null ? published : void 0;
-  const targetSummary = target != null ? target : void 0;
-  if (!published || !target) {
-    return {
-      compatible: false,
-      reasons: ["incomplete-identity"],
-      published: publishedSummary,
-      target: targetSummary
-    };
-  }
-  if (typeof published.contractId === "string" && typeof target.contractId === "string" && published.contractId.length > 0 && published.contractId === target.contractId) {
-    return {
-      compatible: true,
-      reasons: [],
-      published: publishedSummary,
-      target: targetSummary
-    };
-  }
-  const reasons = [];
-  const pubComplete = hasCompleteIdentity(published);
-  const targetComplete = hasCompleteIdentity(target);
-  if (!pubComplete || !targetComplete) {
-    reasons.push("incomplete-identity");
-  }
-  if (normalizeString2(published.provider) !== normalizeString2(target.provider)) {
-    reasons.push("provider-mismatch");
-  }
-  if (normalizeString2(published.model) !== normalizeString2(target.model)) {
-    reasons.push("model-mismatch");
-  }
-  if (published.dimensions !== void 0 && target.dimensions !== void 0 && published.dimensions !== target.dimensions) {
-    reasons.push("dimensions-mismatch");
-  }
-  if (published.inputVersion !== void 0 && target.inputVersion !== void 0 && published.inputVersion !== target.inputVersion) {
-    reasons.push("input-version-mismatch");
-  }
-  if (published.prefixMode !== void 0 && target.prefixMode !== void 0 && normalizeString2(published.prefixMode) !== normalizeString2(target.prefixMode)) {
-    reasons.push("prefix-mode-mismatch");
-  }
-  return {
-    compatible: reasons.length === 0,
-    reasons,
-    published: publishedSummary,
-    target: targetSummary
-  };
-}
-function classifyEmbeddingWork(input) {
-  const {
-    publishedIdentity,
-    targetIdentity,
-    canonicalExists,
-    canonicalReadability = "readable",
-    totalChunks,
-    reusableCanonicalCount = 0,
-    recoverableCheckpointCount = 0,
-    toGenerateCount = 0,
-    staleToReplaceCount = 0,
-    missingCount = 0,
-    obsoleteToDropCount = 0,
-    requiresPublication = false,
-    isExternalProvider = false,
-    planMode,
-    planReasons
-  } = input;
-  const cost = isExternalProvider ? "external" : "local";
-  const counts = {
-    totalChunks,
-    toGenerate: toGenerateCount,
-    staleToReplace: staleToReplaceCount,
-    missing: missingCount,
-    obsoleteToDrop: obsoleteToDropCount,
-    reusableCanonical: reusableCanonicalCount,
-    recoverableCheckpoint: recoverableCheckpointCount
-  };
-  if (planMode === "indeterminate" || canonicalReadability === "unreadable") {
-    return {
-      kind: "indeterminate",
-      updateRequired: false,
-      severity: "none",
-      cost: "none",
-      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-unreadable"],
-      counts
-    };
-  }
-  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty" || planMode === "initial-build") {
-    if (totalChunks === 0) {
-      return {
-        kind: "none",
-        updateRequired: false,
-        severity: "none",
-        cost: "none",
-        reasons: ["no-chunks-no-embeddings"],
-        counts
-      };
-    }
-    return {
-      kind: "pending",
-      mode: "initial-build",
-      updateRequired: true,
-      severity: "action",
-      cost,
-      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-missing-or-empty"],
-      counts
-    };
-  }
-  if (planMode === "full-rebuild" || canonicalReadability === "resource-limit-exceeded") {
-    return {
-      kind: "pending",
-      mode: "full-rebuild",
-      updateRequired: true,
-      severity: "blocking",
-      cost,
-      reasons: planReasons && planReasons.length > 0 ? planReasons : [canonicalReadability === "resource-limit-exceeded" ? "canonical-resource-limit-exceeded" : "full-rebuild-required"],
-      counts
-    };
-  }
-  if (publishedIdentity && targetIdentity) {
-    const identityCheck = compareEmbeddingIdentity(publishedIdentity, targetIdentity);
-    if (!identityCheck.compatible) {
-      return {
-        kind: "pending",
-        mode: "full-rebuild",
-        updateRequired: true,
-        severity: "blocking",
-        cost,
-        reasons: identityCheck.reasons,
-        counts
-      };
-    }
-  }
-  const needsGeneration = toGenerateCount > 0 || staleToReplaceCount > 0 || missingCount > 0;
-  if (needsGeneration) {
-    return {
-      kind: "pending",
-      mode: "incremental",
-      updateRequired: true,
-      severity: "action",
-      cost,
-      reasons: planReasons && planReasons.length > 0 ? planReasons : ["chunks-need-generation"],
-      counts
-    };
-  }
-  const needsCleanupOrPublish = requiresPublication || obsoleteToDropCount > 0;
-  if (needsCleanupOrPublish) {
-    return {
-      kind: "pending",
-      mode: "publish-only",
-      updateRequired: true,
-      severity: "info",
-      cost: "none",
-      reasons: obsoleteToDropCount > 0 ? ["obsolete-chunks-to-drop"] : ["publication-needed"],
-      counts
-    };
-  }
-  return {
-    kind: "none",
-    updateRequired: false,
-    severity: "none",
-    cost: "none",
-    reasons: ["up-to-date"],
-    counts
-  };
-}
-function resolveEmbeddingLifecycle(input) {
-  var _a, _b;
-  const {
-    revision,
-    computedAt = Date.now(),
-    deviceRole,
-    isActiveProducer,
-    embeddingsEnabled,
-    upstreamTextIndex,
-    publishedIdentity,
-    deviceIdentity,
-    canonicalExists,
-    validForSearchCount,
-    activeSource = "none",
-    workAssessment,
-    factsChecking = false,
-    operationState: operationState2,
-    history,
-    provenance = "unknown",
-    requiresConfirmation = false,
-    triggerMode = "manual",
-    scheduledAt,
-    backoffUntil
-  } = input;
-  const isCompanion = deviceRole === "companion";
-  const isStandby = deviceRole === "producer" && !isActiveProducer;
-  const isUnassigned = deviceRole === "unassigned";
-  const defaultWork = {
-    kind: "none",
-    updateRequired: false,
-    severity: "none",
-    cost: "none",
-    reasons: ["no-work-assessed"]
-  };
-  const effectiveWork = isCompanion ? { ...defaultWork, reasons: ["companion-role-write-not-applicable"] } : workAssessment != null ? workAssessment : defaultWork;
-  const writeApplicable = !isCompanion && !isStandby && !isUnassigned && embeddingsEnabled;
-  const writeRegion = {
-    work: effectiveWork,
-    updateRequired: writeApplicable ? effectiveWork.updateRequired : false,
-    reason: effectiveWork.reasons[0],
-    severity: writeApplicable ? effectiveWork.severity : "none",
-    cost: writeApplicable ? effectiveWork.cost : "none",
-    applicable: writeApplicable
-  };
-  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
-  const workDemandsFullRebuild = effectiveWork.mode === "full-rebuild";
-  const readCompatible = identityComparison.compatible && !workDemandsFullRebuild;
-  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
-  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
-  const readRegion = {
-    semanticAvailable,
-    effectiveMode,
-    compatibility: {
-      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
-      reasons: workDemandsFullRebuild && identityComparison.reasons.length === 0 ? effectiveWork.reasons : identityComparison.reasons,
-      published: publishedIdentity != null ? publishedIdentity : void 0,
-      device: deviceIdentity != null ? deviceIdentity : void 0
-    },
-    source: activeSource
-  };
-  let processPhase = "idle";
-  let cancellable = false;
-  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
-    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
-      processPhase = "preparing";
-      cancellable = true;
-    } else if (operationState2.phase === "generating") {
-      processPhase = "generating";
-      cancellable = true;
-    } else if (operationState2.phase === "persisting") {
-      processPhase = "persisting";
-      cancellable = false;
-    } else if (operationState2.phase === "finalizing") {
-      processPhase = "finalizing";
-      cancellable = false;
-    } else {
-      processPhase = "generating";
-      cancellable = true;
-    }
-  } else if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
-    processPhase = "cancelling";
-    cancellable = false;
-  } else if (factsChecking) {
-    processPhase = "checking";
-    cancellable = false;
-  }
-  const processRegion = {
-    phase: processPhase,
-    progress: (operationState2 == null ? void 0 : operationState2.processedChunks) !== void 0 && (operationState2 == null ? void 0 : operationState2.totalChunks) !== void 0 ? {
-      processed: operationState2.processedChunks,
-      total: operationState2.totalChunks,
-      reused: operationState2.reusedChunks,
-      failed: operationState2.failedChunks
-    } : void 0,
-    origin: operationState2 == null ? void 0 : operationState2.origin,
-    cancellable
-  };
-  let blockedReason;
-  if (isCompanion) {
-    blockedReason = "companion";
-  } else if (isStandby) {
-    blockedReason = "standby";
-  } else if (isUnassigned) {
-    blockedReason = "unassigned";
-  } else if (!embeddingsEnabled) {
-    blockedReason = "embeddings-disabled";
-  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
-    blockedReason = "text-index-not-ready";
-  } else if (processPhase !== "idle" && processPhase !== "checking") {
-    blockedReason = "operation-active";
-  }
-  const canRequestUpdate = blockedReason === void 0 && writeApplicable && processPhase === "idle" && upstreamTextIndex === "ready";
-  const capabilityRegion = {
-    canRequestUpdate,
-    blockedReason,
-    requiresConfirmation,
-    trigger: {
-      mode: triggerMode,
-      scheduledAt,
-      backoffUntil
-    }
-  };
-  const historyRegion = {
-    lastSuccess: history == null ? void 0 : history.lastSuccess,
-    lastFailure: history == null ? void 0 : history.lastFailure,
-    lastOperation: (_a = history == null ? void 0 : history.lastOperation) != null ? _a : (operationState2 == null ? void 0 : operationState2.status) === "failed" ? { kind: "failed", message: operationState2.error || operationState2.message } : (operationState2 == null ? void 0 : operationState2.status) === "cancelled" ? { kind: "cancelled", message: operationState2.message } : void 0
-  };
-  const upstreamRegion = {
-    textIndex: upstreamTextIndex
-  };
-  const infoRegion = {
-    embeddingsPublishedAt: (_b = history == null ? void 0 : history.lastSuccess) == null ? void 0 : _b.at,
-    provenance
-  };
-  let primary;
-  if (processPhase === "cancelling") {
-    primary = "CANCELLING";
-  } else if (processPhase === "preparing" || processPhase === "generating" || processPhase === "persisting" || processPhase === "finalizing") {
-    primary = "UPDATING";
-  } else if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
-    primary = "ERROR";
-  } else if (factsChecking || processPhase === "checking") {
-    primary = "VERIFYING";
-  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
-    primary = "NO_TEXT_INDEX";
-  } else if (!embeddingsEnabled) {
-    primary = "DISABLED";
-  } else if (isStandby) {
-    primary = "STANDBY";
-  } else if (effectiveWork.kind === "indeterminate") {
-    primary = "INDETERMINATE";
-  } else if (!canonicalExists) {
-    primary = "INDEX_ONLY";
-  } else if (!readCompatible) {
-    primary = "INCOMPATIBLE";
-  } else if (validForSearchCount === 0) {
-    primary = "INDEX_ONLY";
-  } else if (effectiveWork.kind === "pending" && writeApplicable) {
-    primary = "UPDATE_AVAILABLE";
-  } else {
-    primary = "READY";
-  }
-  return {
-    revision,
-    computedAt,
-    read: readRegion,
-    write: writeRegion,
-    process: processRegion,
-    history: historyRegion,
-    capability: capabilityRegion,
-    upstream: upstreamRegion,
-    info: infoRegion,
-    primary
-  };
-}
-
-// src/index/embeddingLifecycleAdapter.ts
-function toEmbeddingIdentitySummary(identity) {
-  if (!identity) return void 0;
-  return {
-    provider: identity.provider,
-    model: identity.model,
-    dimensions: identity.dimensions,
-    inputVersion: identity.inputVersion,
-    prefixMode: identity.prefixMode,
-    contractId: "contractId" in identity ? identity.contractId : void 0
-  };
-}
-function adaptCurrentStateToLifecycleSnapshot(inputs) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R;
-  const revision = (_a = inputs.revision) != null ? _a : 1;
-  const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
-  const deviceRuntime = inputs.deviceRuntimeState;
-  const isCompanion = inputs.companionState != null || (deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) === "companion";
-  const deviceRole = isCompanion ? "companion" : (_c = deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) != null ? _c : "producer";
-  const isActiveProducer = isCompanion ? false : (_d = deviceRuntime == null ? void 0 : deviceRuntime.isActiveProducer) != null ? _d : true;
-  const embeddingsEnabled = (_f = (_e = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _e.configured) != null ? _f : true;
-  const upstreamTextIndex = (_h = inputs.upstreamTextIndex) != null ? _h : ((_g = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _g.textIndexAvailable) ? "ready" : "missing";
-  const publishedIdentity = (_k = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _k : toEmbeddingIdentitySummary((_j = inputs.companionState) == null ? void 0 : _j.vectorContract);
-  const deviceIdentity = (_m = (_l = toEmbeddingIdentitySummary(inputs.targetIdentity)) != null ? _l : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _m : publishedIdentity;
-  const canonicalExists = (_p = inputs.canonicalExists) != null ? _p : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_o = (_n = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _n.exists) != null ? _o : false;
-  const validForSearchCount = (_r = inputs.validForSearchCount) != null ? _r : inputs.companionState ? ((_q = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _q.status) === "compatible" ? 1 : 0 : canonicalExists ? 1 : 0;
-  const activeSource = (_s = inputs.activeSource) != null ? _s : "jsonl";
-  let workAssessment = (_t = inputs.workAssessment) != null ? _t : void 0;
-  if (inputs.updatePlan) {
-    const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
-    const effectivePublished = publishedIdentity != null ? publishedIdentity : inputs.updatePlan.mode === "incremental" ? targetSummary : void 0;
-    workAssessment = classifyEmbeddingWork({
-      publishedIdentity: effectivePublished,
-      targetIdentity: targetSummary,
-      canonicalExists,
-      canonicalReadability: (_u = inputs.canonicalReadability) != null ? _u : "readable",
-      totalChunks: inputs.updatePlan.totalChunks,
-      reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
-      recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
-      toGenerateCount: inputs.updatePlan.toGenerateCount,
-      staleToReplaceCount: inputs.updatePlan.staleToReplaceCount,
-      missingCount: inputs.updatePlan.missingCount,
-      obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
-      requiresPublication: inputs.updatePlan.requiresPublication,
-      isExternalProvider: (_v = inputs.isExternalProvider) != null ? _v : false,
-      planMode: inputs.updatePlan.mode,
-      planReasons: inputs.updatePlan.reasons
-    });
-  }
-  const history = {
-    lastSuccess: ((_x = (_w = inputs.producerState) == null ? void 0 : _w.embeddings) == null ? void 0 : _x.lastSuccessfulPublicationAt) ? {
-      at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
-    } : void 0,
-    lastFailure: ((_z = (_y = inputs.producerState) == null ? void 0 : _y.maintenance) == null ? void 0 : _z.lastError) ? {
-      category: inputs.producerState.maintenance.lastError
-    } : ((_A = inputs.operationState) == null ? void 0 : _A.error) ? {
-      category: "operation-failed",
-      message: (_B = inputs.operationState.error) != null ? _B : void 0
-    } : void 0,
-    lastOperation: ((_C = inputs.operationState) == null ? void 0 : _C.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_D = inputs.operationState) == null ? void 0 : _D.status) === "failed" ? { kind: "failed", message: (_E = inputs.operationState.error) != null ? _E : void 0 } : ((_F = inputs.operationState) == null ? void 0 : _F.status) === "cancelled" ? { kind: "cancelled", message: (_G = inputs.operationState.message) != null ? _G : void 0 } : void 0
-  };
-  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_H = inputs.updatePlan) == null ? void 0 : _H.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
-  const effectiveDeviceIdentity = deviceIdentity != null ? deviceIdentity : effectivePublishedIdentity;
-  const provenance = (_J = (_I = inputs.companionState) == null ? void 0 : _I.provenanceValidity) != null ? _J : "unknown";
-  return resolveEmbeddingLifecycle({
-    revision,
-    computedAt,
-    deviceRole,
-    isActiveProducer,
-    embeddingsEnabled,
-    upstreamTextIndex,
-    publishedIdentity: effectivePublishedIdentity,
-    deviceIdentity: effectiveDeviceIdentity,
-    canonicalExists,
-    validForSearchCount,
-    activeSource,
-    workAssessment,
-    factsChecking: inputs.factsChecking,
-    operationState: inputs.operationState ? {
-      status: inputs.operationState.status,
-      phase: (_K = inputs.operationState.phase) != null ? _K : void 0,
-      processedChunks: inputs.operationState.processedChunks,
-      totalChunks: (_L = inputs.operationState.totalChunks) != null ? _L : void 0,
-      reusedChunks: (_M = inputs.operationState.reusedChunks) != null ? _M : void 0,
-      failedChunks: (_N = inputs.operationState.failedChunks) != null ? _N : void 0,
-      error: (_O = inputs.operationState.error) != null ? _O : void 0,
-      message: (_P = inputs.operationState.message) != null ? _P : void 0,
-      origin: (_Q = inputs.operationState.origin) != null ? _Q : void 0
-    } : void 0,
-    history,
-    provenance,
-    requiresConfirmation: (_R = inputs.requiresConfirmation) != null ? _R : false
-  });
 }
 
 // src/search/semanticCapability.ts
@@ -11233,33 +11662,60 @@ function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
     reason
   };
 }
+function evaluateSemanticCapabilityFromFacts(facts) {
+  var _a;
+  const isChecking = facts.isChecking === true;
+  const providerReachable = (_a = facts.providerReachable) != null ? _a : true;
+  const readable = facts.canonicalExists && facts.hasValidForSearchEvidence && facts.hasPublishedIdentity;
+  const semanticAvailable = (facts.contractState === "mismatch" ? false : readable) && providerReachable && !isChecking;
+  const indexOnly = facts.textIndexAvailable && (!facts.canonicalExists || facts.hasPublishedIdentity && !facts.hasValidForSearchEvidence);
+  const vectorFileMissing = !isChecking && (!facts.textIndexAvailable || !facts.canonicalExists || indexOnly);
+  const runtimeState = isChecking ? "checking" : readable && providerReachable ? "ready" : "unavailable";
+  const effectiveMode = !facts.textIndexAvailable ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  let reasonCode;
+  let reason;
+  if (isChecking) {
+    reasonCode = "runtime-checking";
+    reason = "A verificar disponibilidade sem\xE2ntica...";
+  } else if (!providerReachable) {
+    reasonCode = "provider-unreachable";
+    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
+  } else if (!semanticAvailable) {
+    if (facts.contractState === "mismatch") {
+      reasonCode = "model-incompatible";
+      reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
+    } else if (indexOnly) {
+      reasonCode = "vector-file-missing";
+      reason = "Embeddings n\xE3o encontrados.";
+    } else if (!facts.hasPublishedIdentity) {
+      reasonCode = "no-contract";
+      reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    } else {
+      reasonCode = "vector-file-missing";
+      reason = "Embeddings n\xE3o encontrados.";
+    }
+  }
+  return {
+    artifactState: {
+      textIndex: facts.textIndexAvailable ? "available" : "missing",
+      embeddingsDeclared: true,
+      vectorFile: vectorFileMissing ? "missing" : "available"
+    },
+    contractState: facts.contractState,
+    runtimeState,
+    semanticAvailable,
+    effectiveMode,
+    reasonCode,
+    reason
+  };
+}
 function evaluateSemanticCapability(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
-  const isCompatible = input.vectorContractState === "compatible" || ((_a = input.semanticCompatibility) == null ? void 0 : _a.available) === true;
-  const canonicalExists = ((_b = input.embeddingsDeclaredInManifest) != null ? _b : false) && ((_c = input.semanticCompatibility) == null ? void 0 : _c.reasonCode) !== "missing";
-  const provider = (_e = (_d = input.semanticCompatibility) == null ? void 0 : _d.indexProvider) != null ? _e : "default";
-  const model = (_g = (_f = input.semanticCompatibility) == null ? void 0 : _f.indexModel) != null ? _g : "default";
-  const dimensions = (_i = (_h = input.semanticCompatibility) == null ? void 0 : _h.indexDimensions) != null ? _i : 768;
-  const publishedIdentity = canonicalExists ? {
-    provider,
-    model,
-    dimensions,
-    inputVersion: 1,
-    prefixMode: "none"
-  } : void 0;
-  const snapshot = (_k = input.lifecycleSnapshot) != null ? _k : adaptCurrentStateToLifecycleSnapshot({
-    upstreamTextIndex: ((_j = input.textIndexAvailable) != null ? _j : true) ? "ready" : "missing",
-    canonicalExists,
-    validForSearchCount: isCompatible ? 1 : 0,
-    publishedIdentity,
-    targetIdentity: publishedIdentity
-  });
-  return evaluateSemanticCapabilityFromSnapshot(snapshot, input);
+  return evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, input);
 }
 
 // src/device/deviceRuntimeState.ts
 function resolveDeviceRuntimeState(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E;
   const deviceId = input.deviceId.trim();
   const deviceState = (_a = input.deviceState) != null ? _a : void 0;
   const ownership = (_b = input.ownership) != null ? _b : null;
@@ -11328,43 +11784,26 @@ function resolveDeviceRuntimeState(input) {
     vectorContractState = "compatible";
   }
   const manifestEmbeddings = (_j = input.textManifestRaw) == null ? void 0 : _j.embeddings;
-  const lifecycleSnapshot = (_s = input.lifecycleSnapshot) != null ? _s : adaptCurrentStateToLifecycleSnapshot({
-    companionState,
-    upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
-    canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || ((_k = input.semanticAvailability) == null ? void 0 : _k.reasonCode) === "incompatible",
-    validForSearchCount: ((_l = input.semanticAvailability) == null ? void 0 : _l.available) || vectorContractState === "compatible" || vectorContractState === "mismatch" || Boolean(manifestEmbeddings) && ((_m = input.semanticAvailability) == null ? void 0 : _m.reasonCode) !== "missing" ? 1 : 0,
-    factsChecking: input.isChecking,
-    publishedIdentity: manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string" ? {
-      provider: manifestEmbeddings.provider,
-      model: manifestEmbeddings.model,
-      dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : companionState.vectorContract ? {
-      provider: companionState.vectorContract.provider,
-      model: companionState.vectorContract.model,
-      dimensions: companionState.vectorContract.dimensions,
-      inputVersion: (_n = companionState.vectorContract.inputVersion) != null ? _n : 1,
-      prefixMode: (_o = companionState.vectorContract.prefixMode) != null ? _o : "none"
-    } : ((_p = input.semanticAvailability) == null ? void 0 : _p.indexProvider) && ((_q = input.semanticAvailability) == null ? void 0 : _q.indexModel) ? {
-      provider: input.semanticAvailability.indexProvider,
-      model: input.semanticAvailability.indexModel,
-      dimensions: (_r = input.semanticAvailability.indexDimensions) != null ? _r : 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0
-  });
-  const semanticCap = (_t = input.semanticCapability) != null ? _t : evaluateSemanticCapability({
+  const semanticCap = (_p = input.semanticCapability) != null ? _p : input.lifecycleSnapshot ? evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, {
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
     vectorContractState,
     semanticCompatibility: input.semanticAvailability,
     isChecking: input.isChecking,
-    providerReachable: input.providerReachable,
-    lifecycleSnapshot
+    providerReachable: input.providerReachable
+  }) : evaluateSemanticCapabilityFromFacts({
+    textIndexAvailable,
+    contractState: vectorContractState,
+    canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || ((_k = input.semanticAvailability) == null ? void 0 : _k.reasonCode) === "incompatible",
+    hasValidForSearchEvidence: Boolean((_l = input.semanticAvailability) == null ? void 0 : _l.available) || vectorContractState === "compatible" || vectorContractState === "mismatch" || Boolean(manifestEmbeddings) && ((_m = input.semanticAvailability) == null ? void 0 : _m.reasonCode) !== "missing",
+    hasPublishedIdentity: Boolean(
+      manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string" || companionState.vectorContract || ((_n = input.semanticAvailability) == null ? void 0 : _n.indexProvider) && ((_o = input.semanticAvailability) == null ? void 0 : _o.indexModel)
+    ),
+    isChecking: input.isChecking,
+    providerReachable: input.providerReachable
   });
   const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available" || Boolean(input.semanticAvailability)) && semanticCap.artifactState.vectorFile !== "missing";
-  const provenanceEpoch = (_u = companionState.lastKnownProducerEpoch) != null ? _u : ownership == null ? void 0 : ownership.epoch;
+  const provenanceEpoch = (_q = companionState.lastKnownProducerEpoch) != null ? _q : ownership == null ? void 0 : ownership.epoch;
   const isProvenanceStale = companionState.provenanceValidity === "stale";
   const provenance = {
     epoch: provenanceEpoch,
@@ -11372,9 +11811,9 @@ function resolveDeviceRuntimeState(input) {
     stale: isProvenanceStale
   };
   const compatibility = {
-    provider: (_y = (_w = (_v = input.semanticAvailability) == null ? void 0 : _v.indexProvider) != null ? _w : companionState.embeddingState.provider) != null ? _y : (_x = companionState.vectorContract) == null ? void 0 : _x.provider,
-    model: (_C = (_A = (_z = input.semanticAvailability) == null ? void 0 : _z.indexModel) != null ? _A : companionState.embeddingState.model) != null ? _C : (_B = companionState.vectorContract) == null ? void 0 : _B.model,
-    dimensions: (_G = (_E = (_D = input.semanticAvailability) == null ? void 0 : _D.indexDimensions) != null ? _E : companionState.embeddingState.dimensions) != null ? _G : (_F = companionState.vectorContract) == null ? void 0 : _F.dimensions,
+    provider: (_u = (_s = (_r = input.semanticAvailability) == null ? void 0 : _r.indexProvider) != null ? _s : companionState.embeddingState.provider) != null ? _u : (_t = companionState.vectorContract) == null ? void 0 : _t.provider,
+    model: (_y = (_w = (_v = input.semanticAvailability) == null ? void 0 : _v.indexModel) != null ? _w : companionState.embeddingState.model) != null ? _y : (_x = companionState.vectorContract) == null ? void 0 : _x.model,
+    dimensions: (_C = (_A = (_z = input.semanticAvailability) == null ? void 0 : _z.indexDimensions) != null ? _A : companionState.embeddingState.dimensions) != null ? _C : (_B = companionState.vectorContract) == null ? void 0 : _B.dimensions,
     compatible: semanticCap.contractState === "compatible"
   };
   const readiness = {
@@ -11382,7 +11821,7 @@ function resolveDeviceRuntimeState(input) {
     runtimeReady: semanticCap.runtimeState === "ready"
   };
   const embeddings = {
-    configured: input.embeddingsEnabled !== void 0 ? Boolean(input.embeddingsEnabled) : Boolean((_I = (_H = input.textManifestRaw) == null ? void 0 : _H.embeddingsEnabled) != null ? _I : true),
+    configured: input.embeddingsEnabled !== void 0 ? Boolean(input.embeddingsEnabled) : Boolean((_E = (_D = input.textManifestRaw) == null ? void 0 : _D.embeddingsEnabled) != null ? _E : true),
     textIndexAvailable,
     embeddingsDeclared,
     exists,
@@ -11615,13 +12054,13 @@ function getVaultMarkdownFiles(vault) {
 }
 
 // src/contentExtractor.ts
-function normalizeExcerpt(text, maxLength) {
-  const cleaned = text.replace(/\s+/g, " ").trim();
+function normalizeExcerpt(text2, maxLength) {
+  const cleaned = text2.replace(/\s+/g, " ").trim();
   if (cleaned.length <= maxLength) return cleaned;
   return cleaned.slice(0, maxLength).trim() + "...";
 }
-function countWords(text) {
-  const tokens = text.trim().split(/\s+/);
+function countWords(text2) {
+  const tokens = text2.trim().split(/\s+/);
   return tokens.length === 1 && tokens[0] === "" ? 0 : tokens.length;
 }
 function analyzeContent(content) {
@@ -12387,6 +12826,49 @@ function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
 
 // src/index/embeddingPersistence.ts
 var import_obsidian19 = require("obsidian");
+
+// src/index/embeddingResourceGuard.ts
+var DESKTOP_BRIDGE_READ_GUARD = Object.freeze({
+  maxFileBytes: 96 * 1024 * 1024,
+  estimatedBridgeAmplification: 3,
+  maxEstimatedBridgePeakBytes: 192 * 1024 * 1024,
+  fixedMarginBytes: 32 * 1024 * 1024
+});
+var MOBILE_BRIDGE_READ_GUARD = Object.freeze({
+  maxFileBytes: 12 * 1024 * 1024,
+  estimatedBridgeAmplification: 5,
+  maxEstimatedBridgePeakBytes: 64 * 1024 * 1024,
+  fixedMarginBytes: 8 * 1024 * 1024
+});
+function getEmbeddingBridgeReadGuard(profile) {
+  return profile === "mobile" ? MOBILE_BRIDGE_READ_GUARD : DESKTOP_BRIDGE_READ_GUARD;
+}
+function estimateCapacitorBridgePeakBytes(fileBytes, guard = MOBILE_BRIDGE_READ_GUARD) {
+  if (!Number.isSafeInteger(fileBytes) || fileBytes < 0 || !Number.isSafeInteger(guard.estimatedBridgeAmplification) || guard.estimatedBridgeAmplification < 0 || !Number.isSafeInteger(guard.fixedMarginBytes) || guard.fixedMarginBytes < 0) {
+    throw new Error("mobile-bridge-read-size-invalid");
+  }
+  const amplified = fileBytes * guard.estimatedBridgeAmplification;
+  if (!Number.isSafeInteger(amplified) || amplified > Number.MAX_SAFE_INTEGER - guard.fixedMarginBytes) {
+    throw new Error("mobile-bridge-read-size-overflow");
+  }
+  return amplified + guard.fixedMarginBytes;
+}
+function evaluateEmbeddingBridgeRead(fileBytes, profile) {
+  const guard = getEmbeddingBridgeReadGuard(profile);
+  if (typeof fileBytes !== "number" || !Number.isSafeInteger(fileBytes) || fileBytes < 0) {
+    return { allowed: false, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes: Number.POSITIVE_INFINITY };
+  }
+  let estimatedPeakBytes;
+  try {
+    estimatedPeakBytes = estimateCapacitorBridgePeakBytes(fileBytes, guard);
+  } catch (e) {
+    return { allowed: false, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes: Number.POSITIVE_INFINITY };
+  }
+  const allowed = fileBytes <= guard.maxFileBytes && estimatedPeakBytes <= guard.maxEstimatedBridgePeakBytes;
+  return allowed ? { allowed, estimatedPeakBytes } : { allowed, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes };
+}
+
+// src/index/embeddingPersistence.ts
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: (0, import_obsidian19.normalizePath)(".lina/index/embeddings.jsonl"),
   canonicalManifest: (0, import_obsidian19.normalizePath)(".lina/index/manifest.json"),
@@ -12405,9 +12887,7 @@ var PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/chec
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 var EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150];
 async function assertWriteFence(fence) {
-  if (fence && !await fence.assertCurrent()) {
-    throw new Error("Ownership fence rejected the embedding write.");
-  }
+  await assertIndexWriteFence(fence);
 }
 function createEmbeddingPublicationId() {
   return `emb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -12558,8 +13038,16 @@ function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
   return isRecord13(embeddings) ? embeddings : null;
 }
+function inspectCanonicalPair(content, manifest) {
+  const declared = isRecord13(manifest) && (manifest.embeddingsEnabled === true || isRecord13(manifest.embeddings));
+  if (content === void 0) return declared ? "inconsistent" : "absent";
+  if (!declared) return content.length === 0 ? "absent" : "inconsistent";
+  const validation = validateCanonicalContent(content, manifest);
+  if (!validation.valid) return "inconsistent";
+  const info = isRecord13(manifest) ? getManifestEmbeddingInfo(manifest) : null;
+  return typeof (info == null ? void 0 : info.publicationId) === "string" && info.publicationId.trim().length > 0 ? "consistent" : "unverifiable-legacy";
+}
 function validateCanonicalContent(embeddingsContent, manifestValue) {
-  var _a;
   if (!isRecord13(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
@@ -12577,19 +13065,31 @@ function validateCanonicalContent(embeddingsContent, manifestValue) {
   if (typeof provider !== "string" || typeof model !== "string") {
     return { valid: false, reason: "manifest-identity-invalid" };
   }
-  const parsed = parseEmbeddingRecords(embeddingsContent, count, dimensions, false);
+  if (embeddingsInfo.publicationId !== void 0 && (typeof embeddingsInfo.publicationId !== "string" || embeddingsInfo.publicationId.trim().length === 0)) {
+    return { valid: false, reason: "manifest-publication-invalid" };
+  }
+  const parsed = parseEmbeddingRecords(
+    embeddingsContent,
+    count,
+    dimensions,
+    typeof embeddingsInfo.publicationId === "string"
+  );
   if (!parsed.valid) {
     return { valid: false, reason: parsed.reason };
   }
   if (parsed.records.some((record) => record.provider !== provider || record.model !== model)) {
     return { valid: false, reason: "canonical-record-identity-mismatch" };
   }
-  const rawContract = (_a = manifestValue.vectorContract) != null ? _a : embeddingsInfo.vectorContract;
-  if (rawContract !== void 0 && rawContract !== null) {
+  const input = isRecord13(manifestValue.embeddingInput) ? manifestValue.embeddingInput : void 0;
+  if (typeof embeddingsInfo.publicationId === "string" && (!input || !Number.isInteger(input.version) || typeof input.version !== "number" || input.version <= 0 || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")) {
+    return { valid: false, reason: "manifest-input-identity-invalid" };
+  }
+  for (const rawContract of [manifestValue.vectorContract, embeddingsInfo.vectorContract]) {
+    if (rawContract === void 0 || rawContract === null) continue;
     if (!isValidVectorContract(rawContract)) {
       return { valid: false, reason: "manifest-vector-contract-invalid" };
     }
-    if (rawContract.provider !== provider.trim().toLowerCase() || rawContract.model !== model.trim().toLowerCase() || rawContract.dimensions !== dimensions) {
+    if (rawContract.provider !== provider.trim().toLowerCase() || rawContract.model !== model.trim().toLowerCase() || rawContract.dimensions !== dimensions || input !== void 0 && (rawContract.inputVersion !== input.version || rawContract.prefixMode !== input.prefixMode)) {
       return { valid: false, reason: "manifest-vector-contract-mismatch" };
     }
   }
@@ -12600,8 +13100,18 @@ async function validateCanonicalFiles(app, embeddingsPath = EMBEDDING_PERSISTENC
     return { valid: false, reason: "canonical-pair-incomplete" };
   }
   try {
+    const stat = await app.vault.adapter.stat(embeddingsPath);
+    if (stat && !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+      return { valid: false, reason: "canonical-resource-limit-exceeded" };
+    }
     const embeddingsContent = await app.vault.adapter.read(embeddingsPath);
-    const manifest = await readJson(app, manifestPath);
+    const manifestContent = await app.vault.adapter.read(manifestPath);
+    let manifest;
+    try {
+      manifest = JSON.parse(manifestContent);
+    } catch (e) {
+      return { valid: false, reason: "canonical-manifest-invalid" };
+    }
     return validateCanonicalContent(embeddingsContent, manifest);
   } catch (e) {
     return { valid: false, reason: "canonical-read-error" };
@@ -12612,6 +13122,7 @@ async function cleanupPaths(app, paths, warnings) {
     try {
       await removeIfExists2(app, path);
     } catch (error) {
+      if (error instanceof OwnershipFenceRejectedError) throw error;
       warnings.push(`${path}: ${errorMessage(error)}`);
     }
   }
@@ -12620,20 +13131,45 @@ async function restoreCheckpointBackups(app) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const backup = await validateCheckpointPair(app, files.checkpointBackup, files.checkpointMetadataBackup);
   if (!backup.valid) return false;
+  await ensureProducerWorkDirectories(app);
+  await app.vault.adapter.write(files.checkpointTemporary, await app.vault.adapter.read(files.checkpointBackup));
+  await app.vault.adapter.write(files.checkpointMetadataTemporary, await app.vault.adapter.read(files.checkpointMetadataBackup));
   await removeIfExists2(app, files.checkpoint);
   await removeIfExists2(app, files.checkpointMetadata);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointBackup, files.checkpoint);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataBackup, files.checkpointMetadata);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointTemporary, files.checkpoint);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataTemporary, files.checkpointMetadata);
+  if (!(await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata)).valid) return false;
+  await removeIfExists2(app, files.checkpointBackup);
+  await removeIfExists2(app, files.checkpointMetadataBackup);
   return true;
+}
+async function manifestSupersedesBackup(app) {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  if (!await fileExists(app, files.canonicalManifest)) return false;
+  const current = await app.vault.adapter.read(files.canonicalManifest);
+  try {
+    JSON.parse(current);
+  } catch (e) {
+    return false;
+  }
+  if (!await fileExists(app, files.manifestPublishBackup)) return true;
+  return current !== await app.vault.adapter.read(files.manifestPublishBackup);
 }
 async function restoreCanonicalBackups(app) {
   const files = EMBEDDING_PERSISTENCE_FILES;
-  const bothBackupsValid = await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
+  const superseded = await manifestSupersedesBackup(app);
+  const bothBackupsValid = superseded ? { valid: false } : await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
   if (bothBackupsValid.valid) {
+    await ensureProducerWorkDirectories(app);
+    await app.vault.adapter.write(files.embeddingsPublishTemporary, await app.vault.adapter.read(files.embeddingsPublishBackup));
+    await app.vault.adapter.write(files.manifestPublishTemporary, await app.vault.adapter.read(files.manifestPublishBackup));
     await removeIfExists2(app, files.canonicalEmbeddings);
     await removeIfExists2(app, files.canonicalManifest);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
+    if (!(await validateCanonicalFiles(app)).valid) return false;
+    await removeIfExists2(app, files.embeddingsPublishBackup);
+    await removeIfExists2(app, files.manifestPublishBackup);
     return true;
   }
   if (await fileExists(app, files.embeddingsPublishBackup)) {
@@ -12643,52 +13179,33 @@ async function restoreCanonicalBackups(app) {
       files.canonicalManifest
     );
     if (backupWithCurrentManifest.valid) {
+      await ensureProducerWorkDirectories(app);
+      await app.vault.adapter.write(files.embeddingsPublishTemporary, await app.vault.adapter.read(files.embeddingsPublishBackup));
       await removeIfExists2(app, files.canonicalEmbeddings);
-      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+      if (!(await validateCanonicalFiles(app)).valid) return false;
+      await removeIfExists2(app, files.embeddingsPublishBackup);
       return true;
     }
   }
-  if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
+  if (!superseded && !await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord13(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord13(manifestBackup) && manifestBackup.indexType === "text" && manifestBackup.embeddingsEnabled !== true) {
+        await ensureProducerWorkDirectories(app);
+        await app.vault.adapter.write(files.manifestPublishTemporary, JSON.stringify(manifestBackup));
         await removeIfExists2(app, files.canonicalEmbeddings);
         await removeIfExists2(app, files.canonicalManifest);
-        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
+        await removeIfExists2(app, files.manifestPublishBackup);
         return true;
       }
-    } catch (e) {
+    } catch (error) {
+      if (error instanceof OwnershipFenceRejectedError) throw error;
       return false;
     }
   }
   return false;
-}
-async function completeInterruptedFirstPublication(app) {
-  const files = EMBEDDING_PERSISTENCE_FILES;
-  if (!await fileExists(app, files.canonicalEmbeddings) || !await fileExists(app, files.canonicalManifest) || !await fileExists(app, files.manifestPublishTemporary)) {
-    return false;
-  }
-  const currentCanonical = await validateCanonicalFiles(app);
-  if (currentCanonical.valid) return false;
-  const candidate = await validateCanonicalFiles(
-    app,
-    files.canonicalEmbeddings,
-    files.manifestPublishTemporary
-  );
-  if (!candidate.valid) return false;
-  await ensureProducerWorkDirectories(app);
-  await removeIfExists2(app, files.manifestPublishBackup);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
-  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
-  const published = await validateCanonicalFiles(app);
-  if (!published.valid) {
-    await removeIfExists2(app, files.canonicalManifest);
-    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
-    await removeIfExists2(app, files.canonicalEmbeddings);
-    return false;
-  }
-  await removeIfExists2(app, files.manifestPublishBackup);
-  return true;
 }
 async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic, fence) {
   const files = EMBEDDING_PERSISTENCE_FILES;
@@ -12700,54 +13217,86 @@ async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic, fence) {
     onDiagnostic == null ? void 0 : onDiagnostic({ stage: "recovery", result: "skipped", reason: errorMessage(error) });
     return { warnings: ["ownership-fence-rejected"] };
   }
-  const publicationBackupExistsAtStart = await fileExists(app, files.embeddingsPublishBackup) || await fileExists(app, files.manifestPublishBackup);
-  if (!publicationBackupExistsAtStart) {
-    try {
-      await completeInterruptedFirstPublication(app);
-    } catch (error) {
-      warnings.push(`first-publication-completion: ${errorMessage(error)}`);
+  const originalAdapter = app.vault.adapter;
+  let changed = false;
+  const guardedAdapter = new Proxy(originalAdapter, {
+    get(target, key) {
+      const value = Reflect.get(target, key);
+      if (typeof value !== "function") return value;
+      if (["write", "remove", "rename", "mkdir"].includes(String(key))) {
+        return async (...args) => {
+          await assertWriteFence(fence);
+          const result = await Reflect.apply(value, target, args);
+          changed = true;
+          return result;
+        };
+      }
+      return value.bind(target);
     }
-  }
-  await cleanupPaths(app, [
-    files.checkpointTemporary,
-    files.checkpointMetadataTemporary,
-    files.embeddingsPublishTemporary,
-    files.manifestPublishTemporary
-  ], warnings);
-  const checkpointBackupExists = await fileExists(app, files.checkpointBackup) || await fileExists(app, files.checkpointMetadataBackup);
-  if (checkpointBackupExists) {
-    const currentCheckpoint = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata);
-    if (currentCheckpoint.valid) {
-      await cleanupPaths(app, [files.checkpointBackup, files.checkpointMetadataBackup], warnings);
-    } else {
-      try {
-        const restored = await restoreCheckpointBackups(app);
-        if (!restored) warnings.push("checkpoint-backup-invalid");
-      } catch (error) {
-        warnings.push(`checkpoint-backup-restore: ${errorMessage(error)}`);
+  });
+  const guardedVault = new Proxy(app.vault, { get: (target, key) => key === "adapter" ? guardedAdapter : Reflect.get(target, key) });
+  app = new Proxy(app, { get: (target, key) => key === "vault" ? guardedVault : Reflect.get(target, key) });
+  try {
+    warnings.push(...(await recoverTextIndexPublication(app)).warnings);
+    await cleanupPaths(app, [
+      files.checkpointTemporary,
+      files.checkpointMetadataTemporary,
+      files.embeddingsPublishTemporary,
+      files.manifestPublishTemporary
+    ], warnings);
+    const checkpointBackupExists = await fileExists(app, files.checkpointBackup) || await fileExists(app, files.checkpointMetadataBackup);
+    if (checkpointBackupExists) {
+      const currentCheckpoint = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata);
+      if (currentCheckpoint.valid) {
+        await cleanupPaths(app, [files.checkpointBackup, files.checkpointMetadataBackup], warnings);
+      } else {
+        try {
+          const restored = await restoreCheckpointBackups(app);
+          if (!restored) warnings.push("checkpoint-backup-invalid");
+        } catch (error) {
+          if (error instanceof OwnershipFenceRejectedError) throw error;
+          warnings.push(`checkpoint-backup-restore: ${errorMessage(error)}`);
+        }
       }
     }
-  }
-  const publishBackupExists = await fileExists(app, files.embeddingsPublishBackup) || await fileExists(app, files.manifestPublishBackup);
-  if (publishBackupExists) {
-    const canonical = await validateCanonicalFiles(app);
-    if (canonical.valid) {
-      await cleanupPaths(app, [files.embeddingsPublishBackup, files.manifestPublishBackup], warnings);
-    } else {
-      try {
-        const restored = await restoreCanonicalBackups(app);
-        if (!restored) warnings.push("canonical-backup-invalid");
-      } catch (error) {
-        warnings.push(`canonical-backup-restore: ${errorMessage(error)}`);
+    const publishBackupExists = await fileExists(app, files.embeddingsPublishBackup) || await fileExists(app, files.manifestPublishBackup);
+    if (publishBackupExists) {
+      const canonical = await validateCanonicalFiles(app);
+      if (canonical.valid) {
+        await cleanupPaths(app, [files.embeddingsPublishBackup, files.manifestPublishBackup], warnings);
+      } else if (canonical.reason === "canonical-resource-limit-exceeded" || canonical.reason === "canonical-read-error") {
+        warnings.push(canonical.reason);
+      } else {
+        try {
+          const restored = await restoreCanonicalBackups(app);
+          if (!restored) warnings.push("canonical-backup-invalid");
+        } catch (error) {
+          if (error instanceof OwnershipFenceRejectedError) throw error;
+          warnings.push(`canonical-backup-restore: ${errorMessage(error)}`);
+        }
       }
     }
+  } catch (error) {
+    if (!(error instanceof OwnershipFenceRejectedError)) throw error;
+    warnings.push("ownership-fence-rejected");
   }
   onDiagnostic == null ? void 0 : onDiagnostic({
     stage: "recovery",
     result: warnings.length === 0 ? "succeeded" : "failed",
     cleanupWarnings: warnings.length
   });
-  return { warnings };
+  return { warnings, changed };
+}
+async function recoverCanonicalEmbeddingsAtStartup(app, coordinator, acquireFence) {
+  const fence = await acquireFence();
+  if (!fence || !await fence.assertCurrent()) return { warnings: ["ownership-fence-rejected"] };
+  const lease = coordinator.startBinaryMaintenance();
+  if (lease.status !== "accepted") return { warnings: ["index-write-busy"] };
+  try {
+    return await recoverEmbeddingPersistenceArtifacts(app, void 0, fence);
+  } finally {
+    coordinator.finish(lease.token);
+  }
 }
 async function loadEmbeddingCheckpoint(app, identity, onDiagnostic) {
   var _a;
@@ -13024,9 +13573,29 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
       backupCreated: embeddingsBackedUp,
       cleanupWarnings: warnings.length
     });
+    if (info.shadowWriteOptions) {
+      await performProducerSqliteShadowWrite(sortedRecords, info, info.shadowWriteOptions).catch(() => {
+      });
+    }
     const publicationId = manifestCandidate.embeddings.publicationId;
     return { success: true, publicationId: typeof publicationId === "string" ? publicationId : void 0, warnings };
   } catch (error) {
+    if (error instanceof OwnershipFenceRejectedError) {
+      onDiagnostic == null ? void 0 : onDiagnostic({
+        stage: "publication",
+        result: "failed",
+        reason: errorMessage(error),
+        rollbackStarted: false,
+        rollbackSucceeded: false,
+        cleanupWarnings: warnings.length
+      });
+      return {
+        success: false,
+        warnings,
+        error: errorMessage(error),
+        rollbackSucceeded: false
+      };
+    }
     let rollbackSucceeded = true;
     onDiagnostic == null ? void 0 : onDiagnostic({
       stage: "publication",
@@ -13077,33 +13646,45 @@ async function removeEmbeddingCheckpoint(app, onDiagnostic) {
   });
   return warnings;
 }
+var PURGE_NOOP = { purgedCount: 0, remainingCount: 0, status: "unchanged" };
+function purgeRefused(reason) {
+  return { purgedCount: 0, remainingCount: 0, status: "refused", reason };
+}
 async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, provenance, fence) {
   var _a;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const embeddingsExist = await fileExists(app, files.canonicalEmbeddings);
   const manifestExists = await fileExists(app, files.canonicalManifest);
   if (!embeddingsExist || !manifestExists) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return PURGE_NOOP;
   }
   let manifestValue;
   try {
     manifestValue = await readJson(app, files.canonicalManifest);
   } catch (e) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-manifest-unreadable");
   }
   if (!isRecord13(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord13(manifestValue.embeddings)) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return PURGE_NOOP;
   }
   let rawContent;
   try {
+    const stat = await app.vault.adapter.stat(files.canonicalEmbeddings);
+    if (stat && !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+      return purgeRefused("resource-limit-exceeded");
+    }
     rawContent = await app.vault.adapter.read(files.canonicalEmbeddings);
   } catch (e) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-unreadable");
+  }
+  const pairState = inspectCanonicalPair(rawContent, manifestValue);
+  if (pairState !== "consistent") {
+    return purgeRefused(`canonical-pair-${pairState}`);
   }
   const dimensions = typeof manifestValue.embeddings.dimensions === "number" ? manifestValue.embeddings.dimensions : void 0;
   const parsed = parseEmbeddingRecords(rawContent, void 0, dimensions, false);
   if (!parsed.valid || parsed.records.length === 0) {
-    return { purgedCount: 0, remainingCount: 0 };
+    return purgeRefused("canonical-records-invalid");
   }
   const validChunkIds = new Set(validChunks.map((chunk) => chunk.chunkId));
   const rules = resolveDefensiveExclusionRules(activePolicy);
@@ -13122,7 +13703,7 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
   });
   const purgedCount = parsed.records.length - remainingRecords.length;
   if (purgedCount === 0) {
-    return { purgedCount: 0, remainingCount: parsed.records.length };
+    return { purgedCount: 0, remainingCount: parsed.records.length, status: "unchanged" };
   }
   if (remainingRecords.length > 0) {
     const info = {
@@ -13137,10 +13718,8 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
     if (!pubResult.success) {
       throw new Error(`Failed to publish reconciled canonical embeddings: ${(_a = pubResult.error) != null ? _a : "unknown"}`);
     }
-    return { purgedCount, remainingCount: remainingRecords.length };
+    return { purgedCount, remainingCount: remainingRecords.length, status: "purged" };
   }
-  await assertWriteFence(fence);
-  await removeIfExists2(app, files.canonicalEmbeddings);
   const nextManifest = {
     ...manifestValue,
     embeddingsEnabled: false,
@@ -13148,51 +13727,80 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
   };
   delete nextManifest.embeddings;
   delete nextManifest.embeddingInput;
-  await assertWriteFence(fence);
-  await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
+  await publishEmbeddingsDisabledManifest(app, nextManifest, fence);
   await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
-  return { purgedCount, remainingCount: 0 };
+  return { purgedCount, remainingCount: 0, status: "purged" };
 }
-
-// src/index/embeddingResourceGuard.ts
-var DESKTOP_BRIDGE_READ_GUARD = Object.freeze({
-  maxFileBytes: 96 * 1024 * 1024,
-  estimatedBridgeAmplification: 3,
-  maxEstimatedBridgePeakBytes: 192 * 1024 * 1024,
-  fixedMarginBytes: 32 * 1024 * 1024
-});
-var MOBILE_BRIDGE_READ_GUARD = Object.freeze({
-  maxFileBytes: 12 * 1024 * 1024,
-  estimatedBridgeAmplification: 5,
-  maxEstimatedBridgePeakBytes: 64 * 1024 * 1024,
-  fixedMarginBytes: 8 * 1024 * 1024
-});
-function getEmbeddingBridgeReadGuard(profile) {
-  return profile === "mobile" ? MOBILE_BRIDGE_READ_GUARD : DESKTOP_BRIDGE_READ_GUARD;
-}
-function estimateCapacitorBridgePeakBytes(fileBytes, guard = MOBILE_BRIDGE_READ_GUARD) {
-  if (!Number.isSafeInteger(fileBytes) || fileBytes < 0 || !Number.isSafeInteger(guard.estimatedBridgeAmplification) || guard.estimatedBridgeAmplification < 0 || !Number.isSafeInteger(guard.fixedMarginBytes) || guard.fixedMarginBytes < 0) {
-    throw new Error("mobile-bridge-read-size-invalid");
-  }
-  const amplified = fileBytes * guard.estimatedBridgeAmplification;
-  if (!Number.isSafeInteger(amplified) || amplified > Number.MAX_SAFE_INTEGER - guard.fixedMarginBytes) {
-    throw new Error("mobile-bridge-read-size-overflow");
-  }
-  return amplified + guard.fixedMarginBytes;
-}
-function evaluateEmbeddingBridgeRead(fileBytes, profile) {
-  const guard = getEmbeddingBridgeReadGuard(profile);
-  if (typeof fileBytes !== "number" || !Number.isSafeInteger(fileBytes) || fileBytes < 0) {
-    return { allowed: false, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes: Number.POSITIVE_INFINITY };
-  }
-  let estimatedPeakBytes;
+async function publishEmbeddingsDisabledManifest(app, nextManifest, fence) {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  const adapter = app.vault.adapter;
+  let embeddingsBackedUp = false;
+  let manifestBackedUp = false;
+  let manifestPublished = false;
   try {
-    estimatedPeakBytes = estimateCapacitorBridgePeakBytes(fileBytes, guard);
-  } catch (e) {
-    return { allowed: false, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes: Number.POSITIVE_INFINITY };
+    await assertWriteFence(fence);
+    await ensureProducerWorkDirectories(app);
+    await adapter.write(files.manifestPublishTemporary, JSON.stringify(nextManifest, null, 2));
+    const staged = await readJson(app, files.manifestPublishTemporary);
+    if (!isRecord13(staged) || staged.embeddingsEnabled !== false || staged.embeddings !== void 0) {
+      throw new Error("Disabled-embeddings manifest candidate validation failed.");
+    }
+    await removeIfExists2(app, files.embeddingsPublishBackup);
+    await removeIfExists2(app, files.manifestPublishBackup);
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup);
+    embeddingsBackedUp = true;
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup);
+    manifestBackedUp = true;
+    await assertWriteFence(fence);
+    await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest);
+    manifestPublished = true;
+    const finalManifest = await readJson(app, files.canonicalManifest);
+    if (!isRecord13(finalManifest) || finalManifest.embeddingsEnabled !== false || await fileExists(app, files.canonicalEmbeddings)) {
+      throw new Error("Disabled-embeddings publication validation failed.");
+    }
+    await cleanupPaths(app, [files.manifestPublishBackup, files.embeddingsPublishBackup], []);
+  } catch (error) {
+    if (error instanceof OwnershipFenceRejectedError) {
+      throw error;
+    }
+    try {
+      if (manifestPublished) await removeIfExists2(app, files.canonicalManifest);
+      if (manifestBackedUp && await fileExists(app, files.manifestPublishBackup)) {
+        await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishBackup, files.canonicalManifest);
+      }
+      if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
+        await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      }
+    } catch (e) {
+    }
+    await cleanupPaths(app, [files.manifestPublishTemporary], []);
+    throw error;
   }
-  const allowed = fileBytes <= guard.maxFileBytes && estimatedPeakBytes <= guard.maxEstimatedBridgePeakBytes;
-  return allowed ? { allowed, estimatedPeakBytes } : { allowed, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes };
+}
+async function runCanonicalMaintenance(coordinator, acquireFence, task) {
+  const lease = coordinator.startCanonicalMaintenance();
+  if (lease.status !== "accepted") {
+    return { status: "refused", reason: lease.status === "disposed" ? "disposed" : "index-write-busy" };
+  }
+  try {
+    const fence = await acquireFence();
+    if (!fence || !await fence.assertCurrent()) return { status: "refused", reason: "ownership-fence-rejected" };
+    return { status: "completed", value: await task(fence) };
+  } finally {
+    coordinator.finish(lease.token);
+  }
+}
+async function purgeOrphanEmbeddingsCoordinated(app, coordinator, acquireFence, validChunks, activePolicy, hooks = {}) {
+  var _a;
+  const outcome = await runCanonicalMaintenance(coordinator, acquireFence, (fence) => {
+    var _a2;
+    return purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, (_a2 = hooks.getProvenance) == null ? void 0 : _a2.call(hooks, fence), fence);
+  });
+  if (outcome.status === "refused") return purgeRefused(outcome.reason);
+  if (outcome.value.status === "purged") (_a = hooks.onPurged) == null ? void 0 : _a.call(hooks);
+  return outcome.value;
 }
 
 // src/index/embeddingUpdatePlan.ts
@@ -13309,7 +13917,10 @@ function calculateEmbeddingUpdatePlan(input) {
   const canonicalMixed = canonicalReadability === "readable" ? hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons) : false;
   const mismatchReasons = publishedComplete ? identityMismatchReasons(input.publishedIdentity, input.targetIdentity) : [];
   for (const reason of mismatchReasons) addReason2(reasons, reason);
-  if (canonicalReadability === "missing") {
+  if (input.canonicalPairState === "inconsistent") {
+    mode = "full-rebuild";
+    addReason2(reasons, "canonical-pair-inconsistent");
+  } else if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason2(reasons, "canonical-missing");
   } else if (canonicalReadability === "empty") {
@@ -13395,11 +14006,11 @@ function getPrefixModeForModel(model) {
   const normalizedModel = model.toLowerCase();
   return NOMIC_PREFIX_MODELS.has(normalizedModel) ? "nomic-search-query-document" : "none";
 }
-function applyEmbeddingPrefix(text, prefixMode, isQuery) {
+function applyEmbeddingPrefix(text2, prefixMode, isQuery) {
   if (prefixMode === "nomic-search-query-document") {
-    return isQuery ? `search_query: ${text}` : `search_document: ${text}`;
+    return isQuery ? `search_query: ${text2}` : `search_document: ${text2}`;
   }
-  return text;
+  return text2;
 }
 function buildEmbeddingInput(chunk, prefixMode = "none") {
   const pathParts = chunk.path.split("/");
@@ -13464,13 +14075,22 @@ async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmb
   try {
     stat = await adapter.stat(embeddingsPath);
   } catch (error) {
-    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+    return { readability: "unreadable", canonicalPairState: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
-  if (!stat || stat.type !== "file") return { readability: "missing", records: [] };
+  if (!stat || stat.type !== "file") {
+    try {
+      const manifestStat = await adapter.stat((0, import_obsidian20.normalizePath)(".lina/index/manifest.json"));
+      const manifest = manifestStat ? JSON.parse(await adapter.read((0, import_obsidian20.normalizePath)(".lina/index/manifest.json"))) : void 0;
+      return { readability: "missing", canonicalPairState: inspectCanonicalPair(void 0, manifest), records: [] };
+    } catch (e) {
+      return { readability: "unreadable", canonicalPairState: "unreadable", records: [] };
+    }
+  }
   const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
   if (!bridgeDecision.allowed) {
     return {
       readability: "resource-limit-exceeded",
+      canonicalPairState: "resource-limit-exceeded",
       records: [],
       resourceLimitCode: bridgeDecision.code,
       error: bridgeDecision.code
@@ -13478,6 +14098,9 @@ async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmb
   }
   try {
     const content = await adapter.read(embeddingsPath);
+    const manifestStat = await adapter.stat((0, import_obsidian20.normalizePath)(".lina/index/manifest.json"));
+    const manifest = manifestStat ? JSON.parse(await adapter.read((0, import_obsidian20.normalizePath)(".lina/index/manifest.json"))) : void 0;
+    const canonicalPairState = inspectCanonicalPair(content, manifest);
     const records = content.split("\n").filter((line) => line.trim().length > 0).map((line) => {
       try {
         return JSON.parse(line);
@@ -13485,9 +14108,9 @@ async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmb
         return void 0;
       }
     });
-    return { readability: records.length === 0 ? "empty" : "readable", records };
+    return { readability: records.length === 0 ? "empty" : "readable", canonicalPairState, records };
   } catch (error) {
-    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+    return { readability: "unreadable", canonicalPairState: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
 function isValidHttpUrl(value) {
@@ -13976,6 +14599,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     canonicalRecords: options.incremental ? canonicalFile.records : [],
     canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: options.incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords: checkpointRecordsForPlan,
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity: preliminaryTargetIdentity,
@@ -14169,6 +14793,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     canonicalRecords: options.incremental ? canonicalFile.records : [],
     canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: options.incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions ? checkpointLoad.records : [],
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity,
@@ -14475,6 +15100,7 @@ async function readEmbeddingUpdatePreview(app, options) {
     canonicalRecords: incremental ? canonicalFile.records : [],
     canonicalExists: incremental ? canonicalFile.readability !== "missing" : false,
     canonicalReadability: incremental ? canonicalFile.readability : "missing",
+    canonicalPairState: incremental ? canonicalFile.canonicalPairState : "absent",
     checkpointRecords,
     publishedIdentity: incremental ? publishedIdentity : {},
     targetIdentity,
@@ -14551,6 +15177,7 @@ async function readEmbeddingStatus(app, options = {}) {
         manifestPrefixMode: publishedIdentity.prefixMode,
         isPrefixModeMismatch: false,
         canonicalReadability: canonicalFile.readability,
+        canonicalPairState: canonicalFile.canonicalPairState,
         detailsAvailable: false,
         resourceLimitCode: canonicalFile.resourceLimitCode,
         error: canonicalFile.error
@@ -14587,6 +15214,8 @@ async function readEmbeddingStatus(app, options = {}) {
     const manifestPrefixMode = publishedIdentity.prefixMode;
     return {
       ...state.summary,
+      canonicalPairState: canonicalFile.canonicalPairState,
+      ...canonicalFile.canonicalPairState === "inconsistent" ? { validForSearchCount: 0, validCount: 0 } : {},
       exists: canonicalFile.readability !== "missing",
       totalEmbeddings: state.summary.totalCanonicalRecords,
       model: (_h = publishedIdentity.model) != null ? _h : "",
@@ -14594,7 +15223,7 @@ async function readEmbeddingStatus(app, options = {}) {
       dimensions: (_j = publishedIdentity.dimensions) != null ? _j : 0,
       updatedAt,
       publishedIdentity,
-      validForSearchChunkIds: state.validForSearchChunkIds,
+      validForSearchChunkIds: canonicalFile.canonicalPairState === "inconsistent" ? /* @__PURE__ */ new Set() : state.validForSearchChunkIds,
       expectedPrefixMode,
       manifestPrefixMode,
       isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
@@ -14625,6 +15254,7 @@ async function readEmbeddingStatus(app, options = {}) {
       publishedIdentity: {},
       validForSearchChunkIds: /* @__PURE__ */ new Set(),
       canonicalReadability: "unreadable",
+      canonicalPairState: "unreadable",
       detailsAvailable: false,
       error: msg
     };
@@ -14716,6 +15346,7 @@ function parseManifestEmbeddingInfo(value) {
     return null;
   }
   return {
+    totalEmbeddings: typeof embeddings.totalEmbeddings === "number" ? embeddings.totalEmbeddings : void 0,
     provider: embeddings.provider,
     model: embeddings.model,
     dimensions: embeddings.dimensions,
@@ -14726,7 +15357,7 @@ function parseManifestEmbeddingInfo(value) {
   };
 }
 function sameSourceIdentity(left, right) {
-  return !!left && !!right && left.provider === right.provider && left.model === right.model && left.dimensions === right.dimensions && left.inputVersion === right.inputVersion && left.prefixMode === right.prefixMode && left.updatedAt === right.updatedAt && left.publicationId === right.publicationId && left.canonicalMtime === right.canonicalMtime && left.canonicalSize === right.canonicalSize;
+  return !!left && !!right && left.provider === right.provider && left.model === right.model && left.dimensions === right.dimensions && left.inputVersion === right.inputVersion && left.prefixMode === right.prefixMode && left.updatedAt === right.updatedAt && left.publicationId === right.publicationId && left.totalEmbeddings === right.totalEmbeddings && left.canonicalMtime === right.canonicalMtime && left.canonicalSize === right.canonicalSize;
 }
 async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
@@ -14931,7 +15562,17 @@ var RuntimeEmbeddingIndexCache = class {
             (_d = this.debug) == null ? void 0 : _d.call(this, "binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
             return sourceAfterBinary ? this.load(sourceAfterBinary, chunks, revision) : null;
           }
-          if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
+          if (Number.isInteger(source.totalEmbeddings) && binary.count === source.totalEmbeddings && binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model && binary.sourceIdentity.inputVersion === source.inputVersion && binary.sourceIdentity.prefixMode === source.prefixMode) {
+            if (evaluateEmbeddingBridgeRead(source.canonicalSize, profile).allowed) {
+              const content2 = await this.app.vault.adapter.read((0, import_obsidian21.normalizePath)(".lina/index/embeddings.jsonl"));
+              const manifest2 = JSON.parse(await this.app.vault.adapter.read((0, import_obsidian21.normalizePath)(".lina/index/manifest.json")));
+              if (inspectCanonicalPair(content2, manifest2) !== "consistent") {
+                this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", lastResolvedAt: Date.now(), lastErrorCode: "canonical-pair-inconsistent" });
+                return null;
+              }
+              const afterValidation = await readRuntimeEmbeddingSourceIdentity(this.app);
+              if (!sameSourceIdentity(source, afterValidation)) return null;
+            }
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
             this.loadedPreference = preference;
@@ -15015,7 +15656,9 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       const records = parseJsonlRecords(content);
-      if (!records) {
+      const manifest = JSON.parse(await this.app.vault.adapter.read((0, import_obsidian21.normalizePath)(".lina/index/manifest.json")));
+      const pairState = inspectCanonicalPair(content, manifest);
+      if (!records || pairState === "inconsistent") {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
         (_h = this.debug) == null ? void 0 : _h.call(this, "load-failed", { reason: "invalid-jsonl" });
         return null;
@@ -15056,11 +15699,12 @@ function sanitize(reason) {
   return reason instanceof Error ? "N\xE3o foi poss\xEDvel validar a c\xF3pia bin\xE1ria." : "C\xF3pia bin\xE1ria indispon\xEDvel.";
 }
 var BinaryEmbeddingCopyController = class {
-  constructor(adapter, digest, coordinator, onState) {
+  constructor(adapter, digest, coordinator, onState, acquireFence) {
     this.adapter = adapter;
     this.digest = digest;
     this.coordinator = coordinator;
     this.onState = onState;
+    this.acquireFence = acquireFence;
     this.checking = null;
     this.pending = /* @__PURE__ */ new Map();
     this.activeMaintenance = null;
@@ -15109,6 +15753,9 @@ var BinaryEmbeddingCopyController = class {
       const runtime = await readBinaryEmbeddingStorage(this.adapter, this.digest);
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       if (runtime.sourceIdentity.publicationId !== canonical.publicationId) return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
+      const pairState = await this.readCanonicalPairState(canonical);
+      if (pairState === "resource-limit-exceeded") return { status: "unsupported", reason: "N\xE3o foi poss\xEDvel validar o par can\xF3nico dentro do limite de recursos." };
+      if (pairState !== "consistent" || runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A c\xF3pia bin\xE1ria n\xE3o corresponde \xE0 publica\xE7\xE3o can\xF3nica." };
       return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
     } catch (error) {
       return { status: "invalid", reason: sanitize(error) };
@@ -15116,6 +15763,28 @@ var BinaryEmbeddingCopyController = class {
   }
   async createOrUpdate() {
     return this.runWrite(false);
+  }
+  async recover() {
+    var _a, _b, _c;
+    if (this.disposed || this.running) return;
+    const fence = await ((_a = this.acquireFence) == null ? void 0 : _a.call(this));
+    if (this.acquireFence && (!fence || !await fence.assertCurrent())) return;
+    const lease = (_b = this.coordinator) == null ? void 0 : _b.startBinaryMaintenance();
+    if (lease && lease.status !== "accepted") return;
+    this.running = true;
+    try {
+      let canonical;
+      try {
+        canonical = await this.readCanonicalManifest();
+      } catch (e) {
+        return;
+      }
+      if (await this.readCanonicalPairState(canonical) !== "consistent") return;
+      await this.recoverDerived(canonical, this.fencedAdapter(fence));
+    } finally {
+      this.running = false;
+      if ((lease == null ? void 0 : lease.status) === "accepted") (_c = this.coordinator) == null ? void 0 : _c.finish(lease.token);
+    }
   }
   /** Queues exactly one derived maintenance per canonical publication id. */
   maintainAfterCanonicalPublication(expectedPublicationId) {
@@ -15163,12 +15832,14 @@ var BinaryEmbeddingCopyController = class {
     return manifest;
   }
   async runWrite(automatic, expectedPublicationId) {
-    var _a, _b;
+    var _a, _b, _c;
     if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
     if (this.running) return { status: "error", reason: "Opera\xE7\xE3o j\xE1 em curso." };
     this.running = true;
     let token;
     try {
+      const fence = await ((_a = this.acquireFence) == null ? void 0 : _a.call(this));
+      if (this.acquireFence && (!fence || !await fence.assertCurrent())) throw new Error("ownership-fence-rejected");
       const manifest = await this.assertExpectedPublication(expectedPublicationId);
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       if (!manifest.publicationId) {
@@ -15178,7 +15849,7 @@ var BinaryEmbeddingCopyController = class {
       }
       const sourcePublicationId = expectedPublicationId != null ? expectedPublicationId : manifest.publicationId;
       this.setState({ phase: "queued", expectedPublicationId: sourcePublicationId });
-      const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
+      const acquired = (_b = this.coordinator) == null ? void 0 : _b.startBinaryMaintenance();
       if (acquired && acquired.status !== "accepted") {
         const summary2 = { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
         this.setState({ phase: "idle", expectedPublicationId: sourcePublicationId, summary: summary2 });
@@ -15187,19 +15858,36 @@ var BinaryEmbeddingCopyController = class {
       token = acquired == null ? void 0 : acquired.token;
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });
-      const text = await this.adapter.read(canonicalJsonl);
-      const records = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+      const stat = await this.adapter.stat(canonicalJsonl);
+      if (!stat || !evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
+        const summary2 = { status: "unsupported", reason: "N\xE3o foi poss\xEDvel validar o par can\xF3nico dentro do limite de recursos." };
+        this.setState({ phase: "failed", expectedPublicationId: sourcePublicationId, summary: summary2 });
+        return summary2;
+      }
+      const text2 = await this.adapter.read(canonicalJsonl);
+      const currentManifest = await this.assertExpectedPublication(sourcePublicationId);
+      if (inspectCanonicalPair(text2, currentManifest.raw) !== "consistent") {
+        const summary2 = { status: "invalid", reason: "Par can\xF3nico de embeddings inconsistente." };
+        this.setState({ phase: "failed", expectedPublicationId: sourcePublicationId, summary: summary2 });
+        return summary2;
+      }
+      const records = text2.split("\n").filter(Boolean).map((line) => JSON.parse(line));
       if (!records.length) return { status: "invalid", reason: "\xCDndice JSONL inv\xE1lido." };
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       await this.assertExpectedPublication(sourcePublicationId);
+      await this.recoverDerived(currentManifest, this.fencedAdapter(fence));
       const identity = { provider: manifest.provider, model: manifest.model, dimensions: manifest.dimensions, inputVersion: manifest.inputVersion, prefixMode: manifest.prefixMode };
       this.setState({ phase: "building", expectedPublicationId: sourcePublicationId });
       this.setState({ phase: "digesting", expectedPublicationId: sourcePublicationId });
       this.setState({ phase: "publishing", expectedPublicationId: sourcePublicationId });
-      await new BinaryEmbeddingPublisher(this.adapter, this.digest, {
+      await new BinaryEmbeddingPublisher(this.fencedAdapter(fence), this.digest, {
         onStage: async (stage) => {
           if (this.disposed) throw new Error("disposed");
-          if (stage === "canonical-metadata") await this.assertExpectedPublication(sourcePublicationId);
+          if (fence && !await fence.assertCurrent()) throw new Error("ownership-fence-rejected");
+          if (stage === "canonical-metadata") {
+            const current = await this.assertExpectedPublication(sourcePublicationId);
+            if (await this.readCanonicalPairState(current) !== "consistent") throw new Error("canonical-pair-inconsistent");
+          }
         }
       }).publish(records, {
         format: "binary-v1",
@@ -15235,22 +15923,25 @@ var BinaryEmbeddingCopyController = class {
       return summary;
     } finally {
       this.running = false;
-      if (token) (_b = this.coordinator) == null ? void 0 : _b.finish(token);
+      if (token) (_c = this.coordinator) == null ? void 0 : _c.finish(token);
     }
   }
   async remove() {
-    var _a, _b;
+    var _a, _b, _c;
     if (this.running || this.disposed) return;
     const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
     if (acquired && acquired.status !== "accepted") throw new Error("index-write-busy");
     this.running = true;
     this.setState({ phase: "publishing" });
     try {
-      for (const path of Object.values(BINARY_EMBEDDING_FILES)) if (await this.adapter.exists(path)) await this.adapter.remove(path);
+      const fence = await ((_b = this.acquireFence) == null ? void 0 : _b.call(this));
+      if (this.acquireFence && (!fence || !await fence.assertCurrent())) throw new Error("ownership-fence-rejected");
+      const adapter = this.fencedAdapter(fence);
+      for (const path of Object.values(BINARY_EMBEDDING_FILES)) if (await adapter.exists(path)) await adapter.remove(path);
       this.setState({ phase: "completed", summary: { status: "absent" } });
     } finally {
       this.running = false;
-      if ((acquired == null ? void 0 : acquired.status) === "accepted") (_b = this.coordinator) == null ? void 0 : _b.finish(acquired.token);
+      if ((acquired == null ? void 0 : acquired.status) === "accepted") (_c = this.coordinator) == null ? void 0 : _c.finish(acquired.token);
     }
   }
   async readCanonicalManifest() {
@@ -15261,6 +15952,8 @@ var BinaryEmbeddingCopyController = class {
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
     const provenance = isValidArtifactProvenance(embeddings.provenance) ? embeddings.provenance : void 0;
     return {
+      raw: value,
+      totalEmbeddings: typeof embeddings.totalEmbeddings === "number" ? embeddings.totalEmbeddings : void 0,
       publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0,
       provider: embeddings.provider,
       model: embeddings.model,
@@ -15269,6 +15962,39 @@ var BinaryEmbeddingCopyController = class {
       prefixMode: input.prefixMode,
       ...provenance ? { provenance } : {}
     };
+  }
+  async readCanonicalPairState(manifest) {
+    const stat = await this.adapter.stat(canonicalJsonl);
+    if (!stat || stat.type !== "file") return "inconsistent";
+    if (!evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) return "resource-limit-exceeded";
+    return inspectCanonicalPair(await this.adapter.read(canonicalJsonl), manifest.raw);
+  }
+  async recoverDerived(canonical, adapter) {
+    const recovered = await recoverBinaryEmbeddingPublication(
+      adapter,
+      this.digest,
+      false,
+      (manifest) => manifest.sourcePublicationId === canonical.publicationId && manifest.recordCount === canonical.totalEmbeddings && manifest.dimensions === canonical.dimensions && manifest.provider === canonical.provider && manifest.model === canonical.model && manifest.inputFormatVersion === String(canonical.inputVersion) && manifest.prefixMode === canonical.prefixMode,
+      { limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) }
+    );
+    if (recovered === "none") {
+      for (const path of [BINARY_EMBEDDING_FILES.manifest, BINARY_EMBEDDING_FILES.metadata, BINARY_EMBEDDING_FILES.vectors]) {
+        if (await adapter.exists(path)) await adapter.remove(path);
+      }
+    }
+  }
+  fencedAdapter(fence) {
+    return new Proxy(this.adapter, {
+      get(target, key) {
+        const value = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        if (["write", "writeBinary", "remove", "rename", "mkdir"].includes(String(key))) return async (...args) => {
+          if (fence && !await fence.assertCurrent()) throw new Error("ownership-fence-rejected");
+          return Reflect.apply(value, target, args);
+        };
+        return value.bind(target);
+      }
+    });
   }
 };
 
@@ -15368,15 +16094,15 @@ var TextSearchModal = class extends import_obsidian22.Modal {
     this.buildHighlightedContent(snippetEl, displayText, query);
     card.addEventListener("click", () => this.openNote(result.path));
   }
-  buildHighlightedContent(container, text, query) {
+  buildHighlightedContent(container, text2, query) {
     if (!query.trim()) {
-      container.textContent = text;
+      container.textContent = text2;
       return;
     }
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const testRe = new RegExp(escaped, "i");
     const splitRe = new RegExp(`(${escaped})`, "gi");
-    const parts = text.split(splitRe);
+    const parts = text2.split(splitRe);
     for (const part of parts) {
       if (part.length === 0) continue;
       if (testRe.test(part)) {
@@ -15399,6 +16125,463 @@ var TextSearchModal = class extends import_obsidian22.Modal {
     this.close();
   }
 };
+
+// src/index/embeddingLifecycleModel.ts
+function normalizeString2(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+function hasCompleteIdentity(identity) {
+  if (!identity) return false;
+  return normalizeString2(identity.provider).length > 0 && normalizeString2(identity.model).length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && normalizeString2(identity.prefixMode).length > 0;
+}
+function compareEmbeddingIdentity(published, target) {
+  const publishedSummary = published != null ? published : void 0;
+  const targetSummary = target != null ? target : void 0;
+  if (!published || !target) {
+    return {
+      compatible: false,
+      reasons: ["incomplete-identity"],
+      published: publishedSummary,
+      target: targetSummary
+    };
+  }
+  if (typeof published.contractId === "string" && typeof target.contractId === "string" && published.contractId.length > 0 && published.contractId === target.contractId) {
+    return {
+      compatible: true,
+      reasons: [],
+      published: publishedSummary,
+      target: targetSummary
+    };
+  }
+  const reasons = [];
+  const pubComplete = hasCompleteIdentity(published);
+  const targetComplete = hasCompleteIdentity(target);
+  if (!pubComplete || !targetComplete) {
+    reasons.push("incomplete-identity");
+  }
+  if (normalizeString2(published.provider) !== normalizeString2(target.provider)) {
+    reasons.push("provider-mismatch");
+  }
+  if (normalizeString2(published.model) !== normalizeString2(target.model)) {
+    reasons.push("model-mismatch");
+  }
+  if (published.dimensions !== void 0 && target.dimensions !== void 0 && published.dimensions !== target.dimensions) {
+    reasons.push("dimensions-mismatch");
+  }
+  if (published.inputVersion !== void 0 && target.inputVersion !== void 0 && published.inputVersion !== target.inputVersion) {
+    reasons.push("input-version-mismatch");
+  }
+  if (published.prefixMode !== void 0 && target.prefixMode !== void 0 && normalizeString2(published.prefixMode) !== normalizeString2(target.prefixMode)) {
+    reasons.push("prefix-mode-mismatch");
+  }
+  return {
+    compatible: reasons.length === 0,
+    reasons,
+    published: publishedSummary,
+    target: targetSummary
+  };
+}
+function classifyEmbeddingWork(input) {
+  const {
+    publishedIdentity,
+    targetIdentity,
+    canonicalExists,
+    canonicalReadability = "readable",
+    totalChunks,
+    reusableCanonicalCount = 0,
+    recoverableCheckpointCount = 0,
+    toGenerateCount = 0,
+    staleToReplaceCount = 0,
+    missingCount = 0,
+    obsoleteToDropCount = 0,
+    requiresPublication = false,
+    isExternalProvider = false,
+    planMode,
+    planReasons
+  } = input;
+  const cost = isExternalProvider ? "external" : "local";
+  const counts = {
+    totalChunks,
+    toGenerate: toGenerateCount,
+    staleToReplace: staleToReplaceCount,
+    missing: missingCount,
+    obsoleteToDrop: obsoleteToDropCount,
+    reusableCanonical: reusableCanonicalCount,
+    recoverableCheckpoint: recoverableCheckpointCount
+  };
+  if (planMode === "indeterminate" || canonicalReadability === "unreadable") {
+    return {
+      kind: "indeterminate",
+      updateRequired: false,
+      severity: "none",
+      cost: "none",
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-unreadable"],
+      counts
+    };
+  }
+  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty" || planMode === "initial-build") {
+    if (totalChunks === 0) {
+      return {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: ["no-chunks-no-embeddings"],
+        counts
+      };
+    }
+    return {
+      kind: "pending",
+      mode: "initial-build",
+      updateRequired: true,
+      severity: "action",
+      cost,
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["canonical-missing-or-empty"],
+      counts
+    };
+  }
+  if (planMode === "full-rebuild" || canonicalReadability === "resource-limit-exceeded") {
+    return {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost,
+      reasons: planReasons && planReasons.length > 0 ? planReasons : [canonicalReadability === "resource-limit-exceeded" ? "canonical-resource-limit-exceeded" : "full-rebuild-required"],
+      counts
+    };
+  }
+  if (publishedIdentity && targetIdentity) {
+    const identityCheck = compareEmbeddingIdentity(publishedIdentity, targetIdentity);
+    if (!identityCheck.compatible) {
+      return {
+        kind: "pending",
+        mode: "full-rebuild",
+        updateRequired: true,
+        severity: "blocking",
+        cost,
+        reasons: identityCheck.reasons,
+        counts
+      };
+    }
+  }
+  const needsGeneration = toGenerateCount > 0 || staleToReplaceCount > 0 || missingCount > 0;
+  if (needsGeneration) {
+    return {
+      kind: "pending",
+      mode: "incremental",
+      updateRequired: true,
+      severity: "action",
+      cost,
+      reasons: planReasons && planReasons.length > 0 ? planReasons : ["chunks-need-generation"],
+      counts
+    };
+  }
+  const needsCleanupOrPublish = requiresPublication || obsoleteToDropCount > 0;
+  if (needsCleanupOrPublish) {
+    return {
+      kind: "pending",
+      mode: "publish-only",
+      updateRequired: true,
+      severity: "info",
+      cost: "none",
+      reasons: obsoleteToDropCount > 0 ? ["obsolete-chunks-to-drop"] : ["publication-needed"],
+      counts
+    };
+  }
+  return {
+    kind: "none",
+    updateRequired: false,
+    severity: "none",
+    cost: "none",
+    reasons: ["up-to-date"],
+    counts
+  };
+}
+function resolveEmbeddingLifecycle(input) {
+  var _a, _b;
+  const {
+    revision,
+    computedAt = Date.now(),
+    deviceRole,
+    isActiveProducer,
+    embeddingsEnabled,
+    upstreamTextIndex,
+    publishedIdentity,
+    deviceIdentity,
+    canonicalExists,
+    validForSearchCount,
+    activeSource = "none",
+    workAssessment,
+    factsChecking = false,
+    operationState: operationState2,
+    history,
+    provenance = "unknown",
+    requiresConfirmation = false,
+    triggerMode = "manual",
+    scheduledAt,
+    backoffUntil
+  } = input;
+  const isCompanion = deviceRole === "companion";
+  const isStandby = deviceRole === "producer" && !isActiveProducer;
+  const isUnassigned = deviceRole === "unassigned";
+  const defaultWork = {
+    kind: "none",
+    updateRequired: false,
+    severity: "none",
+    cost: "none",
+    reasons: ["no-work-assessed"]
+  };
+  const effectiveWork = isCompanion ? { ...defaultWork, reasons: ["companion-role-write-not-applicable"] } : workAssessment != null ? workAssessment : defaultWork;
+  const writeApplicable = !isCompanion && !isStandby && !isUnassigned && embeddingsEnabled;
+  const writeRegion = {
+    work: effectiveWork,
+    updateRequired: writeApplicable ? effectiveWork.updateRequired : false,
+    reason: effectiveWork.reasons[0],
+    severity: writeApplicable ? effectiveWork.severity : "none",
+    cost: writeApplicable ? effectiveWork.cost : "none",
+    applicable: writeApplicable
+  };
+  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
+  const workDemandsFullRebuild = effectiveWork.mode === "full-rebuild";
+  const readCompatible = identityComparison.compatible && !workDemandsFullRebuild;
+  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
+  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  const readRegion = {
+    semanticAvailable,
+    effectiveMode,
+    compatibility: {
+      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
+      reasons: workDemandsFullRebuild && identityComparison.reasons.length === 0 ? effectiveWork.reasons : identityComparison.reasons,
+      published: publishedIdentity != null ? publishedIdentity : void 0,
+      device: deviceIdentity != null ? deviceIdentity : void 0
+    },
+    source: activeSource
+  };
+  let processPhase = "idle";
+  let cancellable = false;
+  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
+    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
+      processPhase = "preparing";
+      cancellable = true;
+    } else if (operationState2.phase === "generating") {
+      processPhase = "generating";
+      cancellable = true;
+    } else if (operationState2.phase === "persisting") {
+      processPhase = "persisting";
+      cancellable = false;
+    } else if (operationState2.phase === "finalizing") {
+      processPhase = "finalizing";
+      cancellable = false;
+    } else {
+      processPhase = "generating";
+      cancellable = true;
+    }
+  } else if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
+    processPhase = "cancelling";
+    cancellable = false;
+  } else if (factsChecking) {
+    processPhase = "checking";
+    cancellable = false;
+  }
+  const processRegion = {
+    phase: processPhase,
+    progress: (operationState2 == null ? void 0 : operationState2.processedChunks) !== void 0 && (operationState2 == null ? void 0 : operationState2.totalChunks) !== void 0 ? {
+      processed: operationState2.processedChunks,
+      total: operationState2.totalChunks,
+      reused: operationState2.reusedChunks,
+      failed: operationState2.failedChunks
+    } : void 0,
+    origin: operationState2 == null ? void 0 : operationState2.origin,
+    cancellable
+  };
+  let blockedReason;
+  if (isCompanion) {
+    blockedReason = "companion";
+  } else if (isStandby) {
+    blockedReason = "standby";
+  } else if (isUnassigned) {
+    blockedReason = "unassigned";
+  } else if (!embeddingsEnabled) {
+    blockedReason = "embeddings-disabled";
+  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
+    blockedReason = "text-index-not-ready";
+  } else if (processPhase !== "idle" && processPhase !== "checking") {
+    blockedReason = "operation-active";
+  }
+  const canRequestUpdate = blockedReason === void 0 && writeApplicable && processPhase === "idle" && upstreamTextIndex === "ready";
+  const capabilityRegion = {
+    canRequestUpdate,
+    blockedReason,
+    requiresConfirmation,
+    trigger: {
+      mode: triggerMode,
+      scheduledAt,
+      backoffUntil
+    }
+  };
+  const historyRegion = {
+    lastSuccess: history == null ? void 0 : history.lastSuccess,
+    lastFailure: history == null ? void 0 : history.lastFailure,
+    lastOperation: (_a = history == null ? void 0 : history.lastOperation) != null ? _a : (operationState2 == null ? void 0 : operationState2.status) === "failed" ? { kind: "failed", message: operationState2.error || operationState2.message } : (operationState2 == null ? void 0 : operationState2.status) === "cancelled" ? { kind: "cancelled", message: operationState2.message } : void 0
+  };
+  const upstreamRegion = {
+    textIndex: upstreamTextIndex
+  };
+  const infoRegion = {
+    canonicalPairState: input.canonicalPairState,
+    embeddingsPublishedAt: (_b = history == null ? void 0 : history.lastSuccess) == null ? void 0 : _b.at,
+    provenance
+  };
+  let primary;
+  if (processPhase === "cancelling") {
+    primary = "CANCELLING";
+  } else if (processPhase === "preparing" || processPhase === "generating" || processPhase === "persisting" || processPhase === "finalizing") {
+    primary = "UPDATING";
+  } else if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
+    primary = "ERROR";
+  } else if (factsChecking || processPhase === "checking") {
+    primary = "VERIFYING";
+  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
+    primary = "NO_TEXT_INDEX";
+  } else if (!embeddingsEnabled) {
+    primary = "DISABLED";
+  } else if (isStandby) {
+    primary = "STANDBY";
+  } else if (effectiveWork.kind === "indeterminate") {
+    primary = "INDETERMINATE";
+  } else if (!canonicalExists) {
+    primary = "INDEX_ONLY";
+  } else if (!readCompatible) {
+    primary = "INCOMPATIBLE";
+  } else if (validForSearchCount === 0) {
+    primary = "INDEX_ONLY";
+  } else if (effectiveWork.kind === "pending" && writeApplicable) {
+    primary = "UPDATE_AVAILABLE";
+  } else {
+    primary = "READY";
+  }
+  return {
+    revision,
+    computedAt,
+    read: readRegion,
+    write: writeRegion,
+    process: processRegion,
+    history: historyRegion,
+    capability: capabilityRegion,
+    upstream: upstreamRegion,
+    info: infoRegion,
+    primary
+  };
+}
+
+// src/index/embeddingLifecycleAdapter.ts
+function toEmbeddingIdentitySummary(identity) {
+  if (!identity) return void 0;
+  return {
+    provider: identity.provider,
+    model: identity.model,
+    dimensions: identity.dimensions,
+    inputVersion: identity.inputVersion,
+    prefixMode: identity.prefixMode,
+    contractId: "contractId" in identity ? identity.contractId : void 0
+  };
+}
+function adaptCurrentStateToLifecycleSnapshot(inputs) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R;
+  const revision = (_a = inputs.revision) != null ? _a : 1;
+  const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
+  const deviceRuntime = inputs.deviceRuntimeState;
+  const isCompanion = inputs.companionState != null || (deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) === "companion";
+  const deviceRole = isCompanion ? "companion" : (_c = deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) != null ? _c : "unassigned";
+  const isActiveProducer = isCompanion ? false : (_d = deviceRuntime == null ? void 0 : deviceRuntime.isActiveProducer) != null ? _d : false;
+  const embeddingsEnabled = (_f = (_e = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _e.configured) != null ? _f : true;
+  const upstreamTextIndex = (_h = inputs.upstreamTextIndex) != null ? _h : ((_g = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _g.textIndexAvailable) ? "ready" : "missing";
+  const publishedIdentity = (_k = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _k : toEmbeddingIdentitySummary((_j = inputs.companionState) == null ? void 0 : _j.vectorContract);
+  const deviceIdentity = (_m = (_l = toEmbeddingIdentitySummary(inputs.targetIdentity)) != null ? _l : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _m : publishedIdentity;
+  const canonicalExists = (_p = inputs.canonicalExists) != null ? _p : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_o = (_n = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _n.exists) != null ? _o : false;
+  const validForSearchCount = (_r = inputs.validForSearchCount) != null ? _r : inputs.companionState ? ((_q = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _q.status) === "compatible" ? 1 : 0 : 0;
+  const activeSource = (_s = inputs.activeSource) != null ? _s : canonicalExists ? "jsonl" : "none";
+  let workAssessment = (_t = inputs.workAssessment) != null ? _t : void 0;
+  if (inputs.updatePlan) {
+    const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
+    const effectivePublished = publishedIdentity != null ? publishedIdentity : inputs.updatePlan.mode === "incremental" ? targetSummary : void 0;
+    workAssessment = classifyEmbeddingWork({
+      publishedIdentity: effectivePublished,
+      targetIdentity: targetSummary,
+      canonicalExists,
+      canonicalReadability: (_u = inputs.canonicalReadability) != null ? _u : "readable",
+      totalChunks: inputs.updatePlan.totalChunks,
+      reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
+      recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
+      toGenerateCount: inputs.updatePlan.toGenerateCount,
+      staleToReplaceCount: inputs.updatePlan.staleToReplaceCount,
+      missingCount: inputs.updatePlan.missingCount,
+      obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
+      requiresPublication: inputs.updatePlan.requiresPublication,
+      isExternalProvider: (_v = inputs.isExternalProvider) != null ? _v : false,
+      planMode: inputs.updatePlan.mode,
+      planReasons: inputs.updatePlan.reasons
+    });
+  }
+  if (inputs.canonicalPairState === "inconsistent") {
+    workAssessment = {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost: inputs.isExternalProvider ? "external" : "local",
+      reasons: ["canonical-pair-inconsistent"]
+    };
+  } else if (inputs.canonicalPairState === "unreadable") {
+    workAssessment = { kind: "indeterminate", updateRequired: false, severity: "none", cost: "none", reasons: ["canonical-pair-unreadable"] };
+  }
+  const history = {
+    lastSuccess: ((_x = (_w = inputs.producerState) == null ? void 0 : _w.embeddings) == null ? void 0 : _x.lastSuccessfulPublicationAt) ? {
+      at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
+    } : void 0,
+    lastFailure: ((_z = (_y = inputs.producerState) == null ? void 0 : _y.maintenance) == null ? void 0 : _z.lastError) ? {
+      category: inputs.producerState.maintenance.lastError
+    } : ((_A = inputs.operationState) == null ? void 0 : _A.error) ? {
+      category: "operation-failed",
+      message: (_B = inputs.operationState.error) != null ? _B : void 0
+    } : void 0,
+    lastOperation: ((_C = inputs.operationState) == null ? void 0 : _C.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_D = inputs.operationState) == null ? void 0 : _D.status) === "failed" ? { kind: "failed", message: (_E = inputs.operationState.error) != null ? _E : void 0 } : ((_F = inputs.operationState) == null ? void 0 : _F.status) === "cancelled" ? { kind: "cancelled", message: (_G = inputs.operationState.message) != null ? _G : void 0 } : void 0
+  };
+  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_H = inputs.updatePlan) == null ? void 0 : _H.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
+  const effectiveDeviceIdentity = deviceIdentity != null ? deviceIdentity : effectivePublishedIdentity;
+  const provenance = (_J = (_I = inputs.companionState) == null ? void 0 : _I.provenanceValidity) != null ? _J : "unknown";
+  return resolveEmbeddingLifecycle({
+    revision,
+    computedAt,
+    deviceRole,
+    isActiveProducer,
+    embeddingsEnabled,
+    upstreamTextIndex,
+    publishedIdentity: effectivePublishedIdentity,
+    deviceIdentity: effectiveDeviceIdentity,
+    canonicalExists: inputs.canonicalPairState === "inconsistent" ? true : canonicalExists,
+    validForSearchCount: inputs.canonicalPairState === "inconsistent" || inputs.canonicalPairState === "unreadable" ? 0 : validForSearchCount,
+    canonicalPairState: inputs.canonicalPairState,
+    activeSource,
+    workAssessment,
+    factsChecking: inputs.factsChecking,
+    operationState: inputs.operationState ? {
+      status: inputs.operationState.status,
+      phase: (_K = inputs.operationState.phase) != null ? _K : void 0,
+      processedChunks: inputs.operationState.processedChunks,
+      totalChunks: (_L = inputs.operationState.totalChunks) != null ? _L : void 0,
+      reusedChunks: (_M = inputs.operationState.reusedChunks) != null ? _M : void 0,
+      failedChunks: (_N = inputs.operationState.failedChunks) != null ? _N : void 0,
+      error: (_O = inputs.operationState.error) != null ? _O : void 0,
+      message: (_P = inputs.operationState.message) != null ? _P : void 0,
+      origin: (_Q = inputs.operationState.origin) != null ? _Q : void 0
+    } : void 0,
+    history,
+    provenance,
+    requiresConfirmation: (_R = inputs.requiresConfirmation) != null ? _R : false
+  });
+}
 
 // src/index/embeddingLifecycleWritePath.ts
 var AUTHORITY_BLOCKS = [
@@ -15491,6 +16674,55 @@ function deriveEmbeddingWritePathDecision(snapshot) {
   };
 }
 
+// src/ai/endpointLocality.ts
+function stripIpv6Brackets(hostname) {
+  return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+}
+function isLoopbackIpv4(hostname) {
+  const octets = hostname.split(".");
+  if (octets.length !== 4 || !octets.every((octet) => /^\d{1,3}$/.test(octet))) {
+    return false;
+  }
+  const values = octets.map(Number);
+  if (values.some((value) => value > 255)) {
+    return false;
+  }
+  return values[0] === 127 || values.every((value) => value === 0);
+}
+function isLoopbackIpv6(hostname) {
+  const address = stripIpv6Brackets(hostname).toLowerCase();
+  if (address === "::1" || address === "::") {
+    return true;
+  }
+  return /^::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}$/.test(address);
+}
+function classifyEndpointLocality(baseUrl) {
+  const trimmed = typeof baseUrl === "string" ? baseUrl.trim() : "";
+  if (trimmed.length === 0) {
+    return "invalid";
+  }
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (e) {
+    return "invalid";
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:" || parsed.hostname.length === 0) {
+    return "invalid";
+  }
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+    return "loopback";
+  }
+  if (isLoopbackIpv4(hostname) || isLoopbackIpv6(hostname)) {
+    return "loopback";
+  }
+  return "remote";
+}
+function isLoopbackEndpoint(baseUrl) {
+  return classifyEndpointLocality(baseUrl) === "loopback";
+}
+
 // src/ai/providerCapabilities.ts
 var EMBEDDING_PROVIDER_CAPABILITIES = Object.freeze({
   ollama: Object.freeze({
@@ -15512,6 +16744,16 @@ var EMBEDDING_PROVIDER_CAPABILITIES = Object.freeze({
     requiresApiKey: true
   })
 });
+function isProviderEndpointLocal(providerId, baseUrl) {
+  return getEmbeddingProviderCapability(providerId).isLocal && isLoopbackEndpoint(baseUrl);
+}
+function resolveEndpointProviderCapability(providerId, baseUrl) {
+  const capability = getEmbeddingProviderCapability(providerId);
+  if (capability.isLocal && !isLoopbackEndpoint(baseUrl)) {
+    return { ...capability, isLocal: false };
+  }
+  return capability;
+}
 function getEmbeddingProviderCapability(providerId) {
   const normalized = providerId.trim().toLowerCase();
   const known = EMBEDDING_PROVIDER_CAPABILITIES[normalized];
@@ -15527,6 +16769,9 @@ function getEmbeddingProviderCapability(providerId) {
 }
 
 // src/index/embeddingWorkStatusController.ts
+function positiveOrUndefined(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
 function cloneState(state) {
   return {
     ...state,
@@ -15570,76 +16815,46 @@ function isIndeterminateWorkSummary(safeSummary) {
   return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable") && safeSummary.canonicalReadability !== "resource-limit-exceeded";
 }
 function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T;
-  const targetProvider = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider;
-  const targetModel = (_f = (_e = (_d = safeSummary.updatePlan) == null ? void 0 : _d.targetIdentity) == null ? void 0 : _e.model) != null ? _f : safeSummary.model;
-  const targetDimensions = (_i = (_h = (_g = safeSummary.updatePlan) == null ? void 0 : _g.targetIdentity) == null ? void 0 : _h.dimensions) != null ? _i : safeSummary.dimensions;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  const plannedTarget = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity;
+  const targetProvider = (_b = plannedTarget == null ? void 0 : plannedTarget.provider) != null ? _b : safeSummary.provider;
+  const targetModel = (_c = plannedTarget == null ? void 0 : plannedTarget.model) != null ? _c : safeSummary.model;
   const targetIdentity = targetProvider && targetModel ? {
     provider: targetProvider,
     model: targetModel,
-    dimensions: targetDimensions != null ? targetDimensions : 768,
-    inputVersion: (_l = (_k = (_j = safeSummary.updatePlan) == null ? void 0 : _j.targetIdentity) == null ? void 0 : _k.inputVersion) != null ? _l : 1,
-    prefixMode: (_q = (_p = (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.prefixMode) != null ? _o : safeSummary.manifestPrefixMode) != null ? _p : safeSummary.expectedPrefixMode) != null ? _q : "none"
+    dimensions: positiveOrUndefined((_d = plannedTarget == null ? void 0 : plannedTarget.dimensions) != null ? _d : safeSummary.dimensions),
+    inputVersion: plannedTarget == null ? void 0 : plannedTarget.inputVersion,
+    prefixMode: (_e = plannedTarget == null ? void 0 : plannedTarget.prefixMode) != null ? _e : safeSummary.expectedPrefixMode
   } : void 0;
-  const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
-    provider: safeSummary.provider,
-    model: safeSummary.model,
-    dimensions: (_u = (_t = safeSummary.dimensions) != null ? _t : (_s = (_r = safeSummary.updatePlan) == null ? void 0 : _r.targetIdentity) == null ? void 0 : _s.dimensions) != null ? _u : 768,
-    inputVersion: 1,
-    prefixMode: (_z = (_y = (_v = safeSummary.manifestPrefixMode) != null ? _v : safeSummary.expectedPrefixMode) != null ? _y : (_x = (_w = safeSummary.updatePlan) == null ? void 0 : _w.targetIdentity) == null ? void 0 : _x.prefixMode) != null ? _z : "none"
+  const publishedIdentity = safeSummary.exists !== false && safeSummary.publishedIdentity ? {
+    ...safeSummary.publishedIdentity,
+    dimensions: positiveOrUndefined(safeSummary.publishedIdentity.dimensions)
   } : void 0;
-  const defaultProducerRuntime = {
-    deviceId: (_A = customDeviceRuntime == null ? void 0 : customDeviceRuntime.deviceId) != null ? _A : "local-device",
-    effectiveRole: "producer",
-    isActiveProducer: true,
-    assignmentState: "assigned",
-    isConfigured: true,
-    ownershipExists: true,
-    isStandbyProducer: false,
-    isCompanion: false,
-    isUnassigned: false,
-    canPublish: true,
-    canTransferOwnership: false,
-    transferEligibilityReason: "already-active-producer",
-    embeddings: {
-      configured: true,
-      textIndexAvailable: true,
-      embeddingsDeclared: true,
-      exists: (_B = safeSummary.exists) != null ? _B : true,
-      vectorFileState: "available",
-      provenance: { stale: false },
-      compatibility: { compatible: true },
-      contractState: "compatible",
-      readiness: { loaded: true, runtimeReady: true },
-      runtimeState: "ready",
-      semanticAvailable: true,
-      effectiveMode: "full"
-    }
-  };
-  const deviceRuntimeState = (_D = (_C = safeSummary.deviceRuntimeState) != null ? _C : customDeviceRuntime) != null ? _D : defaultProducerRuntime;
-  const isExternalProvider = (targetIdentity == null ? void 0 : targetIdentity.provider) ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false;
+  const deviceRuntimeState = (_f = safeSummary.deviceRuntimeState) != null ? _f : customDeviceRuntime;
+  const isExternalProvider = (_g = safeSummary.targetEndpointIsExternal) != null ? _g : (targetIdentity == null ? void 0 : targetIdentity.provider) ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false;
+  const missingFact = !deviceRuntimeState ? "device-runtime-unavailable" : !safeSummary.updatePlan ? "update-plan-unavailable" : void 0;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
+    ...missingFact ? {
+      workAssessment: {
+        kind: "indeterminate",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: [missingFact]
+      }
+    } : {},
     targetIdentity,
     isExternalProvider,
-    updatePlan: (_R = safeSummary.updatePlan) != null ? _R : targetIdentity ? {
-      mode: "incremental",
-      totalChunks: (_E = safeSummary.totalChunks) != null ? _E : 0,
-      missingCount: (_F = safeSummary.missingCount) != null ? _F : 0,
-      staleToReplaceCount: (_G = safeSummary.staleCount) != null ? _G : 0,
-      obsoleteToDropCount: (_H = safeSummary.obsoleteCount) != null ? _H : 0,
-      toGenerateCount: ((_I = safeSummary.missingCount) != null ? _I : 0) + ((_J = safeSummary.staleCount) != null ? _J : 0),
-      reusableCanonicalCount: (_K = safeSummary.validCount) != null ? _K : 0,
-      recoverableCheckpointCount: (_L = safeSummary.recoverableCheckpointCount) != null ? _L : 0,
-      requiresPublication: ((_M = safeSummary.missingCount) != null ? _M : 0) > 0 || ((_N = safeSummary.staleCount) != null ? _N : 0) > 0 || ((_O = safeSummary.obsoleteCount) != null ? _O : 0) > 0 || ((_P = safeSummary.duplicateRecordCount) != null ? _P : 0) > 0 || ((_Q = safeSummary.invalidRecordCount) != null ? _Q : 0) > 0,
-      reasons: [],
-      targetIdentity
-    } : void 0,
+    updatePlan: missingFact ? void 0 : safeSummary.updatePlan,
     publishedIdentity,
-    canonicalExists: (_S = safeSummary.exists) != null ? _S : true,
-    canonicalReadability: (_T = safeSummary.canonicalReadability) != null ? _T : "readable",
-    upstreamTextIndex: "ready",
+    canonicalExists: (_h = safeSummary.exists) != null ? _h : true,
+    // Real count of vectors valid for search; the plan's reusable canonical records when the status has none.
+    validForSearchCount: (_j = safeSummary.validForSearchCount) != null ? _j : (_i = safeSummary.updatePlan) == null ? void 0 : _i.reusableCanonicalCount,
+    canonicalReadability: (_k = safeSummary.canonicalReadability) != null ? _k : "readable",
+    canonicalPairState: safeSummary.canonicalPairState,
+    upstreamTextIndex: safeSummary.textIndexStatus,
     operationState: operationState2 != null ? operationState2 : void 0
   });
   return snapshot;
@@ -15892,6 +17107,10 @@ var EmbeddingWorkStatusController = class {
 };
 
 // src/index/indexWriteCoordinator.ts
+var nextTokenId = 1;
+function createToken(kind, startedAt) {
+  return { kind, startedAt, id: nextTokenId++ };
+}
 function createIdleState() {
   return {
     activeOperation: null,
@@ -15903,6 +17122,7 @@ function createIdleState() {
 var IndexWriteCoordinator = class {
   constructor() {
     this.state = createIdleState();
+    this.activeTokenId = null;
   }
   getState() {
     return { ...this.state };
@@ -15920,7 +17140,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    if (this.state.activeOperation === "text-rebuild") {
+    if (this.state.activeOperation === "text-rebuild" || this.state.activeOperation === "canonical-maintenance") {
       return {
         status: "text-index-busy",
         state: this.getState()
@@ -15958,10 +17178,8 @@ var IndexWriteCoordinator = class {
       };
     }
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const token = {
-      kind: "embedding-generation",
-      startedAt
-    };
+    const token = createToken("embedding-generation", startedAt);
+    this.activeTokenId = token.id;
     this.state = {
       activeOperation: token.kind,
       activeStartedAt: startedAt,
@@ -15980,12 +17198,29 @@ var IndexWriteCoordinator = class {
     if (this.state.disposed) return { status: "disposed", state: this.getState() };
     if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
       return {
-        status: ((_a = this.state.activeOperation) == null ? void 0 : _a.startsWith("text-")) ? "text-index-busy" : "embedding-generation-active",
+        status: ((_a = this.state.activeOperation) == null ? void 0 : _a.startsWith("text-")) || this.state.activeOperation === "canonical-maintenance" ? "text-index-busy" : "embedding-generation-active",
         state: this.getState()
       };
     }
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const token = { kind: "binary-maintenance", startedAt };
+    const token = createToken("binary-maintenance", startedAt);
+    this.activeTokenId = token.id;
+    this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
+    return { status: "accepted", state: this.getState(), token };
+  }
+  /**
+   * Exclusive lease for destructive canonical maintenance (purge). It covers the
+   * whole read-validate-publish cycle, so it is refused while any other writer
+   * (including a pending generation reservation) is active, and it blocks all of them.
+   */
+  startCanonicalMaintenance() {
+    if (this.state.disposed) return { status: "disposed", state: this.getState() };
+    if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
+      return { status: "text-index-busy", state: this.getState() };
+    }
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const token = createToken("canonical-maintenance", startedAt);
+    this.activeTokenId = token.id;
     this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
     return { status: "accepted", state: this.getState(), token };
   }
@@ -16002,11 +17237,15 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
+    if (this.state.activeOperation !== null) {
+      return {
+        status: "text-index-busy",
+        state: this.getState()
+      };
+    }
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const token = {
-      kind: "text-rebuild",
-      startedAt
-    };
+    const token = createToken("text-rebuild", startedAt);
+    this.activeTokenId = token.id;
     this.state = {
       ...this.state,
       activeOperation: token.kind,
@@ -16032,17 +17271,15 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    if (this.state.activeOperation === "text-rebuild") {
+    if (this.state.activeOperation !== null) {
       return {
         status: "text-index-busy",
         state: this.getState()
       };
     }
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const token = {
-      kind: "text-automatic-batch",
-      startedAt
-    };
+    const token = createToken("text-automatic-batch", startedAt);
+    this.activeTokenId = token.id;
     this.state = {
       ...this.state,
       activeOperation: token.kind,
@@ -16058,9 +17295,10 @@ var IndexWriteCoordinator = class {
     if (!token) {
       return;
     }
-    if (this.state.activeOperation !== token.kind || this.state.activeStartedAt !== token.startedAt) {
+    if (this.activeTokenId !== token.id || this.state.activeOperation !== token.kind) {
       return;
     }
+    this.activeTokenId = null;
     this.state = {
       activeOperation: null,
       activeStartedAt: null,
@@ -16165,8 +17403,12 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
       statusEl.textContent = this.L.semanticEmbeddingsUnavailableNoContract;
       return;
     }
-    const settingsProvider = isCompanion ? ((_b = this.config.contract) == null ? void 0 : _b.provider) || this.config.provider || "" : normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider() || "ollama");
-    const settingsModel = isCompanion ? ((_c = this.config.contract) == null ? void 0 : _c.model) || this.config.model || "" : this.config.model || getLocalEmbeddingsModel() || "nomic-embed-text";
+    const settingsProvider = isCompanion ? ((_b = this.config.contract) == null ? void 0 : _b.provider) || this.config.provider || "" : this.config.provider || getLocalEmbeddingsProvider() ? normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider()) : "";
+    const settingsModel = isCompanion ? ((_c = this.config.contract) == null ? void 0 : _c.model) || this.config.model || "" : this.config.model || getLocalEmbeddingsModel() || "";
+    if (!settingsProvider || !settingsModel) {
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableNoContract;
+      return;
+    }
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
     if (this.plugin && runtimeChunks) {
@@ -16528,431 +17770,6 @@ var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian24
 
 // src/device/deviceDiagnosticsModal.ts
 var import_obsidian26 = require("obsidian");
-
-// src/device/ownershipRecoveryDiagnostics.ts
-function evaluateOwnershipRecoveryState(manifest, history) {
-  var _a, _b, _c, _d, _e;
-  const evaluatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  const hasManifest = manifest !== null;
-  const hasHistory = history.length > 0;
-  const totalAuditEvents = history.length;
-  const currentProducerId = (_a = manifest == null ? void 0 : manifest.activeProducerId) != null ? _a : void 0;
-  const currentEpoch = manifest == null ? void 0 : manifest.epoch;
-  const latestAuditEvent = hasHistory ? history[history.length - 1] : void 0;
-  const latestAuditProducerId = (_b = latestAuditEvent == null ? void 0 : latestAuditEvent.newProducerId) != null ? _b : void 0;
-  const latestAuditEpoch = latestAuditEvent == null ? void 0 : latestAuditEvent.newEpoch;
-  const lastKnownProducerId = (_c = currentProducerId != null ? currentProducerId : latestAuditProducerId) != null ? _c : latestAuditEvent == null ? void 0 : latestAuditEvent.previousProducerId;
-  if (!hasManifest && !hasHistory) {
-    return {
-      status: "unknown",
-      hasManifest: false,
-      hasHistory: false,
-      totalAuditEvents: 0,
-      warnings: ["No ownership manifest (.lina/ownership.json) or audit history found in vault."],
-      evaluatedAt
-    };
-  }
-  if (!hasManifest && hasHistory) {
-    return {
-      status: "missing-manifest",
-      hasManifest: false,
-      hasHistory: true,
-      latestAuditProducerId,
-      latestAuditEpoch,
-      lastKnownProducerId,
-      totalAuditEvents,
-      warnings: [
-        `Ownership manifest (.lina/ownership.json) is missing, but audit history contains ${totalAuditEvents} event(s). Latest audit epoch is ${latestAuditEpoch} for producer "${latestAuditProducerId}".`
-      ],
-      evaluatedAt
-    };
-  }
-  if (hasManifest && !hasHistory) {
-    if (currentEpoch === 1) {
-      return {
-        status: "healthy",
-        hasManifest: true,
-        hasHistory: false,
-        currentProducerId,
-        currentEpoch,
-        lastKnownProducerId,
-        totalAuditEvents: 0,
-        warnings: [],
-        evaluatedAt
-      };
-    }
-    return {
-      status: "missing-history",
-      hasManifest: true,
-      hasHistory: false,
-      currentProducerId,
-      currentEpoch,
-      lastKnownProducerId,
-      totalAuditEvents: 0,
-      warnings: [
-        `Ownership manifest exists at epoch ${currentEpoch} for producer "${currentProducerId}", but no audit history was found in .lina/ownership-history/.`
-      ],
-      evaluatedAt
-    };
-  }
-  const m = manifest;
-  const a = latestAuditEvent;
-  if (m.epoch < 1 || a.newEpoch < 1) {
-    return {
-      status: "epoch-inconsistency",
-      hasManifest: true,
-      hasHistory: true,
-      currentProducerId,
-      currentEpoch,
-      latestAuditProducerId,
-      latestAuditEpoch,
-      lastKnownProducerId,
-      totalAuditEvents,
-      warnings: [
-        `Invalid epoch values detected: manifest epoch = ${m.epoch}, latest audit epoch = ${a.newEpoch}. Epochs must be positive integers.`
-      ],
-      evaluatedAt
-    };
-  }
-  if (a.newEpoch > m.epoch) {
-    return {
-      status: "history-ahead-of-manifest",
-      hasManifest: true,
-      hasHistory: true,
-      currentProducerId,
-      currentEpoch,
-      latestAuditProducerId,
-      latestAuditEpoch,
-      lastKnownProducerId,
-      totalAuditEvents,
-      warnings: [
-        `Audit history is ahead of current manifest: latest audit epoch is ${a.newEpoch} (producer "${a.newProducerId}"), but manifest epoch is ${m.epoch} (producer "${m.activeProducerId}").`
-      ],
-      evaluatedAt
-    };
-  }
-  if (m.epoch > a.newEpoch) {
-    return {
-      status: "epoch-inconsistency",
-      hasManifest: true,
-      hasHistory: true,
-      currentProducerId,
-      currentEpoch,
-      latestAuditProducerId,
-      latestAuditEpoch,
-      lastKnownProducerId,
-      totalAuditEvents,
-      warnings: [
-        `Manifest epoch (${m.epoch}) is ahead of latest audit history epoch (${a.newEpoch}).`
-      ],
-      evaluatedAt
-    };
-  }
-  const manifestProducer = (_d = m.activeProducerId) != null ? _d : null;
-  const auditProducer = (_e = a.newProducerId) != null ? _e : null;
-  if (manifestProducer !== auditProducer) {
-    return {
-      status: "epoch-inconsistency",
-      hasManifest: true,
-      hasHistory: true,
-      currentProducerId,
-      currentEpoch,
-      latestAuditProducerId,
-      latestAuditEpoch,
-      lastKnownProducerId,
-      totalAuditEvents,
-      warnings: [
-        `Manifest producer ("${m.activeProducerId}") differs from latest audit event producer ("${a.newProducerId}") at matching epoch ${m.epoch}.`
-      ],
-      evaluatedAt
-    };
-  }
-  return {
-    status: "healthy",
-    hasManifest: true,
-    hasHistory: true,
-    currentProducerId,
-    currentEpoch,
-    latestAuditProducerId,
-    latestAuditEpoch,
-    lastKnownProducerId,
-    totalAuditEvents,
-    warnings: [],
-    evaluatedAt
-  };
-}
-
-// src/device/deviceDiagnostics.ts
-function parseJsonSafely2(content) {
-  try {
-    return JSON.parse(content);
-  } catch (e) {
-    return null;
-  }
-}
-function buildDeviceDiagnostics(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-  const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
-  const deviceId = input.deviceId.trim();
-  const deviceState = (_b = input.deviceState) != null ? _b : void 0;
-  const ownership = (_c = input.ownership) != null ? _c : void 0;
-  const runtime = resolveDeviceRuntimeState({
-    deviceId,
-    deviceState,
-    ownership,
-    roleResolution: input.roleResolution,
-    isMobile: input.isMobile,
-    legacyRoleFallbackAllowed: input.legacyRoleFallbackAllowed,
-    textManifestRaw: input.textManifestRaw,
-    binaryManifestRaw: input.binaryManifestRaw,
-    semanticAvailability: input.semanticAvailability,
-    semanticCapability: input.semanticCapability
-  });
-  const canonicalRole = runtime.effectiveRole === "unassigned" ? void 0 : runtime.effectiveRole;
-  const deviceSection = {
-    id: runtime.deviceId,
-    name: runtime.deviceName,
-    role: canonicalRole,
-    assignmentState: runtime.assignmentState,
-    effectiveRole: runtime.effectiveRole,
-    isConfigured: runtime.isConfigured,
-    createdAt: deviceState == null ? void 0 : deviceState.createdAt,
-    updatedAt: deviceState == null ? void 0 : deviceState.updatedAt
-  };
-  const ownershipSection = {
-    activeProducerId: runtime.activeProducerId,
-    epoch: runtime.epoch,
-    reason: runtime.ownershipReason,
-    acquiredAt: ownership == null ? void 0 : ownership.acquiredAt,
-    updatedAt: ownership == null ? void 0 : ownership.updatedAt,
-    isActiveProducer: runtime.isActiveProducer,
-    isStandbyProducer: runtime.isStandbyProducer,
-    isCompanion: runtime.isCompanion,
-    isUnassigned: runtime.isUnassigned,
-    isUnclaimed: !runtime.ownershipExists
-  };
-  const transferSection = {
-    ownershipExists: runtime.ownershipExists,
-    activeProducerId: runtime.activeProducerId,
-    currentEpoch: runtime.epoch,
-    localDeviceId: runtime.deviceId,
-    isLocalActiveProducer: runtime.isActiveProducer,
-    canTransferOwnership: runtime.canTransferOwnership,
-    eligibilityReason: runtime.transferEligibilityReason
-  };
-  let auditEvents = [];
-  if (Array.isArray(input.auditEvents)) {
-    auditEvents = input.auditEvents;
-  } else if (Array.isArray(input.auditHistoryRaw)) {
-    auditEvents = input.auditHistoryRaw.filter(isOwnershipAuditEvent);
-  }
-  const recoverySection = evaluateOwnershipRecoveryState(ownership != null ? ownership : null, auditEvents);
-  const textManifest = typeof input.textManifestRaw === "object" && input.textManifestRaw !== null ? input.textManifestRaw : void 0;
-  const textValidation = evaluateArtifactProvenance(textManifest, ownership, deviceId);
-  const textIndexArtifact = {
-    status: textValidation.status,
-    validation: textValidation,
-    diagnosticMessage: formatArtifactProvenanceDiagnostic(textValidation),
-    exists: Boolean(textManifest),
-    indexType: typeof (textManifest == null ? void 0 : textManifest.indexType) === "string" ? textManifest.indexType : void 0,
-    totalNotes: typeof (textManifest == null ? void 0 : textManifest.totalNotes) === "number" ? textManifest.totalNotes : void 0,
-    totalChunks: typeof (textManifest == null ? void 0 : textManifest.totalChunks) === "number" ? textManifest.totalChunks : void 0,
-    updatedAt: typeof (textManifest == null ? void 0 : textManifest.updatedAt) === "string" ? textManifest.updatedAt : void 0
-  };
-  const embeddingsSection = textManifest && typeof textManifest.embeddings === "object" && textManifest.embeddings !== null ? textManifest.embeddings : void 0;
-  const embeddingsValidation = evaluateArtifactProvenance(embeddingsSection, ownership, deviceId);
-  const embeddingsArtifact = {
-    status: embeddingsValidation.status,
-    validation: embeddingsValidation,
-    diagnosticMessage: formatArtifactProvenanceDiagnostic(embeddingsValidation),
-    enabled: Boolean(textManifest == null ? void 0 : textManifest.embeddingsEnabled),
-    exists: Boolean(embeddingsSection),
-    provider: typeof (embeddingsSection == null ? void 0 : embeddingsSection.provider) === "string" ? embeddingsSection.provider : void 0,
-    model: typeof (embeddingsSection == null ? void 0 : embeddingsSection.model) === "string" ? embeddingsSection.model : void 0,
-    dimensions: typeof (embeddingsSection == null ? void 0 : embeddingsSection.dimensions) === "number" ? embeddingsSection.dimensions : void 0,
-    publicationId: typeof (embeddingsSection == null ? void 0 : embeddingsSection.publicationId) === "string" ? embeddingsSection.publicationId : void 0,
-    updatedAt: typeof (embeddingsSection == null ? void 0 : embeddingsSection.updatedAt) === "string" ? embeddingsSection.updatedAt : void 0
-  };
-  const binaryManifest = typeof input.binaryManifestRaw === "object" && input.binaryManifestRaw !== null ? input.binaryManifestRaw : void 0;
-  const binaryValidation = evaluateArtifactProvenance(binaryManifest, ownership, deviceId);
-  const binaryArtifact = {
-    status: binaryValidation.status,
-    validation: binaryValidation,
-    diagnosticMessage: formatArtifactProvenanceDiagnostic(binaryValidation),
-    exists: Boolean(binaryManifest),
-    generationId: typeof (binaryManifest == null ? void 0 : binaryManifest.generationId) === "string" ? binaryManifest.generationId : void 0,
-    sourcePublicationId: typeof (binaryManifest == null ? void 0 : binaryManifest.sourcePublicationId) === "string" ? binaryManifest.sourcePublicationId : void 0,
-    provider: typeof (binaryManifest == null ? void 0 : binaryManifest.provider) === "string" ? binaryManifest.provider : void 0,
-    model: typeof (binaryManifest == null ? void 0 : binaryManifest.model) === "string" ? binaryManifest.model : void 0,
-    recordCount: typeof (binaryManifest == null ? void 0 : binaryManifest.recordCount) === "number" ? binaryManifest.recordCount : void 0,
-    dimensions: typeof (binaryManifest == null ? void 0 : binaryManifest.dimensions) === "number" ? binaryManifest.dimensions : void 0,
-    updatedAt: typeof (binaryManifest == null ? void 0 : binaryManifest.createdAt) === "string" ? binaryManifest.createdAt : void 0
-  };
-  let checkpointArtifact;
-  if (typeof input.checkpointMetaRaw === "object" && input.checkpointMetaRaw !== null) {
-    const checkpointMeta = input.checkpointMetaRaw;
-    const checkpointValidation = evaluateArtifactProvenance(checkpointMeta, ownership, deviceId);
-    checkpointArtifact = {
-      status: checkpointValidation.status,
-      validation: checkpointValidation,
-      diagnosticMessage: formatArtifactProvenanceDiagnostic(checkpointValidation),
-      exists: true,
-      operationId: typeof checkpointMeta.operationId === "string" ? checkpointMeta.operationId : void 0,
-      completedRecords: typeof checkpointMeta.completedRecords === "number" ? checkpointMeta.completedRecords : void 0,
-      provider: typeof checkpointMeta.provider === "string" ? checkpointMeta.provider : void 0,
-      model: typeof checkpointMeta.model === "string" ? checkpointMeta.model : void 0,
-      dimensions: typeof checkpointMeta.dimension === "number" ? checkpointMeta.dimension : void 0,
-      updatedAt: typeof checkpointMeta.updatedAt === "string" ? checkpointMeta.updatedAt : void 0
-    };
-  }
-  const artifactsSection = {
-    index: textIndexArtifact,
-    embeddings: embeddingsArtifact,
-    binary: binaryArtifact,
-    checkpoint: checkpointArtifact
-  };
-  const companionCap = evaluateCompanionCapability({ role: canonicalRole });
-  const companionState = evaluateCompanionConsumptionState({
-    deviceId,
-    role: canonicalRole,
-    ownership: ownership != null ? ownership : null,
-    textManifestRaw: input.textManifestRaw,
-    binaryManifestRaw: input.binaryManifestRaw
-  });
-  const lifecycleSnapshot = (_f = input.lifecycleSnapshot) != null ? _f : adaptCurrentStateToLifecycleSnapshot({
-    deviceRuntimeState: runtime,
-    upstreamTextIndex: textIndexArtifact.exists ? "ready" : "missing",
-    canonicalExists: embeddingsArtifact.exists,
-    validForSearchCount: ((_d = input.semanticAvailability) == null ? void 0 : _d.available) || embeddingsArtifact.exists && embeddingsArtifact.provider && ((_e = input.semanticCapability) == null ? void 0 : _e.semanticAvailable) !== false ? 1 : 0,
-    embeddingsDeclaredInManifest: embeddingsArtifact.exists,
-    publishedIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
-      provider: embeddingsArtifact.provider,
-      model: embeddingsArtifact.model,
-      dimensions: embeddingsArtifact.dimensions,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0,
-    targetIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
-      provider: embeddingsArtifact.provider,
-      model: embeddingsArtifact.model,
-      dimensions: embeddingsArtifact.dimensions,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0
-  });
-  const textIndexAvailable = lifecycleSnapshot.upstream.textIndex === "ready" || lifecycleSnapshot.upstream.textIndex === "stale";
-  const embeddingsDeclared = lifecycleSnapshot.read.compatibility.status !== "none" || embeddingsArtifact.exists;
-  const semanticCap = (_h = input.semanticCapability) != null ? _h : evaluateSemanticCapability({
-    textIndexAvailable,
-    embeddingsDeclaredInManifest: embeddingsDeclared,
-    vectorContractState: ((_g = companionState.vectorContractCompatibility) == null ? void 0 : _g.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
-    semanticCompatibility: input.semanticAvailability,
-    lifecycleSnapshot
-  });
-  const operationalSemanticAvailable = input.semanticCapability ? input.semanticCapability.semanticAvailable : input.semanticAvailability ? input.semanticAvailability.available : lifecycleSnapshot.read.semanticAvailable;
-  const operationalMode = input.semanticCapability ? input.semanticCapability.effectiveMode : input.semanticAvailability ? input.semanticAvailability.available ? "full" : "text-only" : lifecycleSnapshot.read.effectiveMode;
-  const companionSearchSection = {
-    supported: companionCap.canConsumeArtifacts,
-    available: operationalMode !== "unavailable",
-    mode: operationalMode,
-    isCompanionRole: companionCap.isCompanion,
-    textIndexAvailable,
-    embeddingsAvailable: embeddingsDeclared,
-    reason: companionState.provenanceReason,
-    operationalSemanticAvailable,
-    operationalMode,
-    operationalReason: input.lifecycleSnapshot ? (_i = lifecycleSnapshot.read.compatibility.reasons[0]) != null ? _i : semanticCap.reason : (_j = semanticCap.reason) != null ? _j : lifecycleSnapshot.read.compatibility.reasons[0],
-    operationalReasonCode: semanticCap.reasonCode,
-    semanticCapability: semanticCap
-  };
-  return {
-    timestamp,
-    device: deviceSection,
-    ownership: ownershipSection,
-    transfer: transferSection,
-    recovery: recoverySection,
-    companionSearch: companionSearchSection,
-    artifacts: artifactsSection,
-    runtime,
-    lifecycleSnapshot: input.lifecycleSnapshot
-  };
-}
-async function readDeviceDiagnostics(adapter, deviceId, options) {
-  var _a, _b, _c, _d;
-  const normalizedId = deviceId.trim();
-  let deviceState = null;
-  try {
-    deviceState = await loadDeviceState(adapter, normalizedId);
-  } catch (e) {
-    deviceState = null;
-  }
-  let ownership = null;
-  try {
-    ownership = await loadOwnership(adapter);
-  } catch (e) {
-    ownership = null;
-  }
-  let auditEvents = [];
-  try {
-    auditEvents = await loadOwnershipAuditHistory(adapter);
-  } catch (e) {
-    auditEvents = [];
-  }
-  let textManifestRaw = null;
-  try {
-    if (await adapter.exists(".lina/index/manifest.json")) {
-      const text = await adapter.read(".lina/index/manifest.json");
-      textManifestRaw = parseJsonSafely2(text);
-    }
-  } catch (e) {
-    textManifestRaw = null;
-  }
-  let binaryManifestRaw = null;
-  try {
-    if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
-      const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
-      binaryManifestRaw = parseJsonSafely2(text);
-    }
-  } catch (e) {
-    binaryManifestRaw = null;
-  }
-  let checkpointMetaRaw = null;
-  try {
-    if (await adapter.exists(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata)) {
-      const text = await adapter.read(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata);
-      checkpointMetaRaw = parseJsonSafely2(text);
-    }
-  } catch (e) {
-    checkpointMetaRaw = null;
-  }
-  const lifecycleSnapshot = (_d = options == null ? void 0 : options.lifecycleSnapshot) != null ? _d : adaptCurrentStateToLifecycleSnapshot({
-    companionState: evaluateCompanionConsumptionState({
-      deviceId: normalizedId,
-      role: ((_a = options == null ? void 0 : options.roleResolution) == null ? void 0 : _a.effectiveRole) === "producer" ? "producer" : ((_b = options == null ? void 0 : options.roleResolution) == null ? void 0 : _b.effectiveRole) === "companion" ? "companion" : void 0,
-      ownership,
-      textManifestRaw,
-      binaryManifestRaw
-    }),
-    upstreamTextIndex: textManifestRaw ? "ready" : "missing",
-    canonicalExists: Boolean(textManifestRaw && typeof textManifestRaw === "object" && textManifestRaw.embeddings),
-    validForSearchCount: ((_c = options == null ? void 0 : options.semanticAvailability) == null ? void 0 : _c.available) ? 1 : 0
-  });
-  return buildDeviceDiagnostics({
-    deviceId: normalizedId,
-    deviceState,
-    ownership,
-    auditEvents,
-    textManifestRaw,
-    binaryManifestRaw,
-    checkpointMetaRaw,
-    roleResolution: options == null ? void 0 : options.roleResolution,
-    legacyRoleFallbackAllowed: options == null ? void 0 : options.legacyRoleFallbackAllowed,
-    isMobile: options == null ? void 0 : options.isMobile,
-    semanticAvailability: options == null ? void 0 : options.semanticAvailability,
-    semanticCapability: options == null ? void 0 : options.semanticCapability,
-    lifecycleSnapshot
-  });
-}
 
 // src/device/deviceOwnershipTransfer.ts
 async function transferOwnershipToDevice(adapter, targetDeviceId, options) {
@@ -17700,8 +18517,6 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         async () => {
           if (this.onRefreshRequested) {
             this.diagnostics = await this.onRefreshRequested();
-          } else if (this.adapter) {
-            this.diagnostics = await readDeviceDiagnostics(this.adapter, this.diagnostics.device.id);
           }
           this.onOpen();
         },
@@ -17717,6 +18532,398 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
     this.contentEl.empty();
   }
 };
+
+// src/device/ownershipRecoveryDiagnostics.ts
+function evaluateOwnershipRecoveryState(manifest, history) {
+  var _a, _b, _c, _d, _e;
+  const evaluatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const hasManifest = manifest !== null;
+  const hasHistory = history.length > 0;
+  const totalAuditEvents = history.length;
+  const currentProducerId = (_a = manifest == null ? void 0 : manifest.activeProducerId) != null ? _a : void 0;
+  const currentEpoch = manifest == null ? void 0 : manifest.epoch;
+  const latestAuditEvent = hasHistory ? history[history.length - 1] : void 0;
+  const latestAuditProducerId = (_b = latestAuditEvent == null ? void 0 : latestAuditEvent.newProducerId) != null ? _b : void 0;
+  const latestAuditEpoch = latestAuditEvent == null ? void 0 : latestAuditEvent.newEpoch;
+  const lastKnownProducerId = (_c = currentProducerId != null ? currentProducerId : latestAuditProducerId) != null ? _c : latestAuditEvent == null ? void 0 : latestAuditEvent.previousProducerId;
+  if (!hasManifest && !hasHistory) {
+    return {
+      status: "unknown",
+      hasManifest: false,
+      hasHistory: false,
+      totalAuditEvents: 0,
+      warnings: ["No ownership manifest (.lina/ownership.json) or audit history found in vault."],
+      evaluatedAt
+    };
+  }
+  if (!hasManifest && hasHistory) {
+    return {
+      status: "missing-manifest",
+      hasManifest: false,
+      hasHistory: true,
+      latestAuditProducerId,
+      latestAuditEpoch,
+      lastKnownProducerId,
+      totalAuditEvents,
+      warnings: [
+        `Ownership manifest (.lina/ownership.json) is missing, but audit history contains ${totalAuditEvents} event(s). Latest audit epoch is ${latestAuditEpoch} for producer "${latestAuditProducerId}".`
+      ],
+      evaluatedAt
+    };
+  }
+  if (hasManifest && !hasHistory) {
+    if (currentEpoch === 1) {
+      return {
+        status: "healthy",
+        hasManifest: true,
+        hasHistory: false,
+        currentProducerId,
+        currentEpoch,
+        lastKnownProducerId,
+        totalAuditEvents: 0,
+        warnings: [],
+        evaluatedAt
+      };
+    }
+    return {
+      status: "missing-history",
+      hasManifest: true,
+      hasHistory: false,
+      currentProducerId,
+      currentEpoch,
+      lastKnownProducerId,
+      totalAuditEvents: 0,
+      warnings: [
+        `Ownership manifest exists at epoch ${currentEpoch} for producer "${currentProducerId}", but no audit history was found in .lina/ownership-history/.`
+      ],
+      evaluatedAt
+    };
+  }
+  const m = manifest;
+  const a = latestAuditEvent;
+  if (m.epoch < 1 || a.newEpoch < 1) {
+    return {
+      status: "epoch-inconsistency",
+      hasManifest: true,
+      hasHistory: true,
+      currentProducerId,
+      currentEpoch,
+      latestAuditProducerId,
+      latestAuditEpoch,
+      lastKnownProducerId,
+      totalAuditEvents,
+      warnings: [
+        `Invalid epoch values detected: manifest epoch = ${m.epoch}, latest audit epoch = ${a.newEpoch}. Epochs must be positive integers.`
+      ],
+      evaluatedAt
+    };
+  }
+  if (a.newEpoch > m.epoch) {
+    return {
+      status: "history-ahead-of-manifest",
+      hasManifest: true,
+      hasHistory: true,
+      currentProducerId,
+      currentEpoch,
+      latestAuditProducerId,
+      latestAuditEpoch,
+      lastKnownProducerId,
+      totalAuditEvents,
+      warnings: [
+        `Audit history is ahead of current manifest: latest audit epoch is ${a.newEpoch} (producer "${a.newProducerId}"), but manifest epoch is ${m.epoch} (producer "${m.activeProducerId}").`
+      ],
+      evaluatedAt
+    };
+  }
+  if (m.epoch > a.newEpoch) {
+    return {
+      status: "epoch-inconsistency",
+      hasManifest: true,
+      hasHistory: true,
+      currentProducerId,
+      currentEpoch,
+      latestAuditProducerId,
+      latestAuditEpoch,
+      lastKnownProducerId,
+      totalAuditEvents,
+      warnings: [
+        `Manifest epoch (${m.epoch}) is ahead of latest audit history epoch (${a.newEpoch}).`
+      ],
+      evaluatedAt
+    };
+  }
+  const manifestProducer = (_d = m.activeProducerId) != null ? _d : null;
+  const auditProducer = (_e = a.newProducerId) != null ? _e : null;
+  if (manifestProducer !== auditProducer) {
+    return {
+      status: "epoch-inconsistency",
+      hasManifest: true,
+      hasHistory: true,
+      currentProducerId,
+      currentEpoch,
+      latestAuditProducerId,
+      latestAuditEpoch,
+      lastKnownProducerId,
+      totalAuditEvents,
+      warnings: [
+        `Manifest producer ("${m.activeProducerId}") differs from latest audit event producer ("${a.newProducerId}") at matching epoch ${m.epoch}.`
+      ],
+      evaluatedAt
+    };
+  }
+  return {
+    status: "healthy",
+    hasManifest: true,
+    hasHistory: true,
+    currentProducerId,
+    currentEpoch,
+    latestAuditProducerId,
+    latestAuditEpoch,
+    lastKnownProducerId,
+    totalAuditEvents,
+    warnings: [],
+    evaluatedAt
+  };
+}
+
+// src/device/deviceDiagnostics.ts
+function parseJsonSafely2(content) {
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    return null;
+  }
+}
+function buildDeviceDiagnostics(input) {
+  var _a, _b, _c, _d, _e, _f;
+  const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
+  const deviceId = input.deviceId.trim();
+  const deviceState = (_b = input.deviceState) != null ? _b : void 0;
+  const ownership = (_c = input.ownership) != null ? _c : void 0;
+  const runtime = resolveDeviceRuntimeState({
+    deviceId,
+    deviceState,
+    ownership,
+    roleResolution: input.roleResolution,
+    isMobile: input.isMobile,
+    legacyRoleFallbackAllowed: input.legacyRoleFallbackAllowed,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw,
+    semanticAvailability: input.semanticAvailability,
+    semanticCapability: input.semanticCapability
+  });
+  const canonicalRole = runtime.effectiveRole === "unassigned" ? void 0 : runtime.effectiveRole;
+  const deviceSection = {
+    id: runtime.deviceId,
+    name: runtime.deviceName,
+    role: canonicalRole,
+    assignmentState: runtime.assignmentState,
+    effectiveRole: runtime.effectiveRole,
+    isConfigured: runtime.isConfigured,
+    createdAt: deviceState == null ? void 0 : deviceState.createdAt,
+    updatedAt: deviceState == null ? void 0 : deviceState.updatedAt
+  };
+  const ownershipSection = {
+    activeProducerId: runtime.activeProducerId,
+    epoch: runtime.epoch,
+    reason: runtime.ownershipReason,
+    acquiredAt: ownership == null ? void 0 : ownership.acquiredAt,
+    updatedAt: ownership == null ? void 0 : ownership.updatedAt,
+    isActiveProducer: runtime.isActiveProducer,
+    isStandbyProducer: runtime.isStandbyProducer,
+    isCompanion: runtime.isCompanion,
+    isUnassigned: runtime.isUnassigned,
+    isUnclaimed: !runtime.ownershipExists
+  };
+  const transferSection = {
+    ownershipExists: runtime.ownershipExists,
+    activeProducerId: runtime.activeProducerId,
+    currentEpoch: runtime.epoch,
+    localDeviceId: runtime.deviceId,
+    isLocalActiveProducer: runtime.isActiveProducer,
+    canTransferOwnership: runtime.canTransferOwnership,
+    eligibilityReason: runtime.transferEligibilityReason
+  };
+  let auditEvents = [];
+  if (Array.isArray(input.auditEvents)) {
+    auditEvents = input.auditEvents;
+  } else if (Array.isArray(input.auditHistoryRaw)) {
+    auditEvents = input.auditHistoryRaw.filter(isOwnershipAuditEvent);
+  }
+  const recoverySection = evaluateOwnershipRecoveryState(ownership != null ? ownership : null, auditEvents);
+  const textManifest = typeof input.textManifestRaw === "object" && input.textManifestRaw !== null ? input.textManifestRaw : void 0;
+  const textValidation = evaluateArtifactProvenance(textManifest, ownership, deviceId);
+  const textIndexArtifact = {
+    status: textValidation.status,
+    validation: textValidation,
+    diagnosticMessage: formatArtifactProvenanceDiagnostic(textValidation),
+    exists: Boolean(textManifest),
+    indexType: typeof (textManifest == null ? void 0 : textManifest.indexType) === "string" ? textManifest.indexType : void 0,
+    totalNotes: typeof (textManifest == null ? void 0 : textManifest.totalNotes) === "number" ? textManifest.totalNotes : void 0,
+    totalChunks: typeof (textManifest == null ? void 0 : textManifest.totalChunks) === "number" ? textManifest.totalChunks : void 0,
+    updatedAt: typeof (textManifest == null ? void 0 : textManifest.updatedAt) === "string" ? textManifest.updatedAt : void 0
+  };
+  const embeddingsSection = textManifest && typeof textManifest.embeddings === "object" && textManifest.embeddings !== null ? textManifest.embeddings : void 0;
+  const embeddingsValidation = evaluateArtifactProvenance(embeddingsSection, ownership, deviceId);
+  const embeddingsArtifact = {
+    status: embeddingsValidation.status,
+    validation: embeddingsValidation,
+    diagnosticMessage: formatArtifactProvenanceDiagnostic(embeddingsValidation),
+    enabled: Boolean(textManifest == null ? void 0 : textManifest.embeddingsEnabled),
+    exists: Boolean(embeddingsSection),
+    provider: typeof (embeddingsSection == null ? void 0 : embeddingsSection.provider) === "string" ? embeddingsSection.provider : void 0,
+    model: typeof (embeddingsSection == null ? void 0 : embeddingsSection.model) === "string" ? embeddingsSection.model : void 0,
+    dimensions: typeof (embeddingsSection == null ? void 0 : embeddingsSection.dimensions) === "number" ? embeddingsSection.dimensions : void 0,
+    publicationId: typeof (embeddingsSection == null ? void 0 : embeddingsSection.publicationId) === "string" ? embeddingsSection.publicationId : void 0,
+    updatedAt: typeof (embeddingsSection == null ? void 0 : embeddingsSection.updatedAt) === "string" ? embeddingsSection.updatedAt : void 0
+  };
+  const binaryManifest = typeof input.binaryManifestRaw === "object" && input.binaryManifestRaw !== null ? input.binaryManifestRaw : void 0;
+  const binaryValidation = evaluateArtifactProvenance(binaryManifest, ownership, deviceId);
+  const binaryArtifact = {
+    status: binaryValidation.status,
+    validation: binaryValidation,
+    diagnosticMessage: formatArtifactProvenanceDiagnostic(binaryValidation),
+    exists: Boolean(binaryManifest),
+    generationId: typeof (binaryManifest == null ? void 0 : binaryManifest.generationId) === "string" ? binaryManifest.generationId : void 0,
+    sourcePublicationId: typeof (binaryManifest == null ? void 0 : binaryManifest.sourcePublicationId) === "string" ? binaryManifest.sourcePublicationId : void 0,
+    provider: typeof (binaryManifest == null ? void 0 : binaryManifest.provider) === "string" ? binaryManifest.provider : void 0,
+    model: typeof (binaryManifest == null ? void 0 : binaryManifest.model) === "string" ? binaryManifest.model : void 0,
+    recordCount: typeof (binaryManifest == null ? void 0 : binaryManifest.recordCount) === "number" ? binaryManifest.recordCount : void 0,
+    dimensions: typeof (binaryManifest == null ? void 0 : binaryManifest.dimensions) === "number" ? binaryManifest.dimensions : void 0,
+    updatedAt: typeof (binaryManifest == null ? void 0 : binaryManifest.createdAt) === "string" ? binaryManifest.createdAt : void 0
+  };
+  let checkpointArtifact;
+  if (typeof input.checkpointMetaRaw === "object" && input.checkpointMetaRaw !== null) {
+    const checkpointMeta = input.checkpointMetaRaw;
+    const checkpointValidation = evaluateArtifactProvenance(checkpointMeta, ownership, deviceId);
+    checkpointArtifact = {
+      status: checkpointValidation.status,
+      validation: checkpointValidation,
+      diagnosticMessage: formatArtifactProvenanceDiagnostic(checkpointValidation),
+      exists: true,
+      operationId: typeof checkpointMeta.operationId === "string" ? checkpointMeta.operationId : void 0,
+      completedRecords: typeof checkpointMeta.completedRecords === "number" ? checkpointMeta.completedRecords : void 0,
+      provider: typeof checkpointMeta.provider === "string" ? checkpointMeta.provider : void 0,
+      model: typeof checkpointMeta.model === "string" ? checkpointMeta.model : void 0,
+      dimensions: typeof checkpointMeta.dimension === "number" ? checkpointMeta.dimension : void 0,
+      updatedAt: typeof checkpointMeta.updatedAt === "string" ? checkpointMeta.updatedAt : void 0
+    };
+  }
+  const artifactsSection = {
+    index: textIndexArtifact,
+    embeddings: embeddingsArtifact,
+    binary: binaryArtifact,
+    checkpoint: checkpointArtifact
+  };
+  const companionCap = evaluateCompanionCapability({ role: canonicalRole });
+  const companionState = evaluateCompanionConsumptionState({
+    deviceId,
+    role: canonicalRole,
+    ownership: ownership != null ? ownership : null,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw
+  });
+  const lifecycleSnapshot = input.lifecycleSnapshot;
+  const textIndexAvailable = lifecycleSnapshot.upstream.textIndex === "ready" || lifecycleSnapshot.upstream.textIndex === "stale";
+  const embeddingsDeclared = lifecycleSnapshot.read.compatibility.status !== "none" || embeddingsArtifact.exists;
+  const semanticCap = (_e = input.semanticCapability) != null ? _e : evaluateSemanticCapability({
+    textIndexAvailable,
+    embeddingsDeclaredInManifest: embeddingsDeclared,
+    vectorContractState: ((_d = companionState.vectorContractCompatibility) == null ? void 0 : _d.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
+    semanticCompatibility: input.semanticAvailability,
+    lifecycleSnapshot
+  });
+  const operationalSemanticAvailable = input.semanticCapability ? input.semanticCapability.semanticAvailable : input.semanticAvailability ? input.semanticAvailability.available : lifecycleSnapshot.read.semanticAvailable;
+  const operationalMode = input.semanticCapability ? input.semanticCapability.effectiveMode : input.semanticAvailability ? input.semanticAvailability.available ? "full" : "text-only" : lifecycleSnapshot.read.effectiveMode;
+  const companionSearchSection = {
+    supported: companionCap.canConsumeArtifacts,
+    available: operationalMode !== "unavailable",
+    mode: operationalMode,
+    isCompanionRole: companionCap.isCompanion,
+    textIndexAvailable,
+    embeddingsAvailable: embeddingsDeclared,
+    reason: companionState.provenanceReason,
+    operationalSemanticAvailable,
+    operationalMode,
+    operationalReason: (_f = lifecycleSnapshot.read.compatibility.reasons[0]) != null ? _f : semanticCap.reason,
+    operationalReasonCode: semanticCap.reasonCode,
+    semanticCapability: semanticCap
+  };
+  return {
+    timestamp,
+    device: deviceSection,
+    ownership: ownershipSection,
+    transfer: transferSection,
+    recovery: recoverySection,
+    companionSearch: companionSearchSection,
+    artifacts: artifactsSection,
+    runtime,
+    lifecycleSnapshot: input.lifecycleSnapshot
+  };
+}
+async function readDeviceDiagnostics(adapter, deviceId, options) {
+  const normalizedId = deviceId.trim();
+  let deviceState = null;
+  try {
+    deviceState = await loadDeviceState(adapter, normalizedId);
+  } catch (e) {
+    deviceState = null;
+  }
+  let ownership = null;
+  try {
+    ownership = await loadOwnership(adapter);
+  } catch (e) {
+    ownership = null;
+  }
+  let auditEvents = [];
+  try {
+    auditEvents = await loadOwnershipAuditHistory(adapter);
+  } catch (e) {
+    auditEvents = [];
+  }
+  let textManifestRaw = null;
+  try {
+    if (await adapter.exists(".lina/index/manifest.json")) {
+      const text2 = await adapter.read(".lina/index/manifest.json");
+      textManifestRaw = parseJsonSafely2(text2);
+    }
+  } catch (e) {
+    textManifestRaw = null;
+  }
+  let binaryManifestRaw = null;
+  try {
+    if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
+      const text2 = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+      binaryManifestRaw = parseJsonSafely2(text2);
+    }
+  } catch (e) {
+    binaryManifestRaw = null;
+  }
+  let checkpointMetaRaw = null;
+  try {
+    if (await adapter.exists(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata)) {
+      const text2 = await adapter.read(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata);
+      checkpointMetaRaw = parseJsonSafely2(text2);
+    }
+  } catch (e) {
+    checkpointMetaRaw = null;
+  }
+  return buildDeviceDiagnostics({
+    deviceId: normalizedId,
+    deviceState,
+    ownership,
+    auditEvents,
+    textManifestRaw,
+    binaryManifestRaw,
+    checkpointMetaRaw,
+    roleResolution: options.roleResolution,
+    legacyRoleFallbackAllowed: options.legacyRoleFallbackAllowed,
+    isMobile: options.isMobile,
+    semanticAvailability: options.semanticAvailability,
+    semanticCapability: options.semanticCapability,
+    lifecycleSnapshot: options.lifecycleSnapshot
+  });
+}
 
 // src/search/hybridSearch.ts
 var import_obsidian27 = require("obsidian");
@@ -18343,7 +19550,7 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
   return strings.sidebarFreshnessUnknown;
 }
 function buildSidebarStatusViewModel(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const {
     deviceId,
     deviceRole,
@@ -18358,84 +19565,16 @@ function buildSidebarStatusViewModel(input) {
     companionState
   } = input;
   const strings = (_b = input.strings) != null ? _b : getStrings((_a = input.language) != null ? _a : "pt-PT");
-  const isCompanionRole2 = Boolean(input.deviceRole === "companion" || input.companionState != null);
-  const isStandbyRole = Boolean(input.isStandbyProducer || input.deviceRole === "producer" && input.isAuthorizedProducer === false);
   const isAuthorizedProducerRole = Boolean((_c = input.isAuthorizedProducer) != null ? _c : input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId));
-  const hasValidVectors = Boolean(input.semanticAvailable || ((_d = input.runtimeEmbeddings) == null ? void 0 : _d.semanticAvailable) && input.semanticAvailable !== false);
-  const isMismatch = Boolean(((_e = input.runtimeEmbeddings) == null ? void 0 : _e.contractState) === "mismatch" || input.semanticReasonCode === "model-incompatible" || ((_f = input.runtimeEmbeddings) == null ? void 0 : _f.reasonCode) === "model-incompatible");
-  const lifecycleSnapshot = (_I = input.lifecycleSnapshot) != null ? _I : adaptCurrentStateToLifecycleSnapshot({
-    companionState: input.companionState,
-    workAssessment: isMismatch ? {
-      kind: "pending",
-      mode: "full-rebuild",
-      updateRequired: true,
-      severity: "blocking",
-      cost: "local",
-      reasons: ["model-incompatible"]
-    } : input.embeddingsWorkAvailable !== void 0 ? {
-      kind: input.embeddingsWorkAvailable ? "pending" : "none",
-      mode: input.embeddingsWorkAvailable ? "incremental" : void 0,
-      updateRequired: input.embeddingsWorkAvailable,
-      severity: input.embeddingsWorkAvailable ? "action" : "none",
-      cost: "local",
-      reasons: input.embeddingsWorkAvailable ? ["work-available"] : ["up-to-date"]
-    } : void 0,
-    deviceRuntimeState: {
-      deviceId: (_g = input.deviceId) != null ? _g : "device-1",
-      deviceName: "Device",
-      effectiveRole: isCompanionRole2 ? "companion" : "producer",
-      assignmentState: "assigned",
-      isConfigured: true,
-      ownershipExists: true,
-      isActiveProducer: isAuthorizedProducerRole,
-      isStandbyProducer: isStandbyRole,
-      isCompanion: isCompanionRole2,
-      isUnassigned: false,
-      canPublish: isAuthorizedProducerRole,
-      canTransferOwnership: false,
-      transferEligibilityReason: "ready",
-      embeddings: {
-        configured: (_h = input.embeddingsEnabled) != null ? _h : true,
-        textIndexAvailable: (_i = input.textIndexReady) != null ? _i : true,
-        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_j = input.runtimeEmbeddings) == null ? void 0 : _j.exists)),
-        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_k = input.runtimeEmbeddings) == null ? void 0 : _k.exists)),
-        vectorFileState: "available",
-        provenance: { stale: false },
-        compatibility: { compatible: !isMismatch },
-        contractState: isMismatch ? "mismatch" : (_m = (_l = input.runtimeEmbeddings) == null ? void 0 : _l.contractState) != null ? _m : "compatible",
-        readiness: { loaded: true, runtimeReady: true },
-        runtimeState: "ready",
-        semanticAvailable: hasValidVectors && !isMismatch,
-        effectiveMode: hasValidVectors && !isMismatch ? "full" : "text-only"
-      }
-    },
-    upstreamTextIndex: input.textIndexReady ? "ready" : input.textIndexUsability === "missing" ? "missing" : "invalid",
-    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_n = input.runtimeEmbeddings) == null ? void 0 : _n.exists) || hasValidVectors || isMismatch),
-    validForSearchCount: hasValidVectors && !isMismatch ? 1 : 0,
-    factsChecking: input.embeddingsChecking,
-    publishedIdentity: isMismatch || hasValidVectors || input.embeddingsReady || ((_o = input.runtimeEmbeddings) == null ? void 0 : _o.exists) ? {
-      provider: (_r = (_q = (_p = input.runtimeEmbeddings) == null ? void 0 : _p.compatibility) == null ? void 0 : _q.provider) != null ? _r : "default",
-      model: (_u = (_t = (_s = input.runtimeEmbeddings) == null ? void 0 : _s.compatibility) == null ? void 0 : _t.model) != null ? _u : "default",
-      dimensions: (_x = (_w = (_v = input.runtimeEmbeddings) == null ? void 0 : _v.compatibility) == null ? void 0 : _w.dimensions) != null ? _x : 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0,
-    targetIdentity: isMismatch ? void 0 : hasValidVectors || input.embeddingsReady || ((_y = input.runtimeEmbeddings) == null ? void 0 : _y.exists) ? {
-      provider: (_B = (_A = (_z = input.runtimeEmbeddings) == null ? void 0 : _z.compatibility) == null ? void 0 : _A.provider) != null ? _B : "default",
-      model: (_E = (_D = (_C = input.runtimeEmbeddings) == null ? void 0 : _C.compatibility) == null ? void 0 : _D.model) != null ? _E : "default",
-      dimensions: (_H = (_G = (_F = input.runtimeEmbeddings) == null ? void 0 : _F.compatibility) == null ? void 0 : _G.dimensions) != null ? _H : 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0
-  });
-  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_J = input.embeddingsEnabled) != null ? _J : true);
-  const embeddingsUpdatedAt = (_K = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _K : input.embeddingsUpdatedAt;
+  const lifecycleSnapshot = input.lifecycleSnapshot;
+  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_d = input.embeddingsEnabled) != null ? _d : true);
+  const embeddingsUpdatedAt = (_e = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _e : input.embeddingsUpdatedAt;
   const embeddingsChecking = lifecycleSnapshot.primary === "VERIFYING" || Boolean(input.embeddingsChecking);
   const semanticAvailable = lifecycleSnapshot.read.semanticAvailable;
-  const semanticReason = (_M = (_L = input.semanticReason) != null ? _L : lifecycleSnapshot.read.reasonCode) != null ? _M : lifecycleSnapshot.read.compatibility.reasons[0];
+  const semanticReason = (_g = (_f = input.semanticReason) != null ? _f : lifecycleSnapshot.read.reasonCode) != null ? _g : lifecycleSnapshot.read.compatibility.reasons[0];
   const semanticPreparing = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || Boolean(input.semanticPreparing);
   const nowMs = resolveNowMs(input.currentTime);
-  const currentSearchMode = (_N = input.currentSearchMode) != null ? _N : "hibrida";
+  const currentSearchMode = (_h = input.currentSearchMode) != null ? _h : "hibrida";
   let roleKey;
   if (isAuthorizedProducer !== void 0) {
     if (isAuthorizedProducer) {
@@ -18484,7 +19623,7 @@ function buildSidebarStatusViewModel(input) {
       };
       break;
   }
-  const effectiveTextUpdated = (_Q = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_O = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _O.textIndex.lastSuccessfulPublicationAt) != null ? _Q : (_P = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _P.updatedAt;
+  const effectiveTextUpdated = (_k = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_i = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _i.textIndex.lastSuccessfulPublicationAt) != null ? _k : (_j = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _j.updatedAt;
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
@@ -18504,8 +19643,8 @@ function buildSidebarStatusViewModel(input) {
     humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
     updatedAt: effectiveTextUpdated
   };
-  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_R = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _R.embeddings.lastSuccessfulPublicationAt;
-  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_S = input.runtimeEmbeddings) == null ? void 0 : _S.runtimeState) === "checking");
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_l = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _l.embeddings.lastSuccessfulPublicationAt;
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_m = input.runtimeEmbeddings) == null ? void 0 : _m.runtimeState) === "checking");
   const isOperational = Boolean(semanticAvailable && lifecycleSnapshot.primary !== "ERROR");
   let embeddingsStatus;
   if (effectiveEmbeddingsUpdated && Number.isNaN(Date.parse(effectiveEmbeddingsUpdated))) {
@@ -18593,7 +19732,7 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedPolicyMismatch
     };
-  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_T = input.runtimeEmbeddings) == null ? void 0 : _T.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
+  } else if (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible" || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
     degradedAlert = {
       kind: "vector-mismatch",
       level: "warning",
@@ -18810,33 +19949,33 @@ function shouldHighlightTerm(term) {
 function isWordCharacterForHighlight(char) {
   return !!char && (char.toLowerCase() !== char.toUpperCase() || /[0-9_-]/.test(char));
 }
-function renderHighlightedText(container, text, terms) {
-  if (!text || !terms || terms.length === 0) {
-    container.createSpan({ text });
+function renderHighlightedText(container, text2, terms) {
+  if (!text2 || !terms || terms.length === 0) {
+    container.createSpan({ text: text2 });
     return;
   }
   const validTerms = terms.filter(shouldHighlightTerm).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   if (validTerms.length === 0) {
-    container.createSpan({ text });
+    container.createSpan({ text: text2 });
     return;
   }
   const regex = new RegExp(`(${validTerms.join("|")})`, "gi");
   let lastIndex = 0;
   let match;
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(text2)) !== null) {
     let matchStart = match.index;
     let matchEnd = regex.lastIndex;
-    while (matchStart > lastIndex && isWordCharacterForHighlight(text.charAt(matchStart - 1))) {
+    while (matchStart > lastIndex && isWordCharacterForHighlight(text2.charAt(matchStart - 1))) {
       matchStart--;
     }
-    while (matchEnd < text.length && isWordCharacterForHighlight(text.charAt(matchEnd))) {
+    while (matchEnd < text2.length && isWordCharacterForHighlight(text2.charAt(matchEnd))) {
       matchEnd++;
     }
     if (matchStart > lastIndex) {
-      container.createSpan({ text: text.substring(lastIndex, matchStart) });
+      container.createSpan({ text: text2.substring(lastIndex, matchStart) });
     }
     const mark = container.createEl("mark");
-    mark.textContent = text.substring(matchStart, matchEnd);
+    mark.textContent = text2.substring(matchStart, matchEnd);
     mark.addClass("lina-bg-highlight");
     mark.addClass("lina-color-inherit");
     mark.addClass("lina-radius-2");
@@ -18844,12 +19983,12 @@ function renderHighlightedText(container, text, terms) {
     lastIndex = matchEnd;
     regex.lastIndex = matchEnd;
   }
-  if (lastIndex < text.length) {
-    container.createSpan({ text: text.substring(lastIndex) });
+  if (lastIndex < text2.length) {
+    container.createSpan({ text: text2.substring(lastIndex) });
   }
 }
-function normalizeSearchResultText(text) {
-  return text.replace(/\.md$/i, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim().toLowerCase();
+function normalizeSearchResultText(text2) {
+  return text2.replace(/\.md$/i, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 function snippetLooksLikeFrontmatter(snippet) {
   var _a;
@@ -18899,8 +20038,8 @@ function getSearchSnippetDisplay(card) {
     (snippet) => !snippet.isFrontmatter && !snippetRepeatsTitle(snippet.cleaned, card.basename)
   );
   if (usefulSnippet) {
-    const text = usefulSnippet.cleaned.length > 280 ? `${usefulSnippet.cleaned.substring(0, 280)}...` : usefulSnippet.cleaned;
-    return { text, shouldHighlight: true, isFallback: false };
+    const text2 = usefulSnippet.cleaned.length > 280 ? `${usefulSnippet.cleaned.substring(0, 280)}...` : usefulSnippet.cleaned;
+    return { text: text2, shouldHighlight: true, isFallback: false };
   }
   if (allSnippets.some((snippet) => snippet.isFrontmatter)) {
     return {
@@ -18944,11 +20083,11 @@ function extrairTagsDeValorYaml(value) {
 function formatTagUsageLabel(count, alreadyUsedLabel) {
   return `${alreadyUsedLabel}: ${count}`;
 }
-function normalizeComparableText(text) {
-  return text.replace(/\s+/g, " ").trim().toLowerCase();
+function normalizeComparableText(text2) {
+  return text2.replace(/\s+/g, " ").trim().toLowerCase();
 }
-function normalizeTaskText(text) {
-  return normalizeComparableText(text.replace(/^- \[[ xX]\]\s*/, ""));
+function normalizeTaskText(text2) {
+  return normalizeComparableText(text2.replace(/^- \[[ xX]\]\s*/, ""));
 }
 function getMarkdownSection(content, heading) {
   var _a;
@@ -18963,7 +20102,7 @@ function getMarkdownSection(content, heading) {
 function sanitizeFileName(name) {
   return name.replace(/[<>:"/\\|?*]/g, " ");
 }
-function capitalizarTitulo(text) {
+function capitalizarTitulo(text2) {
   const min\u00FAsculas = /* @__PURE__ */ new Set([
     "e",
     "de",
@@ -19018,7 +20157,7 @@ function capitalizarTitulo(text) {
     "aqueles",
     "aquelas"
   ]);
-  return text.trim().split(/\s+/).map((word, index) => {
+  return text2.trim().split(/\s+/).map((word, index) => {
     if (index === 0) {
       return word.charAt(0).toUpperCase() + word.slice(1);
     }
@@ -19100,8 +20239,8 @@ function isSameFolderForMatching(a, b) {
   const segmentB = normalizeFolderSegmentForMatching(b);
   return fullA === fullB || segmentA === fullB || fullA === segmentB || segmentA === segmentB;
 }
-function extrairJsonDaResposta(text) {
-  const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+function extrairJsonDaResposta(text2) {
+  const jsonBlockMatch = text2.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
     try {
       const parsed = JSON.parse(jsonBlockMatch[1]);
@@ -19109,7 +20248,7 @@ function extrairJsonDaResposta(text) {
     } catch (e) {
     }
   }
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text2.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -19331,8 +20470,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const domSelection = this.getDomSelectionOutsideLinaPanel();
     this.cacheContextSelection(activeFile, domSelection, "dom");
   }
-  cacheContextSelection(activeFile, text, source, selectionRange) {
-    const trimmedText = text.trim();
+  cacheContextSelection(activeFile, text2, source, selectionRange) {
+    const trimmedText = text2.trim();
     if (!trimmedText) {
       return false;
     }
@@ -19773,11 +20912,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     });
   }
   getActiveTextAiProfile() {
-    const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
-    const defaults = getAnalysisProviderDefaults(provider);
-    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || defaults.model;
-    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || defaults.baseUrl;
-    const isLocal = provider === "ollama";
+    const { provider, model, baseUrl } = resolveEffectiveAnalysisConfig(
+      {
+        provider: getLocalAnalysisProvider(),
+        model: getLocalAnalysisModel(),
+        baseUrl: getLocalAnalysisBaseUrl()
+      },
+      this.plugin.settings
+    );
+    const isLocal = isProviderEndpointLocal(provider, baseUrl);
     return { provider, model, baseUrl, isLocal };
   }
   async generateTextWithActiveAiProfile(profile, prompt) {
@@ -20286,9 +21429,9 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       void this.copySuggestedMetadataToClipboard(cleanText);
     });
   }
-  async copySuggestedMetadataToClipboard(text) {
+  async copySuggestedMetadataToClipboard(text2) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text2);
       new import_obsidian28.Notice(this.L.analysisCopyMetadataSuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
@@ -21009,8 +22152,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       willBeTruncated: noteText.length > _LinaSearchView.MAX_CONTENT_CHARS
     };
   }
-  countWordsForAskContext(text) {
-    return text.trim().split(/\s+/).filter(Boolean).length;
+  countWordsForAskContext(text2) {
+    return text2.trim().split(/\s+/).filter(Boolean).length;
   }
   async runTagsCommand() {
     var _a;
@@ -24279,8 +25422,8 @@ ${limitedContent}
     line.createSpan({ text: value });
     return line;
   }
-  createInboxCardParagraph(container, text) {
-    const paragraph = container.createDiv({ text });
+  createInboxCardParagraph(container, text2) {
+    const paragraph = container.createDiv({ text: text2 });
     paragraph.addClass("lina-pre-wrap");
     paragraph.addClass("lina-break-word");
     return paragraph;
@@ -26184,6 +27327,7 @@ var ReconciliationWorker = class {
   }
   async runStartupReconciliation() {
     return this.run("startup", async () => {
+      if (this.options.runStartupEmbeddingRecovery) await this.options.runStartupEmbeddingRecovery();
       await this.options.runStartupReconciliation();
       await this.options.runStartupBinaryArtifactMigration();
     });
@@ -26466,7 +27610,7 @@ function prepareEmbeddingUpdateConfirmation(options) {
     return null;
   }
   const semanticSearchImpact = totalToGenerate === 0 && validCount > 0 ? "complete" : validCount > 0 ? "partial" : "unavailable";
-  const costWarningMessage = providerCapability.hasExternalCost ? strings.confirmEmbeddingUpdateCostWarningText.replace("{provider}", providerCapability.providerId) : strings.confirmEmbeddingUpdateLocalNoCost;
+  const costWarningMessage = providerCapability.hasExternalCost ? strings.confirmEmbeddingUpdateCostWarningText.replace("{provider}", providerCapability.providerId) : providerCapability.isLocal ? strings.confirmEmbeddingUpdateLocalNoCost : strings.confirmEmbeddingUpdateRemoteEndpointWarningText;
   return {
     providerId: providerCapability.providerId,
     modelName: modelName && modelName.trim().length > 0 ? modelName.trim() : void 0,
@@ -26478,7 +27622,7 @@ function prepareEmbeddingUpdateConfirmation(options) {
     totalToGenerate,
     totalChunks,
     semanticSearchImpact,
-    requiresConfirmation: policyDecision.requiresConfirmation || providerCapability.hasExternalCost || isFullRebuild,
+    requiresConfirmation: policyDecision.requiresConfirmation || providerCapability.hasExternalCost || !providerCapability.isLocal || isFullRebuild,
     costWarningMessage,
     isFullRebuild
   };
@@ -26728,8 +27872,8 @@ var OwnershipGate = class {
     const decision = await this.evaluate();
     return decision.authorized;
   }
-  async acquireFence() {
-    const decision = await this.evaluate();
+  async acquireFence(options) {
+    const decision = options && this.adapter ? await evaluateOwnershipGate(this.adapter, this.getDeviceId(), this.getRole(), void 0, options) : await this.evaluate();
     if (!decision.authorized || !decision.activeProducerId || !decision.epoch) {
       return void 0;
     }
@@ -26989,6 +28133,14 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       activePolicy: this.getCanonicalExclusionPolicy()
     });
   }
+  /** Factual usability of the text index for the lifecycle snapshot; unknown when it cannot be read. */
+  async readUpstreamTextIndexUsability() {
+    try {
+      return (await this.getTextIndexStatus()).usability;
+    } catch (e) {
+      return void 0;
+    }
+  }
   isContentExcludedByUserRules(content) {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -27025,6 +28177,10 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
+    this.app.workspace.onLayoutReady(() => {
+      void this.diagnoseRuntimeSqlite().catch(() => {
+      });
+    });
     if (getDeviceCapabilities().canReconcileStartupDiffs) {
       this.app.workspace.onLayoutReady(() => {
         window.setTimeout(() => {
@@ -27091,6 +28247,44 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
             new import_obsidian30.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+          }
+        })();
+      }
+    });
+    this.addCommand({
+      id: "diagnose-runtime-sqlite",
+      name: "Diagnose runtime sqlite",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseRuntimeSqlite();
+            const statusText2 = report.nodeSqliteAvailable && report.databaseSyncAvailable ? "AVAILABLE (PASS)" : "UNAVAILABLE (BLOCKED)";
+            new import_obsidian30.Notice(`Lina SQLite Diagnostic:
+node:sqlite: ${statusText2}
+Node: ${report.node}
+Electron: ${report.electron}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian30.Notice(`Lina SQLite Diagnostic error: ${message}`);
+          }
+        })();
+      }
+    });
+    this.addCommand({
+      id: "diagnose-shadow-write-runtime",
+      name: "Diagnose shadow write runtime",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseShadowWriteRuntime();
+            const statusText2 = report.shadowWritePassed && report.reopenPassed && report.controlledFailurePassed ? "PASS" : "FAIL";
+            new import_obsidian30.Notice(`Lina Shadow Write Diagnostic:
+Status: ${statusText2}
+DB Outside Vault: ${report.dbOutsideVault}
+Records: ${report.recordCount}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian30.Notice(`Lina Shadow Write Diagnostic error: ${message}`);
           }
         })();
       }
@@ -27362,24 +28556,28 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     const workState = (_a = this.embeddingWorkStatusController) == null ? void 0 : _a.getState();
     const summary = workState == null ? void 0 : workState.summary;
     if (summary && !isIndeterminateWorkSummary(summary)) {
-      return buildEmbeddingWorkLifecycleSnapshot(summary, (_b = workState == null ? void 0 : workState.revision) != null ? _b : 0, runtime, operationState2);
+      const liveSummary = {
+        ...summary,
+        targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability().isLocal
+      };
+      return buildEmbeddingWorkLifecycleSnapshot(liveSummary, (_b = workState == null ? void 0 : workState.revision) != null ? _b : 0, runtime, operationState2);
     }
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
     return adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtime,
       operationState: operationState2,
       upstreamTextIndex: this.textIndexLoaded ? "ready" : void 0,
+      canonicalPairState: summary == null ? void 0 : summary.canonicalPairState,
       isExternalProvider: !providerCapability.isLocal,
-      ...summary ? {
-        workAssessment: {
-          kind: "indeterminate",
-          updateRequired: false,
-          severity: "none",
-          cost: "none",
-          reasons: ["canonical-unreadable"]
-        }
-      } : {}
+      // Without a trustworthy work summary the state is unknown, never "no work" (LINA-15D-B / S9).
+      workAssessment: {
+        kind: "indeterminate",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: [summary ? "canonical-unreadable" : "work-summary-unavailable"]
+      }
     });
   }
   /** Overlays the live ownership decision on the cached device runtime state. */
@@ -27489,16 +28687,11 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     } catch (e) {
       companionState = null;
     }
-    const operationState2 = this.getEmbeddingOperationState();
-    const vectorContract = await this.loadCanonicalVectorContract();
-    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: runtimeState,
-      operationState: operationState2,
-      companionState,
-      vectorContract,
-      canonicalExists: runtimeState.embeddings.exists,
-      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0
-    });
+    if (!this.getEmbeddingWorkStatusController().getState().summary) {
+      await this.refreshEmbeddingWorkStatus();
+    }
+    const liveSnapshot = this.getEmbeddingLifecycleSnapshot();
+    const lifecycleSnapshot = companionState ? { ...liveSnapshot, info: { ...liveSnapshot.info, provenance: companionState.provenanceValidity } } : liveSnapshot;
     const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
@@ -27554,16 +28747,16 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     if (adapter) {
       try {
         if (await adapter.exists(".lina/index/manifest.json")) {
-          const text = await adapter.read(".lina/index/manifest.json");
-          textManifestRaw = JSON.parse(text);
+          const text2 = await adapter.read(".lina/index/manifest.json");
+          textManifestRaw = JSON.parse(text2);
         }
       } catch (e) {
         textManifestRaw = null;
       }
       try {
         if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
-          const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
-          binaryManifestRaw = JSON.parse(text);
+          const text2 = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+          binaryManifestRaw = JSON.parse(text2);
         }
       } catch (e) {
         binaryManifestRaw = null;
@@ -27923,7 +29116,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
             return false;
           }
           const config = this.getEffectiveEmbeddingConfig();
-          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
           if (!providerCapability.isLocal) {
             return false;
           }
@@ -27974,6 +29167,18 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         capabilities: getDeviceCapabilities(),
         canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runStartupEmbeddingRecovery: async () => {
+          const recovery = await recoverCanonicalEmbeddingsAtStartup(this.app, this.getIndexWriteCoordinator(), async () => {
+            const gate = this.getOwnershipGate();
+            const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+            return token ? { assertCurrent: () => gate.assertFence(token) } : void 0;
+          });
+          await this.getBinaryEmbeddingCopyController().recover();
+          if (recovery.changed) {
+            this.invalidateRuntimeEmbeddingIndex("canonical-recovered");
+            this.markEmbeddingWorkStatusDirty("embeddings-published");
+          }
+        },
         runStartupBinaryArtifactMigration: async () => {
           await this.getMaintenanceEngine().migrateBinaryArtifactsAtStartup();
         },
@@ -28060,7 +29265,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     (_a = this.binaryEmbeddingCopyController) != null ? _a : this.binaryEmbeddingCopyController = new BinaryEmbeddingCopyController(
       this.app.vault.adapter,
       createWebCryptoEmbeddingDigest(),
-      this.getIndexWriteCoordinator()
+      this.getIndexWriteCoordinator(),
+      void 0,
+      async () => {
+        const gate = this.getOwnershipGate();
+        const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+        return token ? { assertCurrent: () => gate.assertFence(token) } : void 0;
+      }
     );
     return this.binaryEmbeddingCopyController;
   }
@@ -28093,13 +29304,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     return request;
   }
   async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
       new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
     const deviceRole = this.getEffectiveDeviceRole();
     if (deviceRole !== "producer") {
       new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
@@ -28112,17 +29323,19 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: !isFullRebuild && ((_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true)
+      incremental: !isFullRebuild && EMBEDDING_GENERATION_INCREMENTAL
     });
-    const policy = (_c = this.settings.embeddingUpdateMode) != null ? _c : "manual";
+    const policy = (_a = this.settings.embeddingUpdateMode) != null ? _a : "manual";
     const effectiveUpdatePlan = isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan;
     const workSummary = {
       ...summary != null ? summary : {},
       updatePlan: effectiveUpdatePlan,
-      exists: (_d = summary == null ? void 0 : summary.exists) != null ? _d : true,
-      canonicalReadability: (_e = summary == null ? void 0 : summary.canonicalReadability) != null ? _e : "readable",
+      exists: (_b = summary == null ? void 0 : summary.exists) != null ? _b : true,
+      canonicalReadability: (_c = summary == null ? void 0 : summary.canonicalReadability) != null ? _c : "readable",
       provider: config.provider,
-      model: config.model
+      model: config.model,
+      textIndexStatus: await this.readUpstreamTextIndexUsability(),
+      targetEndpointIsExternal: !providerCapability.isLocal
     };
     const snapshot = buildEmbeddingWorkLifecycleSnapshot(
       workSummary,
@@ -28133,8 +29346,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
     const confirmationRequest = prepareEmbeddingUpdateConfirmation({
       state: {
-        totalChunks: (_f = summary == null ? void 0 : summary.totalChunks) != null ? _f : 0,
-        validCount: (_g = summary == null ? void 0 : summary.validCount) != null ? _g : 0,
+        totalChunks: (_d = summary == null ? void 0 : summary.totalChunks) != null ? _d : 0,
+        validCount: (_e = summary == null ? void 0 : summary.validCount) != null ? _e : 0,
         missingCount: updatePlan.missingCount,
         staleCount: updatePlan.staleToReplaceCount,
         obsoleteCount: updatePlan.obsoleteToDropCount,
@@ -28165,6 +29378,9 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
           cancelled: true
         };
       }
+    }
+    if (!this.getEmbeddingWorkStatusController().getState().summary) {
+      await this.refreshEmbeddingWorkStatus();
     }
     const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
     if (request.status !== "accepted") {
@@ -28497,47 +29713,45 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       const activePolicy = this.getCanonicalExclusionPolicy();
       const manifestHash = (_b = status.manifest) == null ? void 0 : _b.exclusionPolicyHash;
       if (activePolicy && manifestHash !== activePolicy.policyHash) {
-        const gate = this.getOwnershipGate();
-        const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : void 0;
-        if (typeof gate.acquireFence === "function" && !fenceToken) return;
-        const provenance = gate.getProvenance();
-        const pathExclusions = this.getIndexPathExclusions();
-        const excludedContentContains2 = this.getExcludedContentTerms();
-        await persistAndActivateTextIndexCandidate(
-          () => {
-            var _a2;
-            return saveTextIndex(
-              this.app,
-              this.indexedNotes,
-              this.indexedChunks,
-              { enabled: true, chunkSize: 1200, overlap: 150 },
-              (_a2 = status.excludedNotes) != null ? _a2 : 0,
-              {
-                enabled: true,
-                alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-                excludedFoldersCount: pathExclusions.excludedFolders.length,
-                excludedPathContainsCount: pathExclusions.excludedPathContains.length,
-                excludedContentContainsCount: excludedContentContains2.length
+        const outcome = await runCanonicalMaintenance(
+          this.getIndexWriteCoordinator(),
+          () => this.acquireCanonicalMaintenanceFence(),
+          async (fence) => {
+            const provenance = fence.identity ? createArtifactProvenance(fence.identity.producerDeviceId, fence.identity.epoch) : void 0;
+            const pathExclusions = this.getIndexPathExclusions();
+            const excludedContentContains2 = this.getExcludedContentTerms();
+            await persistAndActivateTextIndexCandidate(
+              () => {
+                var _a2;
+                return saveTextIndex(
+                  this.app,
+                  this.indexedNotes,
+                  this.indexedChunks,
+                  { enabled: true, chunkSize: 1200, overlap: 150 },
+                  (_a2 = status.excludedNotes) != null ? _a2 : 0,
+                  {
+                    enabled: true,
+                    alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+                    excludedFoldersCount: pathExclusions.excludedFolders.length,
+                    excludedPathContainsCount: pathExclusions.excludedPathContains.length,
+                    excludedContentContainsCount: excludedContentContains2.length
+                  },
+                  provenance,
+                  activePolicy,
+                  fence
+                );
               },
-              provenance,
-              activePolicy
+              () => {
+                this.textIndexLoaded = true;
+              }
             );
-          },
-          () => {
-            this.textIndexLoaded = true;
+            return purgeOrphanEmbeddingRecords(this.app, this.indexedChunks, activePolicy, provenance, fence);
           }
-        );
-        try {
-          await purgeOrphanEmbeddingRecords(
-            this.app,
-            this.indexedChunks,
-            activePolicy,
-            provenance,
-            fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : void 0
-          );
-        } catch (purgeError) {
+        ).catch((purgeError) => {
           console.warn("Lina: failed to purge orphan embedding records:", purgeError);
-        }
+          return void 0;
+        });
+        this.finishCanonicalPurge(outcome);
       }
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
@@ -28553,18 +29767,18 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       embeddingWorkInvalidationReason: "text-index-published"
     });
     try {
-      const activePolicy = this.getCanonicalExclusionPolicy();
-      const gate = this.getOwnershipGate();
-      const fenceToken = typeof gate.acquireFence === "function" ? await gate.acquireFence() : void 0;
-      if (typeof gate.acquireFence === "function" && !fenceToken) return;
-      const provenance = gate.getProvenance();
-      await purgeOrphanEmbeddingRecords(
+      const result = await purgeOrphanEmbeddingsCoordinated(
         this.app,
+        this.getIndexWriteCoordinator(),
+        () => this.acquireCanonicalMaintenanceFence(),
         this.indexedChunks,
-        activePolicy,
-        provenance,
-        fenceToken ? { assertCurrent: () => gate.assertFence(fenceToken) } : void 0
+        this.getCanonicalExclusionPolicy(),
+        {
+          getProvenance: (fence) => fence.identity ? createArtifactProvenance(fence.identity.producerDeviceId, fence.identity.epoch) : void 0,
+          onPurged: () => this.invalidateAfterCanonicalPurge()
+        }
       );
+      this.logCanonicalPurgeRefusal(result);
       try {
         await this.getBinaryEmbeddingCopyController().check(true);
       } catch (e) {
@@ -28572,6 +29786,37 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     } catch (purgeError) {
       console.warn("Lina: failed to purge orphan embedding records after exclusion reconciliation:", purgeError);
     }
+  }
+  /** Purge never claims ownership: without a valid current Active Producer it must not write. */
+  async acquireCanonicalMaintenanceFence() {
+    const gate = this.getOwnershipGate();
+    const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+    return token ? { assertCurrent: () => gate.assertFence(token), identity: { producerDeviceId: token.producerDeviceId, epoch: token.epoch } } : void 0;
+  }
+  invalidateAfterCanonicalPurge() {
+    this.invalidateRuntimeEmbeddingIndex("canonical-published");
+    this.markEmbeddingWorkStatusDirty("embeddings-published");
+  }
+  logCanonicalPurgeRefusal(result) {
+    var _a;
+    if (result.status === "refused") {
+      this.logAutomaticUpdateDiagnostic("orphan embedding purge refused", {
+        reason: (_a = result.reason) != null ? _a : "unknown",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+  }
+  finishCanonicalPurge(outcome) {
+    if (!outcome) return;
+    if (outcome.status === "refused") {
+      this.logAutomaticUpdateDiagnostic("orphan embedding purge refused", {
+        reason: outcome.reason,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      return;
+    }
+    if (outcome.value.status === "purged") this.invalidateAfterCanonicalPurge();
+    else this.logCanonicalPurgeRefusal(outcome.value);
   }
   onTextIndexRebuildProgress(listener) {
     this.textIndexRebuildListeners.add(listener);
@@ -28715,7 +29960,12 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         excludedContentContainsCount: excludedContentContains.length
       };
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
-      const provenance = await this.getOwnershipGate().evaluateProvenance();
+      const writeFence = await this.acquireCanonicalMaintenanceFence();
+      if (!writeFence) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+      }
+      const provenance = writeFence.identity ? createArtifactProvenance(writeFence.identity.producerDeviceId, writeFence.identity.epoch) : void 0;
       const policy = this.getCanonicalExclusionPolicy();
       const success = await saveTextIndex(
         this.app,
@@ -28725,7 +29975,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         totalExcludedCount,
         exclusionsInfo,
         provenance,
-        policy
+        policy,
+        writeFence
       );
       if (!success) {
         this.setTextIndexRebuildProgress({ status: "failed" });
@@ -28846,8 +30097,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     try {
       const textManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/manifest.json");
       if (await adapter.exists(textManifestPath)) {
-        const text = await adapter.read(textManifestPath);
-        const parsed = JSON.parse(text);
+        const text2 = await adapter.read(textManifestPath);
+        const parsed = JSON.parse(text2);
         contract = extractVectorContract(parsed);
       }
     } catch (e) {
@@ -28856,8 +30107,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       try {
         const binaryManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/embeddings.binary.manifest.json");
         if (await adapter.exists(binaryManifestPath)) {
-          const text = await adapter.read(binaryManifestPath);
-          const parsed = JSON.parse(text);
+          const text2 = await adapter.read(binaryManifestPath);
+          const parsed = JSON.parse(text2);
           contract = extractVectorContract(parsed);
         }
       } catch (e) {
@@ -28865,6 +30116,14 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     }
     this.effectiveVectorContract = contract;
     return contract;
+  }
+  /**
+   * Capability of the *configured* embeddings endpoint: the provider capability plus the effective
+   * locality of the Base URL (LINA-15F). Always computed live from the current configuration; an
+   * Ollama provider pointing to a non-loopback endpoint is NOT local.
+   */
+  getEffectiveEmbeddingEndpointCapability(config = this.getEffectiveEmbeddingConfig()) {
+    return resolveEndpointProviderCapability(config.provider, config.baseUrl);
   }
   getEffectiveEmbeddingConfig(targetContract) {
     const isCompanion = this.getLocalDeviceRole() === "companion";
@@ -28884,9 +30143,9 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         };
       }
       const provider2 = normalizeSupportedProvider(contract.provider);
-      const defaults2 = getEmbeddingProviderDefaults(provider2);
-      const configuredBaseUrl2 = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider2 === "ollama" ? this.settings.aiBaseUrl : "") || defaults2.baseUrl;
-      const baseUrl2 = chooseProviderDefaultBaseUrl(configuredBaseUrl2, provider2) || OLLAMA_DEFAULT_BASE_URL;
+      const defaults = getEmbeddingProviderDefaults(provider2);
+      const configuredBaseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider2 === "ollama" ? this.settings.aiBaseUrl : "") || defaults.baseUrl;
+      const baseUrl2 = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider2) || OLLAMA_DEFAULT_BASE_URL;
       const model2 = contract.model;
       const timeoutMs2 = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3;
       const localBatchSize2 = getLocalEmbeddingsBatchSize();
@@ -28903,14 +30162,14 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         contract
       };
     }
-    const provider = normalizeSupportedProvider(
-      getLocalEmbeddingsProvider() || this.settings.embeddingProvider
+    const { provider, baseUrl, model } = resolveEffectiveEmbeddingsConfig(
+      {
+        provider: getLocalEmbeddingsProvider(),
+        model: getLocalEmbeddingsModel(),
+        baseUrl: getLocalEmbeddingsBaseUrl()
+      },
+      this.settings
     );
-    const defaults = getEmbeddingProviderDefaults(provider);
-    const configuredBaseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider === "ollama" ? this.settings.aiBaseUrl : "") || defaults.baseUrl;
-    const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider) || OLLAMA_DEFAULT_BASE_URL;
-    const configuredModel = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model;
-    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text";
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3;
     const localBatchSize = getLocalEmbeddingsBatchSize();
     const configuredBatchSize = localBatchSize !== "" ? Number(localBatchSize) : this.settings.embeddingBatchSize;
@@ -28932,20 +30191,22 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
    * fresh, canonical decision even before a user requests status details.
    */
   async hasAutomaticEmbeddingWork() {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const config = this.getEffectiveEmbeddingConfig();
     const policy = (_b = (_a = this.settings) == null ? void 0 : _a.embeddingUpdateMode) != null ? _b : "manual";
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: (_d = (_c = this.settings.generateOnlyMissingEmbeddings) != null ? _c : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _d : true
+      incremental: EMBEDDING_GENERATION_INCREMENTAL
     });
     const workSummary = {
       updatePlan,
       exists: updatePlan.mode !== "initial-build",
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
       provider: config.provider,
-      model: config.model
+      model: config.model,
+      textIndexStatus: await this.readUpstreamTextIndexUsability(),
+      targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal
     };
     const snapshot = buildEmbeddingWorkLifecycleSnapshot(
       workSummary,
@@ -28960,7 +30221,6 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     if (!this.embeddingWorkStatusController) {
       this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
         refreshSummary: async () => {
-          var _a, _b;
           const config = this.getEffectiveEmbeddingConfig();
           const operationState2 = this.getEmbeddingOperationState();
           const summary = await readEmbeddingStatus(this.app, {
@@ -28973,11 +30233,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
           const updatePlan = await readEmbeddingUpdatePreview(this.app, {
             provider: config.provider,
             model: config.model,
-            incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true
+            incremental: EMBEDDING_GENERATION_INCREMENTAL
           });
           return {
             ...summary,
-            updatePlan
+            updatePlan,
+            textIndexStatus: await this.readUpstreamTextIndexUsability(),
+            targetEndpointIsExternal: !this.getEffectiveEmbeddingEndpointCapability(config).isLocal
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
@@ -29078,7 +30340,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     return this.getMaintenanceEngine().drainTextIndexAutomaticUpdates(signal);
   }
   async runGenerateLocalEmbeddings(onProgress, onPhase, abortSignal, onEmbeddingProgress, operationId) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
@@ -29139,7 +30401,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       apiKey: embeddingConfig.apiKey,
       timeoutMs: embeddingConfig.timeoutMs,
       batchSize: embeddingConfig.batchSize,
-      incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true,
+      incremental: EMBEDDING_GENERATION_INCREMENTAL,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,
       operationId: operationId === void 0 ? void 0 : String(operationId),
@@ -29174,13 +30436,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     });
     if (!result.success) {
       this.logEmbeddingDiagnostic("embedding generation failed", {
-        outcome: (_c = result.outcome) != null ? _c : "unknown",
-        errorCategory: (_d = result.errorCategory) != null ? _d : "unknown",
-        errorScope: (_e = result.errorScope) != null ? _e : "operation",
-        errorStatus: (_f = result.errorStatus) != null ? _f : null,
-        errorProvider: (_g = result.errorProvider) != null ? _g : embeddingConfig.provider,
-        errorMessage: (_h = result.errorMessage) != null ? _h : null,
-        requestCount: (_i = result.requestCount) != null ? _i : 0
+        outcome: (_a = result.outcome) != null ? _a : "unknown",
+        errorCategory: (_b = result.errorCategory) != null ? _b : "unknown",
+        errorScope: (_c = result.errorScope) != null ? _c : "operation",
+        errorStatus: (_d = result.errorStatus) != null ? _d : null,
+        errorProvider: (_e = result.errorProvider) != null ? _e : embeddingConfig.provider,
+        errorMessage: (_f = result.errorMessage) != null ? _f : null,
+        requestCount: (_g = result.requestCount) != null ? _g : 0
       });
       if (result.outcome !== "cancelled") {
         try {
@@ -29495,7 +30757,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     this.getMaintenanceEngine().requeueTextIndexAutomaticUpdates(updates);
   }
   async processAutomaticIndexUpdateBatch(updates, options = {}, reservedBatchToken) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     let automaticUpdateRegistered = false;
     let batchToken = reservedBatchToken;
     try {
@@ -29724,7 +30986,16 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       }
       const pathExclusions = this.getIndexPathExclusions();
       const excludedContentContains = this.getExcludedContentTerms();
-      const provenance = this.getOwnershipGate().getProvenance();
+      const writeFence = await this.acquireCanonicalMaintenanceFence();
+      if (!writeFence) {
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: (_e = (_d = updates[0]) == null ? void 0 : _d.path) != null ? _e : "batch",
+          message: "automatic batch skipped because ownership could not be proven"
+        });
+        return;
+      }
+      const provenance = writeFence.identity ? createArtifactProvenance(writeFence.identity.producerDeviceId, writeFence.identity.epoch) : void 0;
       const policy = this.getCanonicalExclusionPolicy();
       const success = await persistAndActivateTextIndexCandidate(
         () => {
@@ -29743,7 +31014,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
               excludedContentContainsCount: excludedContentContains.length
             },
             provenance,
-            policy
+            policy,
+            writeFence
           );
         },
         () => {
@@ -29757,7 +31029,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
-        this.markEmbeddingWorkStatusDirty((_d = options.embeddingWorkInvalidationReason) != null ? _d : "text-index-published");
+        this.markEmbeddingWorkStatusDirty((_f = options.embeddingWorkInvalidationReason) != null ? _f : "text-index-published");
         this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
           batchSize: updates.length,
@@ -29784,7 +31056,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       console.error("Lina: failed to process automatic index batch:", error);
       this.addDiagnosticEvent({
         eventType: "error",
-        path: (_f = (_e = updates[0]) == null ? void 0 : _e.path) != null ? _f : "batch",
+        path: (_h = (_g = updates[0]) == null ? void 0 : _g.path) != null ? _h : "batch",
         message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
@@ -29816,11 +31088,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       legacyFingerprintDeviceId
     });
     if (migration.unsupportedFutureVersion) {
-      this.settings = Object.assign(
-        {},
-        DEFAULT_SETTINGS,
-        rawSettings != null ? rawSettings : {}
-      );
+      this.settings = resolveLoadedSettings(rawSettings);
       setDeviceSettingsContext(this.settings, () => {
         void this.saveSettings();
       }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole(), () => this.getDeviceName());
@@ -29841,11 +31109,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       this.indexData = (_a = data == null ? void 0 : data.index) != null ? _a : void 0;
       return;
     }
-    this.settings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      rawSettings != null ? rawSettings : {}
-    );
+    this.settings = resolveLoadedSettings(rawSettings);
     if (rawSettings) {
       const userFieldsToPreserve = [
         "aiProvider",
@@ -29923,6 +31187,11 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     });
   }
   async runStartupEmbeddingAutomation() {
+    if (isLegacyFullRegenerationPreferenceSet(this.settings)) {
+      console.warn(
+        "Lina: legacy setting generateOnlyMissingEmbeddings=false is ignored; embedding generation is always incremental."
+      );
+    }
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
@@ -30011,5 +31280,166 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       path: "settings",
       message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "listeners removidos"
     });
+  }
+  async diagnoseRuntimeSqlite() {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
+    const winProcess = typeof window !== "undefined" ? window.process : void 0;
+    const nodeVer = (_b = (_a = winProcess == null ? void 0 : winProcess.versions) == null ? void 0 : _a.node) != null ? _b : "unknown";
+    const electronVer = (_d = (_c = winProcess == null ? void 0 : winProcess.versions) == null ? void 0 : _c.electron) != null ? _d : "unknown";
+    const platform = (_e = winProcess == null ? void 0 : winProcess.platform) != null ? _e : isDesktop ? "desktop" : "mobile";
+    const arch = (_f = winProcess == null ? void 0 : winProcess.arch) != null ? _f : "unknown";
+    let nodeSqliteAvailable = false;
+    let databaseSyncAvailable = false;
+    let errorSummary = null;
+    let errorStack = null;
+    if (isDesktop) {
+      try {
+        const req = typeof require === "function" ? require : null;
+        let sqliteModule = null;
+        if (req) {
+          try {
+            sqliteModule = req("node:sqlite");
+          } catch (e) {
+            sqliteModule = req("sqlite");
+          }
+        }
+        if (sqliteModule && typeof sqliteModule === "object") {
+          const dbSync = sqliteModule.DatabaseSync;
+          nodeSqliteAvailable = true;
+          databaseSyncAvailable = typeof dbSync === "function";
+        } else {
+          errorSummary = "Module node:sqlite loading returned non-object export.";
+        }
+      } catch (err) {
+        errorSummary = err instanceof Error ? err.message : String(err);
+        errorStack = err instanceof Error ? (_g = err.stack) != null ? _g : null : null;
+      }
+    } else {
+      errorSummary = "Mobile platform does not support node:sqlite.";
+    }
+    const report = {
+      obsidianPluginRuntime: true,
+      isDesktop,
+      node: nodeVer,
+      electron: electronVer,
+      platform,
+      arch,
+      nodeSqliteAvailable,
+      databaseSyncAvailable,
+      errorSummary,
+      errorStack,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/sqlite-runtime-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch (e) {
+    }
+    return report;
+  }
+  async diagnoseShadowWriteRuntime() {
+    var _a;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
+    const role = getDeviceRole();
+    const vaultBasePath = (_a = this.app.vault.adapter.basePath) != null ? _a : "";
+    const resolver = new DefaultProducerLocalStorePathResolver(vaultBasePath);
+    const pathResolution = resolver.resolveStorePath();
+    const dbOutsideVault = !pathResolution.separation.insideVault;
+    let shadowWritePassed = false;
+    let reopenPassed = false;
+    let controlledFailurePassed = false;
+    let journalMode = "unknown";
+    let synchronous = 0;
+    let foreignKeys = 0;
+    let schemaVersion = 0;
+    let recordCount = 0;
+    if (isDesktop) {
+      try {
+        const store = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath
+        });
+        store.open();
+        const diag = store.diagnose();
+        schemaVersion = diag.schemaVersion;
+        journalMode = "wal";
+        synchronous = 2;
+        foreignKeys = 1;
+        const sampleRecord = {
+          chunkId: "m1b-runtime-sample-001",
+          path: "Diagnostic/SampleNote.md",
+          index: 0,
+          textHash: "hash-m1b-123",
+          model: "nomic-embed-text",
+          provider: "ollama",
+          dimensions: 4,
+          embedding: [0.1, -0.2, 0.5, 0.85],
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        const pubInfo = {
+          provider: "ollama",
+          model: "nomic-embed-text",
+          dimensions: 4,
+          inputVersion: 1,
+          prefixMode: "none"
+        };
+        const shadowRes = await performProducerSqliteShadowWrite([sampleRecord], pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store
+        });
+        shadowWritePassed = shadowRes.attempted && shadowRes.success;
+        store.close();
+        store.open();
+        const retrieved = store.getEmbeddingRecord("m1b-runtime-sample-001");
+        if (retrieved && retrieved.chunkId === "m1b-runtime-sample-001" && retrieved.embeddingBlob instanceof Float32Array) {
+          reopenPassed = true;
+        }
+        recordCount = store.countRecords();
+        const invalidStore = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath
+        });
+        const failRes = await performProducerSqliteShadowWrite([sampleRecord], pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store: invalidStore
+        });
+        controlledFailurePassed = failRes.attempted && !failRes.success;
+        store.close();
+      } catch (err) {
+        console.warn("Lina: shadow write runtime diagnostic exception:", err);
+      }
+    }
+    const report = {
+      executionContext: isDesktop ? "obsidian-plugin" : "obsidian-mobile",
+      role,
+      shadowWriteEnabled: true,
+      dbOutsideVault,
+      dbPath: pathResolution.databasePath,
+      journalMode,
+      synchronous,
+      foreignKeys,
+      legacyWritePassed: true,
+      shadowWritePassed,
+      reopenPassed,
+      controlledFailurePassed,
+      schemaVersion,
+      recordCount,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/m1b-shadow-write-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch (e) {
+    }
+    return report;
   }
 };

@@ -50,22 +50,22 @@ describe("ProducerLocalStore Path Resolver (Phase M0)", () => {
       expect(dir).toBe("/Users/TestUser/Library/Application Support/lina/db");
     });
 
-    it("resolves Linux path using XDG_CONFIG_HOME if present", () => {
+    it("resolves Linux path using XDG_STATE_HOME if present", () => {
       const dir = resolveDefaultStoreDirectory({
         platform: "linux",
-        env: { XDG_CONFIG_HOME: "/home/testuser/.custom-config" },
+        env: { XDG_STATE_HOME: "/home/testuser/.custom-state" },
         homedir: "/home/testuser",
       });
-      expect(dir).toBe("/home/testuser/.custom-config/lina/db");
+      expect(dir).toBe("/home/testuser/.custom-state/lina/db");
     });
 
-    it("resolves Linux path using ~/.config fallback when XDG_CONFIG_HOME is unset", () => {
+    it("resolves Linux path using ~/.local/state fallback when XDG_STATE_HOME is unset", () => {
       const dir = resolveDefaultStoreDirectory({
         platform: "linux",
         env: {},
         homedir: "/home/testuser",
       });
-      expect(dir).toBe("/home/testuser/.config/lina/db");
+      expect(dir).toBe("/home/testuser/.local/state/lina/db");
     });
   });
 
@@ -117,9 +117,9 @@ describe("ProducerLocalStore Path Resolver (Phase M0)", () => {
 
       const resolution = resolver.resolveStorePath();
       expect(resolution.isCustomPath).toBe(false);
-      expect(resolution.storeDirectory).toBe("/home/testuser/.config/lina/db");
+      expect(resolution.storeDirectory).toBe("/home/testuser/.local/state/lina/db");
       expect(resolution.databasePath).toBe(
-        `/home/testuser/.config/lina/db/${PRODUCER_STORE_DEFAULT_DB_NAME}`
+        `/home/testuser/.local/state/lina/db/${PRODUCER_STORE_DEFAULT_DB_NAME}`
       );
       expect(resolution.separation.insideVault).toBe(false);
     });

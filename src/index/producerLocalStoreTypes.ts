@@ -116,4 +116,9 @@ export interface ProducerLocalStore {
   getSchemaVersion(): number;
   open(): Promise<void> | void;
   close(): Promise<void> | void;
+  upsertEmbeddingSpace(space: EmbeddingSpaceRecord): Promise<void> | void;
+  upsertEmbeddingRecord(record: ProducerEmbeddingRecord): Promise<void> | void;
+  upsertEmbeddingBatch(space: EmbeddingSpaceRecord, records: readonly ProducerEmbeddingRecord[]): Promise<void> | void;
+  getEmbeddingRecord(chunkId: string): Promise<ProducerEmbeddingRecord | null> | ProducerEmbeddingRecord | null;
+  countRecords(spaceId?: string): Promise<number> | number;
 }

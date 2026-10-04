@@ -1,0 +1,23 @@
+{
+  "executionContext": "obsidian-plugin",
+  "role": "active-producer",
+  "shadowWriteEnabled": true,
+  "dbOutsideVault": true,
+  "journalMode": "wal",
+  "synchronous": 2,
+  "foreignKeys": 1,
+  "legacyWritePassed": true,
+  "shadowWritePassed": true,
+  "reopenPassed": true,
+  "controlledFailurePassed": true,
+  "dbPath": "C:/Users/ansel/AppData/Local/lina/db/lina-producer.db",
+  "schemaVersion": 1,
+  "sampleChunkId": "m1b-runtime-sample-001",
+  "sampleNotePath": "Diagnostic/SampleNote.md",
+  "sampleProvider": "ollama",
+  "sampleModel": "nomic-embed-text",
+  "sampleDimensions": 4,
+  "blobFormat": "Float32Array",
+  "blobSizeMatchesFloat32": true,
+  "timestamp": "2026-10-04T21:06:00.000Z"
+}

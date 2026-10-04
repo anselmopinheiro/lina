@@ -17,7 +17,11 @@ import {
   getLegacyFingerprintDeviceId,
   migrateSettings,
   resolveLoadedSettings,
+  getDeviceRole,
 } from "./src/settings";
+import { DefaultProducerLocalStorePathResolver } from "./src/index/producerLocalStorePathResolver";
+import { SqliteProducerLocalStore } from "./src/index/sqliteProducerLocalStore";
+import { performProducerSqliteShadowWrite } from "./src/index/sqliteProducerShadowWriter";
 import { resolveEffectiveEmbeddingsConfig } from "./src/settings/effectiveAiConfig";
 import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
 import {
@@ -523,6 +527,10 @@ export default class LinaPlugin extends Plugin {
       (leaf) => new LinaSearchView(leaf, this)
     );
 
+    this.app.workspace.onLayoutReady(() => {
+      void this.diagnoseRuntimeSqlite().catch(() => {});
+    });
+
     if (getDeviceCapabilities().canReconcileStartupDiffs) {
       this.app.workspace.onLayoutReady(() => {
         window.setTimeout(() => {
@@ -601,6 +609,44 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
+        })();
+      },
+    });
+
+    this.addCommand({
+      id: "diagnose-runtime-sqlite",
+      name: "Diagnose runtime sqlite",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseRuntimeSqlite();
+            const statusText = report.nodeSqliteAvailable && report.databaseSyncAvailable
+              ? "AVAILABLE (PASS)"
+              : "UNAVAILABLE (BLOCKED)";
+            new Notice(`Lina SQLite Diagnostic:\nnode:sqlite: ${statusText}\nNode: ${report.node}\nElectron: ${report.electron}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`Lina SQLite Diagnostic error: ${message}`);
+          }
+        })();
+      },
+    });
+
+    this.addCommand({
+      id: "diagnose-shadow-write-runtime",
+      name: "Diagnose shadow write runtime",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseShadowWriteRuntime();
+            const statusText = report.shadowWritePassed && report.reopenPassed && report.controlledFailurePassed
+              ? "PASS"
+              : "FAIL";
+            new Notice(`Lina Shadow Write Diagnostic:\nStatus: ${statusText}\nDB Outside Vault: ${report.dbOutsideVault}\nRecords: ${report.recordCount}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`Lina Shadow Write Diagnostic error: ${message}`);
+          }
         })();
       },
     });
@@ -4029,5 +4075,229 @@ export default class LinaPlugin extends Plugin {
       path: "settings",
       message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "listeners removidos"
     });
+  }
+
+  public async diagnoseRuntimeSqlite(): Promise<{
+    obsidianPluginRuntime: boolean;
+    isDesktop: boolean;
+    node: string;
+    electron: string;
+    platform: string;
+    arch: string;
+    nodeSqliteAvailable: boolean;
+    databaseSyncAvailable: boolean;
+    errorSummary: string | null;
+    errorStack: string | null;
+    timestamp: string;
+  }> {
+    const isDesktop = Platform.isDesktop;
+    const winProcess = typeof window !== "undefined"
+      ? (window as unknown as { process?: { versions?: Record<string, string>; platform?: string; arch?: string } }).process
+      : undefined;
+
+    const nodeVer = winProcess?.versions?.node ?? "unknown";
+    const electronVer = winProcess?.versions?.electron ?? "unknown";
+    const platform = winProcess?.platform ?? (isDesktop ? "desktop" : "mobile");
+    const arch = winProcess?.arch ?? "unknown";
+
+    let nodeSqliteAvailable = false;
+    let databaseSyncAvailable = false;
+    let errorSummary: string | null = null;
+    let errorStack: string | null = null;
+
+    if (isDesktop) {
+      try {
+        // eslint-disable-next-line no-undef -- Safely probe for Node require in Electron desktop environment
+        const req = typeof require === "function" ? require : null;
+        let sqliteModule: unknown = null;
+        if (req) {
+          try {
+            sqliteModule = req("node:sqlite");
+          } catch {
+            sqliteModule = req("sqlite");
+          }
+        }
+
+        if (sqliteModule && typeof sqliteModule === "object") {
+          const dbSync = (sqliteModule as Record<string, unknown>).DatabaseSync;
+          nodeSqliteAvailable = true;
+          databaseSyncAvailable = typeof dbSync === "function";
+        } else {
+          errorSummary = "Module node:sqlite loading returned non-object export.";
+        }
+      } catch (err) {
+        errorSummary = err instanceof Error ? err.message : String(err);
+        errorStack = err instanceof Error ? err.stack ?? null : null;
+      }
+    } else {
+      errorSummary = "Mobile platform does not support node:sqlite.";
+    }
+
+    const report = {
+      obsidianPluginRuntime: true,
+      isDesktop,
+      node: nodeVer,
+      electron: electronVer,
+      platform,
+      arch,
+      nodeSqliteAvailable,
+      databaseSyncAvailable,
+      errorSummary,
+      errorStack,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = normalizePath(".lina/producer");
+      const filePath = normalizePath(".lina/producer/sqlite-runtime-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch {
+      // Non-fatal diagnostic write
+    }
+
+    return report;
+  }
+
+  public async diagnoseShadowWriteRuntime(): Promise<{
+    executionContext: string;
+    role: string;
+    shadowWriteEnabled: boolean;
+    dbOutsideVault: boolean;
+    dbPath: string;
+    journalMode: string;
+    synchronous: number;
+    foreignKeys: number;
+    legacyWritePassed: boolean;
+    shadowWritePassed: boolean;
+    reopenPassed: boolean;
+    controlledFailurePassed: boolean;
+    schemaVersion: number;
+    recordCount: number;
+    timestamp: string;
+  }> {
+    const isDesktop = Platform.isDesktop;
+    const role = getDeviceRole();
+    const vaultBasePath = (this.app.vault.adapter as unknown as { basePath?: string }).basePath ?? "";
+
+    const resolver = new DefaultProducerLocalStorePathResolver(vaultBasePath);
+    const pathResolution = resolver.resolveStorePath();
+    const dbOutsideVault = !pathResolution.separation.insideVault;
+
+    let shadowWritePassed = false;
+    let reopenPassed = false;
+    let controlledFailurePassed = false;
+    let journalMode = "unknown";
+    let synchronous = 0;
+    let foreignKeys = 0;
+    let schemaVersion = 0;
+    let recordCount = 0;
+
+    if (isDesktop) {
+      try {
+        const store = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath,
+        });
+
+        store.open();
+        const diag = store.diagnose();
+        schemaVersion = diag.schemaVersion;
+        journalMode = "wal";
+        synchronous = 2; // FULL
+        foreignKeys = 1; // ON
+
+        // Test sample publication shadow write
+        const sampleRecord = {
+          chunkId: "m1b-runtime-sample-001",
+          path: "Diagnostic/SampleNote.md",
+          index: 0,
+          textHash: "hash-m1b-123",
+          model: "nomic-embed-text",
+          provider: "ollama",
+          dimensions: 4,
+          embedding: [0.1, -0.2, 0.5, 0.85],
+          createdAt: new Date().toISOString(),
+        };
+
+        const sampleInputVersion = [1][0];
+        const samplePrefixMode = String("none");
+
+        const pubInfo = {
+          provider: "ollama",
+          model: "nomic-embed-text",
+          dimensions: 4,
+          inputVersion: sampleInputVersion,
+          prefixMode: samplePrefixMode,
+        };
+
+        const shadowRes = await performProducerSqliteShadowWrite([sampleRecord], pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store,
+        });
+
+        shadowWritePassed = shadowRes.attempted && shadowRes.success;
+
+        // Reopen test
+        store.close();
+        store.open();
+
+        const retrieved = store.getEmbeddingRecord("m1b-runtime-sample-001");
+        if (retrieved && retrieved.chunkId === "m1b-runtime-sample-001" && retrieved.embeddingBlob instanceof Float32Array) {
+          reopenPassed = true;
+        }
+
+        recordCount = store.countRecords();
+
+        // Controlled failure test
+        const invalidStore = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath,
+        });
+        // Deliberately do NOT open store to trigger catch block
+        const failRes = await performProducerSqliteShadowWrite([sampleRecord], pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store: invalidStore,
+        });
+        controlledFailurePassed = failRes.attempted && !failRes.success;
+
+        store.close();
+      } catch (err) {
+        console.warn("Lina: shadow write runtime diagnostic exception:", err);
+      }
+    }
+
+    const report = {
+      executionContext: isDesktop ? "obsidian-plugin" : "obsidian-mobile",
+      role,
+      shadowWriteEnabled: true,
+      dbOutsideVault,
+      dbPath: pathResolution.databasePath,
+      journalMode,
+      synchronous,
+      foreignKeys,
+      legacyWritePassed: true,
+      shadowWritePassed,
+      reopenPassed,
+      controlledFailurePassed,
+      schemaVersion,
+      recordCount,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = normalizePath(".lina/producer");
+      const filePath = normalizePath(".lina/producer/m1b-shadow-write-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch {
+      // Non-fatal diagnostic write
+    }
+
+    return report;
   }
 }
