@@ -1,0 +1,10 @@
+{
+  "phase": "M6-PREFLIGHT-FIX-B1-B3-001",
+  "B1": "PASS",
+  "B2": "PASS",
+  "B3": "PASS",
+  "B4": "PENDING_USER_AUTHORIZATION",
+  "runtimeEvidence": { "classification": "INTEGRATION_TEST", "companionStartup": "automatic mutable M3 diagnostics removed from normal startup" },
+  "m6Status": "STILL_NOT_STARTED",
+  "cutoverStatus": "NOT_STARTED"
+}

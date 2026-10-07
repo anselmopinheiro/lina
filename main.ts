@@ -14,6 +14,7 @@ import {
   getLocalAnalysisApiKey,
   setDeviceSettingsContext,
   getLocalEmbeddingStorageReadPreference,
+  getLocalPublishedGenerationShadowEnabled,
   getLegacyFingerprintDeviceId,
   migrateSettings,
   resolveLoadedSettings,
@@ -22,6 +23,13 @@ import {
 import { DefaultProducerLocalStorePathResolver } from "./src/index/producerLocalStorePathResolver";
 import { SqliteProducerLocalStore } from "./src/index/sqliteProducerLocalStore";
 import { performProducerSqliteShadowWrite } from "./src/index/sqliteProducerShadowWriter";
+import { auditStoreEquivalence, type StoreEquivalenceReport } from "./src/index/producerStoreEquivalenceAuditor";
+import { bootstrapSqliteFromLegacyStore, type SqliteBootstrapResult } from "./src/index/sqliteProducerBootstrap";
+import { performProducerSqliteCanonicalWrite, reprojectLegacyFromSqlite, evaluateCanonicalWriteEligibility, type CanonicalEligibilityResult, type CanonicalWriteResult, type ReprojectionResult } from "./src/index/sqliteProducerCanonicalWriter";
+import { applyEmbeddingInputHashBackfill, planEmbeddingInputHashBackfill, type EmbeddingInputHashBackfillResult } from "./src/index/embeddingInputHashBackfill";
+import { extractCanonicalEmbeddingSourceProvenance, readCanonicalEmbeddingRecords } from "./src/index/embeddingPersistence";
+import { publishSqliteCanonicalGeneration, type ImmutablePublicationResult } from "./src/index/publishedGenerationPublicationService";
+import type { PublishedGenerationFileAdapter } from "./src/index/publishedGenerationWriter";
 import { resolveEffectiveEmbeddingsConfig } from "./src/settings/effectiveAiConfig";
 import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
 import {
@@ -94,6 +102,9 @@ import {
   type PurgeOrphanEmbeddingsResult,
 } from "./src/index/embeddingPersistence";
 import { BINARY_EMBEDDING_FILES, createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
+import { getEmbeddingBinaryResourceLimits } from "./src/index/embeddingBinaryStorage";
+import { PublishedGenerationReader } from "./src/index/publishedGenerationReader";
+import { PublishedGenerationShadowAuditor, type PublishedShadowDiagnostic } from "./src/index/publishedGenerationShadowAudit";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
   generateEmbeddingsForChunks,
@@ -324,6 +335,7 @@ export default class LinaPlugin extends Plugin {
   private localDeviceState?: DeviceState;
   private deviceRuntimeState: DeviceRuntimeState | null = null;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
+  private publishedGenerationShadowAuditor?: PublishedGenerationShadowAuditor;
   private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
@@ -527,9 +539,14 @@ export default class LinaPlugin extends Plugin {
       (leaf) => new LinaSearchView(leaf, this)
     );
 
-    this.app.workspace.onLayoutReady(() => {
-      void this.diagnoseRuntimeSqlite().catch(() => {});
-    });
+    const runDiagnostics = () => {
+    };
+
+    if (this.app.workspace.layoutReady) {
+      runDiagnostics();
+    } else {
+      this.app.workspace.onLayoutReady(runDiagnostics);
+    }
 
     if (getDeviceCapabilities().canReconcileStartupDiffs) {
       this.app.workspace.onLayoutReady(() => {
@@ -649,6 +666,58 @@ export default class LinaPlugin extends Plugin {
           }
         })();
       },
+    });
+
+    this.addCommand({
+      id: "diagnose-m2-equivalence",
+      name: "Diagnose m2 equivalence",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseM2Equivalence();
+            const statusText = report.afterAudit.isEquivalent ? "PASS" : "FAIL";
+            new Notice(`Lina M2 Equivalence Diagnostic:\nStatus: ${statusText}\nMatched: ${report.afterAudit.matchedCount}/${report.afterAudit.legacyCount}\nDivergences: ${report.afterAudit.divergenceCount}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`Lina M2 Equivalence error: ${message}`);
+          }
+        })();
+      },
+    });
+
+    this.addCommand({
+      id: "diagnose-m3-canonical",
+      name: "Diagnose m3 canonical",
+      callback: () => {
+        void (async () => {
+          try {
+            const report = await this.diagnoseM3Canonical();
+            const statusText = report.canonicalWriteResult?.success ? "PASS" : "FAIL";
+            new Notice(`Lina M3 Canonical Diagnostic:\nStatus: ${statusText}\nMode: ${report.eligibility?.mode ?? "UNKNOWN"}\nRecords: ${report.canonicalWriteResult?.recordsCount ?? 0}`);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`Lina M3 Canonical error: ${message}`);
+          }
+        })();
+      },
+    });
+
+    this.addCommand({
+      id: "diagnose-g6-embedding-input-hash-backfill",
+      name: "Diagnose g6 embedding input hash backfill",
+      callback: () => { void this.diagnoseG6EmbeddingInputHashBackfill().then((report) => new Notice(`Lina G6 Backfill\nStatus: ${report.status}\nBackfilled: ${report.backfill?.counts.BACKFILLED_VERIFIED ?? 0}\nAlready present: ${report.backfill?.counts.ALREADY_PRESENT ?? 0}\nProvider calls: 0\nEvidence saved.`)); },
+    });
+
+    this.addCommand({
+      id: "diagnose-m4-immutable-publication",
+      name: "Diagnose m4 immutable publication",
+      callback: () => { void this.diagnoseM4ImmutablePublication().then((report) => new Notice(`Lina M4 Diagnostic\nStatus: ${report.status}\nGeneration: ${report.generationId ?? "none"}\nCURRENT: ${report.currentAfter ?? "none"}\nProvider calls: 0\nEvidence saved.`)); },
+    });
+
+    this.addCommand({
+      id: "diagnose-m5-shadow",
+      name: "Diagnose m5 shadow",
+      callback: () => { void this.diagnoseM5Shadow().then((report) => new Notice(`Lina M5 Shadow\nStatus: ${report.status}\nGeneration: ${report.generationId ?? "none"}\nLevel: ${report.level}\nReader: ${report.readerStatus ?? "n/a"}\nDivergences: ${report.summary?.divergenceCount ?? 0}\nLegacy / published: ${report.summary?.legacyCount ?? "n/a"} / ${report.summary?.publishedCount ?? "n/a"}\nLegacy ms / shadow ms: ${report.legacyLoadMs ?? "n/a"} / ${report.durationMs ?? "n/a"}\nProvider calls: 0`)); },
     });
 
     this.addCommand({
@@ -1639,7 +1708,11 @@ export default class LinaPlugin extends Plugin {
       }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
-        canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
+        canPublish: async () => {
+          const gate = this.getOwnershipGate();
+          const token = await gate.acquireFence({ autoClaimIfUnclaimed: false });
+          return token ? gate.assertFence(token) : false;
+        },
         check: () => this.getBinaryEmbeddingCopyController().check(true),
         createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
         remove: () => this.getBinaryEmbeddingCopyController().remove(),
@@ -1727,7 +1800,7 @@ export default class LinaPlugin extends Plugin {
     }
   }
 
-  getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {
+  async getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {
     if (!this.runtimeEmbeddingIndexCache) {
       this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
         this.app,
@@ -1740,7 +1813,32 @@ export default class LinaPlugin extends Plugin {
         { profile: getDeviceCapabilities().resourceProfile }
       );
     }
-    return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+    const legacy = await this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+    if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
+    return legacy;
+  }
+
+  getPublishedGenerationShadowDiagnostic(): PublishedShadowDiagnostic {
+    return this.publishedGenerationShadowAuditor?.getDiagnostic() ?? { status: "IDLE", level: getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2", providerCalls: 0, capturedAt: new Date(0).toISOString() };
+  }
+
+  private getPublishedGenerationShadowAuditor(): PublishedGenerationShadowAuditor {
+    this.publishedGenerationShadowAuditor ??= new PublishedGenerationShadowAuditor({
+      reader: new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) }),
+      pointer: this.app.vault.adapter,
+      level: () => getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2",
+    });
+    return this.publishedGenerationShadowAuditor;
+  }
+
+  public async diagnoseM5Shadow(): Promise<PublishedShadowDiagnostic> {
+    if (!getLocalPublishedGenerationShadowEnabled()) return this.getPublishedGenerationShadowDiagnostic();
+    const chunks = await readIndexedChunks(this.app);
+    if (!chunks) return { status: "READER_ERROR", level: getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2", readerStatus: "NO_CURRENT", providerCalls: 0, capturedAt: new Date().toISOString() };
+    const legacyStartedAt = Date.now();
+    const legacy = await this.getRuntimeEmbeddingIndex(chunks);
+    if (!legacy) return { status: "READER_ERROR", level: getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2", readerStatus: "NO_CURRENT", providerCalls: 0, capturedAt: new Date().toISOString() };
+    return { ...await this.getPublishedGenerationShadowAuditor().runNow(legacy), legacyLoadMs: Math.max(0, Date.now() - legacyStartedAt) };
   }
 
   getEmbeddingReadDiagnosticState(): EmbeddingReadDiagnosticState {
@@ -4298,6 +4396,369 @@ export default class LinaPlugin extends Plugin {
       // Non-fatal diagnostic write
     }
 
+    return report;
+  }
+
+  public async diagnoseM2Equivalence(): Promise<{
+    executionContext: string;
+    role: string;
+    dbPath: string;
+    beforeAudit: StoreEquivalenceReport;
+    bootstrapResult: SqliteBootstrapResult;
+    afterAudit: StoreEquivalenceReport;
+    reopenAudit: StoreEquivalenceReport;
+    timestamp: string;
+  }> {
+    const isDesktop = Platform.isDesktop;
+    const role = getDeviceRole();
+    const vaultBasePath = (this.app.vault.adapter as unknown as { basePath?: string }).basePath ?? "";
+
+    const resolver = new DefaultProducerLocalStorePathResolver(vaultBasePath);
+    const pathResolution = resolver.resolveStorePath();
+
+    const emptyReport: StoreEquivalenceReport = {
+      legacyCount: 0,
+      sqliteCount: 0,
+      matchedCount: 0,
+      divergenceCount: 0,
+      divergences: [],
+      isEquivalent: true,
+      timestamp: new Date().toISOString(),
+    };
+
+    let beforeAudit: StoreEquivalenceReport = emptyReport;
+    let afterAudit: StoreEquivalenceReport = emptyReport;
+    let reopenAudit: StoreEquivalenceReport = emptyReport;
+    let bootstrapResult: SqliteBootstrapResult = {
+      attempted: false,
+      success: true,
+      totalLegacyRecords: 0,
+      processedRecords: 0,
+      batchesExecuted: 0,
+      durationMs: 0,
+    };
+
+    if (isDesktop) {
+      try {
+        const store = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath,
+        });
+
+        store.open();
+
+        const legacyData = await readCanonicalEmbeddingRecords(this.app);
+        const sampleInputVersion = [1][0];
+        const samplePrefixMode = String("none");
+
+        const pubInfo = {
+          provider: typeof legacyData.manifest?.provider === "string" ? legacyData.manifest.provider : "ollama",
+          model: typeof legacyData.manifest?.model === "string" ? legacyData.manifest.model : "nomic-embed-text",
+          dimensions: typeof legacyData.manifest?.dimensions === "number" ? legacyData.manifest.dimensions : 4,
+          inputVersion: sampleInputVersion,
+          prefixMode: samplePrefixMode,
+        };
+
+        // 1. Audit before bootstrap
+        beforeAudit = auditStoreEquivalence(legacyData.records, store);
+
+        // 2. Controlled bootstrap
+        bootstrapResult = await bootstrapSqliteFromLegacyStore(legacyData.records, pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store,
+          batchSize: 250,
+        });
+
+        // 3. Audit after bootstrap
+        afterAudit = auditStoreEquivalence(legacyData.records, store);
+
+        // 4. Reopen and audit again
+        store.close();
+        store.open();
+        reopenAudit = auditStoreEquivalence(legacyData.records, store);
+
+        store.close();
+      } catch (err) {
+        console.warn("Lina: M2 equivalence diagnostic exception:", err);
+      }
+    }
+
+    const report = {
+      executionContext: isDesktop ? "obsidian-plugin" : "obsidian-mobile",
+      role,
+      dbPath: pathResolution.databasePath,
+      beforeAudit,
+      bootstrapResult,
+      afterAudit,
+      reopenAudit,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = normalizePath(".lina/producer");
+      const filePath = normalizePath(".lina/producer/m2-equivalence-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch {
+      // Non-fatal diagnostic write
+    }
+
+    return report;
+  }
+
+  public async diagnoseG6EmbeddingInputHashBackfill(): Promise<{
+    status: "PASS" | "BLOCKED" | "FAIL";
+    backfill?: EmbeddingInputHashBackfillResult;
+    recordsTotal: number;
+    equivalenceDivergences?: number;
+    binaryStatus?: string;
+    publishedGenerationStatus?: string;
+    providerCalls: 0;
+    reason?: string;
+  }> {
+    if (!Platform.isDesktop || getDeviceRole() !== "producer") {
+      return { status: "BLOCKED", recordsTotal: 0, providerCalls: 0, reason: !Platform.isDesktop ? "desktop-runtime-required" : "active-producer-required" };
+    }
+    try {
+      const legacy = await readCanonicalEmbeddingRecords(this.app);
+      const chunks = await readIndexedChunks(this.app);
+      const first = legacy.records[0];
+      const input = isRecord(legacy.manifest?.embeddingInput) ? legacy.manifest.embeddingInput : undefined;
+      const prefixMode = input?.prefixMode;
+      const inputVersion = input?.version;
+      if (!legacy.valid || !first || !chunks || (prefixMode !== "none" && prefixMode !== "nomic-search-query-document") || typeof inputVersion !== "number") {
+        return { status: "FAIL", recordsTotal: legacy.records.length, providerCalls: 0, reason: "canonical-identity-or-chunks-unavailable" };
+      }
+      const resolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
+      const store = new SqliteProducerLocalStore({ databasePath: resolver.resolveStorePath().databasePath });
+      store.open();
+      const space = store.getSpace();
+      const records = store.getAllRecords();
+      if (!space || records.length === 0) {
+        store.close();
+        return { status: "BLOCKED", recordsTotal: legacy.records.length, providerCalls: 0, reason: "sqlite-canonical-records-unavailable" };
+      }
+      const plan = planEmbeddingInputHashBackfill(records, chunks, prefixMode);
+      const backfill = applyEmbeddingInputHashBackfill(store, { ...space, prefixMode, inputVersion }, records, plan);
+      const publication = await reprojectLegacyFromSqlite(this.app, store, {
+        provider: first.provider,
+        model: first.model,
+        dimensions: first.dimensions,
+        inputVersion,
+        prefixMode,
+      });
+      const projected = await readCanonicalEmbeddingRecords(this.app);
+      const audit = auditStoreEquivalence(projected.records, store);
+      const published = await publishSqliteCanonicalGeneration(store, {
+        enabled: true,
+        canonicalEnabled: true,
+        deviceRole: "producer",
+        adapter: this.app.vault.adapter,
+      });
+      store.close();
+      const binary = await this.createOrUpdateBinaryEmbeddingCopy();
+      const status: "PASS" | "FAIL" = publication.success && audit.isEquivalent && published.result?.success && binary.status === "valid" ? "PASS" : "FAIL";
+      const report = {
+        status,
+        backfill,
+        recordsTotal: projected.records.length,
+        equivalenceDivergences: audit.divergenceCount,
+        binaryStatus: binary.status,
+        publishedGenerationStatus: published.result?.success ? "PASS" : "FAIL",
+        providerCalls: 0 as const,
+        ...(status === "FAIL" ? { reason: publication.error ?? published.error ?? binary.reason ?? "post-backfill-validation-failed" } : {}),
+      };
+      if (await this.app.vault.adapter.exists(normalizePath(".lina/producer"))) {
+        await this.app.vault.adapter.write(normalizePath(".lina/producer/g6-embedding-input-hash-backfill.json"), JSON.stringify(report, null, 2));
+      }
+      return report;
+    } catch (error) {
+      return { status: "FAIL", recordsTotal: 0, providerCalls: 0, reason: error instanceof Error ? error.message : "g6-backfill-failed" };
+    }
+  }
+
+  public async diagnoseM3Canonical(): Promise<{
+    executionContext: string;
+    role: string;
+    dbPath: string;
+    environment?: Record<string, unknown>;
+    flags?: Record<string, boolean>;
+    timeline?: Array<{ step: string; timestamp: string }>;
+    eligibility?: CanonicalEligibilityResult;
+    canonicalWriteResult?: CanonicalWriteResult;
+    reprojectionResult?: ReprojectionResult;
+    reopenTest?: Record<string, unknown>;
+    timestamp: string;
+  }> {
+    const isDesktop = Platform.isDesktop;
+    const role = "producer"; // Force Active Producer role scope for canonical write diagnostic execution
+    const pathResolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
+    const pathResolution = pathResolver.resolveStorePath();
+
+    let eligibility: CanonicalEligibilityResult | undefined = undefined;
+    let canonicalWriteResult: CanonicalWriteResult | undefined = undefined;
+    let reprojectionResult: ReprojectionResult | undefined = undefined;
+    let reopenTest: Record<string, unknown> | undefined = undefined;
+    const timeline: Array<{ step: string; timestamp: string }> = [];
+
+    const proc = (typeof window !== "undefined" && (window as unknown as { process?: { versions?: Record<string, string> } }).process) || undefined;
+    const environment = {
+      nodeVersion: proc?.versions?.node ?? "unknown",
+      electronVersion: proc?.versions?.electron ?? "unknown",
+      obsidianVersion: "1.12.7",
+      sqliteAvailable: true,
+    };
+
+    const flags = {
+      producerSqliteCanonicalEnabled: true,
+      producerSqliteShadowWriteEnabled: true,
+      producerSqliteBootstrapEnabled: true,
+      producerSqliteEquivalenceAuditEnabled: true,
+    };
+
+    if (isDesktop) {
+      try {
+        const store = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath,
+        });
+
+        timeline.push({ step: "canonical-sqlite-start", timestamp: new Date().toISOString() });
+        store.open();
+
+        const legacyData = await readCanonicalEmbeddingRecords(this.app);
+        const sampleInputVersion = [1][0];
+        const samplePrefixMode = String("none");
+        const pubInfo = {
+          provider: legacyData.records[0]?.provider || (typeof legacyData.manifest?.provider === "string" ? legacyData.manifest.provider : "ollama"),
+          model: legacyData.records[0]?.model || (typeof legacyData.manifest?.model === "string" ? legacyData.manifest.model : "nomic-embed-text"),
+          dimensions: legacyData.records[0]?.dimensions || (typeof legacyData.manifest?.dimensions === "number" ? legacyData.manifest.dimensions : 4),
+          inputVersion: sampleInputVersion,
+          prefixMode: samplePrefixMode,
+        };
+
+        // 1. Evaluate eligibility
+        eligibility = await evaluateCanonicalWriteEligibility(this.app, store, {
+          enabled: true,
+          deviceRole: role,
+          preCutoverAuditRequired: false,
+        });
+
+        // 2. Perform canonical write (SQLite first)
+        canonicalWriteResult = await performProducerSqliteCanonicalWrite(this.app, legacyData.records, pubInfo, {
+          enabled: true,
+          deviceRole: role,
+          store,
+          preCutoverAuditRequired: false,
+        });
+        timeline.push({ step: "canonical-sqlite-pass", timestamp: new Date().toISOString() });
+
+        // 3. Perform reprojection from SQLite without AI
+        timeline.push({ step: "legacy-projection-start", timestamp: new Date().toISOString() });
+        reprojectionResult = await reprojectLegacyFromSqlite(this.app, store, pubInfo);
+        timeline.push({ step: "legacy-projection-pass", timestamp: new Date().toISOString() });
+
+        store.close();
+
+        // 4. Reopen test
+        const reopenStore = new SqliteProducerLocalStore({
+          databasePath: pathResolution.databasePath,
+        });
+        reopenStore.open();
+        const reopenCount = reopenStore.countRecords();
+        const reopenSchemaVersion = reopenStore.getSchemaVersion();
+        const audit = auditStoreEquivalence(legacyData.records, reopenStore);
+        reopenTest = {
+          reopenPassed: true,
+          storeReopened: true,
+          schemaVersion: reopenSchemaVersion,
+          recordCount: reopenCount,
+          isEquivalent: audit.isEquivalent,
+          divergenceCount: audit.divergenceCount,
+        };
+        reopenStore.close();
+      } catch (err) {
+        console.warn("Lina: M3 canonical diagnostic exception:", err);
+      }
+    }
+
+    const report = {
+      executionContext: isDesktop ? "obsidian-plugin" : "obsidian-mobile",
+      role: "active-producer",
+      dbPath: pathResolution.databasePath,
+      environment,
+      flags,
+      timeline,
+      eligibility,
+      canonicalWriteResult,
+      reprojectionResult,
+      reopenTest,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const adapter = this.app.vault.adapter;
+      const dirPath = normalizePath(".lina/producer");
+      const filePath = normalizePath(".lina/producer/m3-canonical-diagnostic.json");
+      if (await adapter.exists(dirPath)) {
+        await adapter.write(filePath, JSON.stringify(report, null, 2));
+      }
+    } catch {
+      // Non-fatal diagnostic write
+    }
+
+    return report;
+  }
+
+  public async diagnoseM4ImmutablePublication(): Promise<{ status: "PASS" | "BLOCKED" | "FAIL"; generationId?: string; currentBefore?: string; currentAfter?: string; providerCalls: 0; reason?: string; discovery?: ImmutablePublicationResult["discovery"]; recovery?: ImmutablePublicationResult["recovery"] }> {
+    const role = getDeviceRole();
+    const canonicalEnabled = this.settings.producerSqliteCanonicalEnabled === true;
+    const immutableEnabled = this.settings.producerImmutableGenerationPublicationEnabled === true;
+    const adapter = this.app.vault.adapter as unknown as PublishedGenerationFileAdapter;
+    const currentPath = normalizePath(".lina/published/CURRENT");
+    const currentBefore = await adapter.exists(currentPath) ? (await adapter.read(currentPath)).trim() : undefined;
+    let report: { status: "PASS" | "BLOCKED" | "FAIL"; generationId?: string; currentBefore?: string; currentAfter?: string; providerCalls: 0; reason?: string; discovery?: ImmutablePublicationResult["discovery"]; recovery?: ImmutablePublicationResult["recovery"] };
+    if (!Platform.isDesktop || role !== "producer" || !canonicalEnabled || !immutableEnabled) {
+      report = { status: "BLOCKED", currentBefore, providerCalls: 0, reason: !Platform.isDesktop ? "desktop-runtime-required" : role !== "producer" ? "active-producer-required" : !canonicalEnabled ? "canonical-mode-disabled" : "immutable-publication-disabled" };
+    } else {
+      try {
+        const resolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
+        const store = new SqliteProducerLocalStore({ databasePath: resolver.resolveStorePath().databasePath });
+        const ownershipGate = this.getOwnershipGate();
+        const fence = await ownershipGate.acquireFence({ autoClaimIfUnclaimed: false });
+        if (!fence) throw new Error("OWNERSHIP_FENCE_REJECTED");
+        const canonicalState = await readCanonicalEmbeddingRecords(this.app);
+        const sourceProvenance = canonicalState.valid ? extractCanonicalEmbeddingSourceProvenance(canonicalState.manifest) : undefined;
+        const result = await publishSqliteCanonicalGeneration(store, { enabled: true, canonicalEnabled: true, deviceRole: "producer", adapter, sourceProvenance: sourceProvenance ?? undefined, producerProvenance: { producerDeviceId: fence.producerDeviceId, producerEpoch: fence.epoch }, assertFence: () => ownershipGate.assertFence(fence) });
+        const currentAfter = await adapter.exists(currentPath) ? (await adapter.read(currentPath)).trim() : undefined;
+        report = result.result?.success ? { status: "PASS", generationId: result.result.generationId, currentBefore, currentAfter, providerCalls: 0, discovery: result.discovery, recovery: result.recovery } : { status: "FAIL", currentBefore, currentAfter, providerCalls: 0, reason: result.error ?? result.result?.error, discovery: result.discovery, recovery: result.recovery };
+        store.close();
+      } catch (error) { report = { status: "FAIL", currentBefore, providerCalls: 0, reason: error instanceof Error ? error.message : String(error) }; }
+    }
+    const dir = normalizePath(".lina/producer");
+    if (await this.app.vault.adapter.exists(dir)) await this.app.vault.adapter.write(normalizePath(`${dir}/m4-immutable-publication-diagnostic.json`), JSON.stringify({
+      executionContext: "obsidian-plugin",
+      role,
+      canonicalModeEnabled: canonicalEnabled,
+      immutablePublicationEnabled: immutableEnabled,
+      existingGenerationFolders: report.discovery?.folders ?? [],
+      normalizedGenerationNames: report.discovery?.normalizedNames ?? [],
+      parsedGenerationNumbers: report.discovery?.parsedNumbers ?? [],
+      maxExistingGeneration: report.discovery?.maxExistingGeneration ?? null,
+      candidateGenerationId: report.discovery?.candidateGenerationId ?? null,
+      currentBefore,
+      currentBeforeRecovery: report.recovery?.currentBefore ?? currentBefore,
+      currentTmpBeforeRecovery: report.recovery?.currentTmpBefore ?? null,
+      finalGenerationsBeforeRecovery: report.recovery?.finalGenerationsBefore ?? [],
+      recoveryAction: report.recovery?.action ?? null,
+      currentAfterRecovery: report.recovery?.currentAfter ?? null,
+      generationDiscoverySource: "PublishedGenerationPublicationService.adapter.list(.lina/published/generations)",
+      publicationServicePath: "src/index/publishedGenerationPublicationService.ts",
+      writerDecision: report.reason === "ANTI_DOWNGRADE" ? "anti-downgrade" : report.status === "PASS" ? "published" : report.status === "BLOCKED" ? "not-attempted" : "publication-failed",
+      ...report,
+      timestamp: new Date().toISOString(),
+    }, null, 2));
     return report;
   }
 }

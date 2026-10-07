@@ -1,0 +1,72 @@
+{
+  "phase": "M2",
+  "task": "PROMPT-LINA-M2-EQUIVALENCIA-LEGADO-SQLITE-001",
+  "timestamp": "2026-10-04T22:33:30.000Z",
+  "environment": {
+    "nodeVersion": "22.22.1",
+    "electronVersion": "39.8.3",
+    "obsidianVersion": "1.12.7",
+    "sqliteAvailable": true,
+    "journalMode": "wal",
+    "synchronous": "FULL",
+    "foreignKeys": "ON"
+  },
+  "flags": {
+    "producerSqliteShadowWriteEnabled": true,
+    "producerSqliteBootstrapEnabled": true,
+    "producerSqliteEquivalenceAuditEnabled": true
+  },
+  "auditBeforeBootstrap": {
+    "legacyCount": 42,
+    "sqliteCount": 5,
+    "matchedCount": 5,
+    "divergenceCount": 37,
+    "isEquivalent": false,
+    "divergenceSummary": {
+      "LEGACY_ONLY": 37,
+      "SQLITE_ONLY": 0,
+      "METADATA_MISMATCH": 0,
+      "VECTOR_MISMATCH": 0,
+      "DIMENSION_MISMATCH": 0,
+      "CONTRACT_MISMATCH": 0,
+      "HASH_MISMATCH": 0,
+      "DUPLICATE_IDENTITY": 0,
+      "READ_ERROR": 0
+    }
+  },
+  "bootstrapExecution": {
+    "status": "SUCCESS",
+    "recordsProcessed": 42,
+    "batchesExecuted": 1,
+    "batchSize": 250,
+    "durationMs": 14,
+    "aiProviderCalled": false,
+    "embeddingGeneratorCalled": false,
+    "legacyRecordsMutated": false,
+    "deviceRole": "producer"
+  },
+  "auditAfterBootstrap": {
+    "legacyCount": 42,
+    "sqliteCount": 42,
+    "matchedCount": 42,
+    "divergenceCount": 0,
+    "isEquivalent": true,
+    "divergenceSummary": {
+      "LEGACY_ONLY": 0,
+      "SQLITE_ONLY": 0,
+      "METADATA_MISMATCH": 0,
+      "VECTOR_MISMATCH": 0,
+      "DIMENSION_MISMATCH": 0,
+      "CONTRACT_MISMATCH": 0,
+      "HASH_MISMATCH": 0,
+      "DUPLICATE_IDENTITY": 0,
+      "READ_ERROR": 0
+    }
+  },
+  "postReopenAudit": {
+    "isEquivalent": true,
+    "matchedCount": 42,
+    "divergenceCount": 0
+  },
+  "conclusion": "PASS"
+}

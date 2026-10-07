@@ -1,0 +1,1037 @@
+{
+  "phase": "G6-BINARY-OWNERSHIP-CACHE-AUDIT-001",
+  "kind": "audit with authorized ownership-cache fix follow-up",
+  "capturedAt": "2026-10-06T11:33:41.622Z",
+  "conclusion": "FIX_IMPLEMENTED_RUNTIME_VALIDATED",
+  "rootCause": "The untyped harness passed options to evaluate(expectedEpoch:number), caching a false epoch-mismatch. acquireFence(options) read correct ownership but did not update lastDecision. BinaryWorker read cached isAuthorizedSync=false and returned undefined before controller creation; host converted that to binaryStatus=error.",
+  "cachePath": "RAM: LinaPlugin.ownershipGate.lastDecision (no filesystem cache path)",
+  "cacheFormat": "OwnershipGateDecision JavaScript object",
+  "cacheScope": "one plugin instance, one local device",
+  "cacheWriter": [
+    "OwnershipGate.evaluateAndCache (evaluate/acquireFence/assertFence)",
+    "OwnershipGate.invalidate (clears cache and supersedes earlier completions)"
+  ],
+  "cacheReader": [
+    "OwnershipGate.isAuthorizedSync/getProvenance/validateArtifact (legacy synchronous consumers)",
+    "BinaryWorker receives the current preflight boolean from acquireFence + assertFence; no cached sync authorization"
+  ],
+  "cacheLifetime": "until evaluate/assertFence/invalidate or replacement with new plugin instance",
+  "cachePersisted": false,
+  "cacheSynced": false,
+  "sourceOfTruth": [
+    ".lina/ownership.json: activeProducerId and epoch",
+    "Obsidian app.loadLocalStorage(lina_device_id): local device identity",
+    ".lina/devices/<deviceId>.json and canonical role resolution: configured/effective role"
+  ],
+  "invalidState": null,
+  "invalidationGap": "Resolved for mutable binary paths by mandatory fresh no-auto-claim acquisition/assertion, synchronized allow/deny and unchanged durable fencing.",
+  "affectedPath": "Mutable binary preflight -> acquireFence(no-auto-claim) -> assertFence -> current boolean -> BinaryWorker -> fenced controller",
+  "recoverability": "RECOVERABLE_WITHOUT_PROVIDER",
+  "providerRequired": false,
+  "reembeddingRequired": false,
+  "recommendedFix": "Implemented and runtime validated; see ownershipCacheFix and runtimeEvidence.",
+  "g6Status": "PASS",
+  "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+  "testResults": {
+    "diffCheck": "PASS",
+    "typecheck": "PASS",
+    "focusedFiles": 2,
+    "focusedTests": 22,
+    "status": "PASS",
+    "newCharacterizationTests": 4
+  },
+  "safety": {
+    "liveSqliteModified": false,
+    "protectedFilesChanged": 0,
+    "vectorPreservation": "2303/2303 float32 vectors identical by chunk between SQLite, JSONL, existing binary and v2 generations 9/10",
+    "protectedFilesCompared": 40,
+    "commitOrPush": false,
+    "currentModified": false,
+    "generationsModified": false,
+    "ownershipOrCacheRepaired": false,
+    "sqliteIntegrity": "ok on read-only copy including WAL",
+    "reembeddingCalls": 0,
+    "providerCalls": 0,
+    "g6FullDiagnosisRepeated": false,
+    "historicalPhysicalEmbeddingRewrite": "The earlier G6 diagnosis reprojected JSONL; zero physical rewrite is claimed only for this audit, not that earlier diagnosis"
+  },
+  "runtimeCapture": {
+    "capturedAt": "2026-10-06T11:33:41.622Z",
+    "executionContext": "OBSIDIAN_RUNTIME_READ_ONLY",
+    "runtime": {
+      "vault": "zettel",
+      "deviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+      "persistedLocalDeviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+      "localDeviceState": {
+        "schemaVersion": 2,
+        "deviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "createdAt": "2026-09-04T13:50:34.412Z",
+        "updatedAt": "2026-09-28T19:57:12.874Z",
+        "role": "producer",
+        "deviceName": "TESTES"
+      },
+      "lastDecision": {
+        "authorized": false,
+        "status": "epoch-mismatch",
+        "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3,
+        "reason": "Ownership epoch mismatch: expected epoch [object Object], but manifest is at epoch 3."
+      },
+      "isAuthorizedSync": false,
+      "deviceRuntime": {
+        "deviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "deviceName": "TESTES",
+        "configuredRole": "producer",
+        "effectiveRole": "producer",
+        "assignmentState": "assigned",
+        "isConfigured": true,
+        "ownershipExists": true,
+        "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3,
+        "ownershipReason": "manual-transfer",
+        "isActiveProducer": true,
+        "isStandbyProducer": false,
+        "isCompanion": false,
+        "isUnassigned": false,
+        "canPublish": true,
+        "canTransferOwnership": false,
+        "transferEligibilityReason": "already-active-producer",
+        "embeddings": {
+          "configured": true,
+          "textIndexAvailable": true,
+          "embeddingsDeclared": true,
+          "exists": true,
+          "vectorFileState": "available",
+          "provenance": {
+            "epoch": 3,
+            "producerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+            "stale": false
+          },
+          "compatibility": {
+            "provider": "mistral",
+            "model": "mistral-embed",
+            "dimensions": 1024,
+            "compatible": true
+          },
+          "contractState": "compatible",
+          "readiness": {
+            "loaded": true,
+            "runtimeReady": true
+          },
+          "runtimeState": "ready",
+          "semanticAvailable": true,
+          "effectiveMode": "full"
+        }
+      },
+      "maintenance": {
+        "state": {
+          "status": "idle",
+          "activeTask": null,
+          "lastError": null
+        },
+        "started": true,
+        "capabilities": {
+          "role": "producer",
+          "resourceProfile": "desktop",
+          "canWatchVaultEvents": true,
+          "canMaintainTextIndex": true,
+          "canGenerateEmbeddings": true,
+          "canMaintainBinaryCopy": true,
+          "canReconcileStartupDiffs": true,
+          "canReadArtifacts": true,
+          "canExecuteSearch": true
+        }
+      },
+      "binaryControllerState": {
+        "phase": "completed",
+        "expectedPublicationId": "emb-muwl66hs-8hv4xi3e5p",
+        "summary": {
+          "status": "valid",
+          "format": "binary-v1",
+          "sourcePublicationId": "emb-muwl66hs-8hv4xi3e5p",
+          "binaryGenerationId": "derived-emb-muwl66hs-8hv4xi3e5p",
+          "recordCount": 2303,
+          "dimensions": 1024,
+          "byteLength": 9433088,
+          "updatedAt": "2026-10-06T11:19:21.701Z"
+        }
+      },
+      "embeddingReadDiagnostic": {
+        "configuredPreference": "jsonl",
+        "effectiveSource": "binary",
+        "fallbackReason": "none",
+        "canonicalPublicationId": "emb-muwl66hs-8hv4xi3e5p",
+        "binarySourcePublicationId": "emb-muwl66hs-8hv4xi3e5p",
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "lastResolvedAt": 1791285668925,
+        "loadDurationMs": 664.3999999985099,
+        "cacheHit": false
+      },
+      "shadow": {
+        "status": "PASS",
+        "generationId": "generation-000009",
+        "formatVersion": 2,
+        "cutoverEligible": true,
+        "level": "L2",
+        "summary": {
+          "legacyCount": 2303,
+          "publishedCount": 2303,
+          "divergenceCount": 0,
+          "countsByClass": {},
+          "truncated": false
+        },
+        "divergences": [],
+        "providerCalls": 0,
+        "capturedAt": "2026-10-06T11:21:09.106Z",
+        "durationMs": 178
+      }
+    },
+    "ownership": {
+      "schemaVersion": 1,
+      "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+      "epoch": 3,
+      "acquiredAt": "2026-09-28T19:54:18.892Z",
+      "updatedAt": "2026-09-28T19:54:18.892Z",
+      "reason": "manual-transfer"
+    },
+    "deviceState": {
+      "schemaVersion": 2,
+      "deviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+      "createdAt": "2026-09-04T13:50:34.412Z",
+      "updatedAt": "2026-09-28T19:57:12.874Z",
+      "role": "producer",
+      "deviceName": "TESTES"
+    },
+    "canonicalManifest": {
+      "embeddingsEnabled": true,
+      "embeddings": {
+        "enabled": true,
+        "provider": "mistral",
+        "model": "mistral-embed",
+        "totalEmbeddings": 2303,
+        "dimensions": 1024,
+        "updatedAt": "2026-10-06T11:21:10.308Z",
+        "publicationId": "emb-muwl8l2c-icffosat9c",
+        "sourceTotalChunks": 2303,
+        "sourceTextGenerationId": "gen-muvb41fn-elt8zhju",
+        "vectorContract": {
+          "schemaVersion": 1,
+          "provider": "mistral",
+          "model": "mistral-embed",
+          "dimensions": 1024,
+          "metric": "cosine",
+          "prefixMode": "none",
+          "inputVersion": 1,
+          "contractId": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51"
+        }
+      },
+      "embeddingInput": {
+        "version": 1,
+        "includesTitle": true,
+        "includesPath": true,
+        "includesChunkIndex": true,
+        "includesChunkText": true,
+        "prefixMode": "none",
+        "usesSearchQueryPrefix": false,
+        "usesSearchDocumentPrefix": false
+      },
+      "version": 1,
+      "indexType": "text",
+      "generationId": "gen-muvb41fn-elt8zhju",
+      "notesDigest": "sha256:8466c6b01821448a3c65222e1a24c0ce40d603f83500338bc10687d16d7ddccb",
+      "chunksDigest": "sha256:1fc6195999522568fd3edcd3e2ccf6d195a9c17705d656d20d607be3bdd84cb2",
+      "updatedAt": "2026-10-05T13:49:55.896Z",
+      "totalNotes": 1252,
+      "totalChunks": 2303,
+      "excludedNotes": 41,
+      "chunking": {
+        "enabled": true,
+        "chunkSize": 1200,
+        "overlap": 150
+      },
+      "exclusions": {
+        "enabled": true,
+        "alwaysExcludedFolders": [
+          ".lina/",
+          ".obsidian/"
+        ],
+        "excludedFoldersCount": 1,
+        "excludedPathContainsCount": 18,
+        "excludedContentContainsCount": 0
+      },
+      "provenance": {
+        "producerDeviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "producerEpoch": 3,
+        "generatedAt": "2026-10-05T13:49:55.895Z"
+      },
+      "exclusionPolicyRevision": 1,
+      "exclusionPolicyHash": "sha256:9beada2034af0d0b30a49eea0b1f967adb239d20fea2ddddc24bdb90bf6358e4",
+      "vectorContract": {
+        "schemaVersion": 1,
+        "provider": "mistral",
+        "model": "mistral-embed",
+        "dimensions": 1024,
+        "metric": "cosine",
+        "prefixMode": "none",
+        "inputVersion": 1,
+        "contractId": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51"
+      }
+    },
+    "binaryManifest": {
+      "format": "lina-embeddings-binary",
+      "version": 1,
+      "generationId": "derived-emb-muwl66hs-8hv4xi3e5p",
+      "sourcePublicationId": "emb-muwl66hs-8hv4xi3e5p",
+      "byteOrder": "little-endian",
+      "numericType": "float32",
+      "provider": "mistral",
+      "model": "mistral-embed",
+      "dimensions": 1024,
+      "recordCount": 2303,
+      "metadataFile": "embeddings.meta.jsonl",
+      "vectorsFile": "embeddings.vectors.f32",
+      "metadataByteLength": 610425,
+      "vectorsByteLength": 9433088,
+      "metadataDigest": "sha256:28da45864f7f4e68059f45a60c2001c8cf888fe6e732b907a771aba3cfb95193",
+      "vectorsDigest": "sha256:79c6782a27df3429863adf8f1152b0ffeae77e4b8f96bd525ce8ac4da0ebc65a",
+      "inputFormatVersion": "1",
+      "prefixMode": "none",
+      "createdAt": "2026-10-06T11:19:21.701Z",
+      "vectorContractId": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51",
+      "vectorContract": {
+        "schemaVersion": 1,
+        "provider": "mistral",
+        "model": "mistral-embed",
+        "dimensions": 1024,
+        "metric": "cosine",
+        "prefixMode": "none",
+        "inputVersion": 1,
+        "contractId": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51"
+      }
+    },
+    "binaryIntegrity": {
+      "metadataDigestMatches": true,
+      "vectorsDigestMatches": true,
+      "metadataSizeMatches": true,
+      "vectorsSizeMatches": true,
+      "metadataRecordCount": 2303
+    },
+    "vectorPreservation": {
+      "sqliteCount": 2303,
+      "canonicalCount": 2303,
+      "canonicalVectorMatches": 2303,
+      "canonicalInputMatches": 2303,
+      "binaryCount": 2303,
+      "binaryVectorMatches": 2303
+    },
+    "sqliteDatabasePath": "C:/Users/ansel/AppData/Local/lina/db/lina-producer.db",
+    "sqlite": {
+      "method": "read-only query of copied DB and WAL",
+      "integrityCheck": [
+        {
+          "integrity_check": "ok"
+        }
+      ],
+      "schemaMigrations": [
+        {
+          "version": 1,
+          "applied_at": "2026-10-05T09:25:54.757Z",
+          "description": "Phase M1 initial schema for embedding spaces and records"
+        },
+        {
+          "version": 2,
+          "applied_at": "2026-10-06T10:38:07.227Z",
+          "description": "G6 preserve embedding input hashes"
+        }
+      ],
+      "recordSummary": {
+        "records": 2303,
+        "inputHashes": 2303,
+        "minVectorBytes": 4096,
+        "maxVectorBytes": 4096
+      },
+      "spaces": [
+        {
+          "space_id": "ollama:nomic-embed-text:4",
+          "vector_contract_id": "vec:65fe9dae332509d07214d0818a943164c8660e28bbfb4bc2cb174ad7fa7e2c1d",
+          "provider": "ollama",
+          "model": "nomic-embed-text",
+          "dimension": 4,
+          "dtype": "float32",
+          "input_version": 1
+        },
+        {
+          "space_id": "ollama:nomic-embed-text:1024",
+          "vector_contract_id": "vec:62b82b967a48ab4aaece24c5449eaf78820b987bbb2e5bdba410fd0d5d7c6361",
+          "provider": "ollama",
+          "model": "nomic-embed-text",
+          "dimension": 1024,
+          "dtype": "float32",
+          "input_version": 1
+        },
+        {
+          "space_id": "mistral:mistral-embed:1024",
+          "vector_contract_id": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51",
+          "provider": "mistral",
+          "model": "mistral-embed",
+          "dimension": 1024,
+          "dtype": "float32",
+          "input_version": 1
+        }
+      ]
+    },
+    "generations": [
+      {
+        "generationId": "generation-000001",
+        "formatVersion": 1,
+        "recordCount": 2299,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2299,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000002",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000003",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000004",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000005",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000006",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000007",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000008",
+        "formatVersion": 1,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 2303,
+        "offsetsMatch": true
+      },
+      {
+        "generationId": "generation-000009",
+        "formatVersion": 2,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 0,
+        "offsetsMatch": true,
+        "sqliteVectorMatches": 2303,
+        "sqliteInputMatches": 2303
+      },
+      {
+        "generationId": "generation-000010",
+        "formatVersion": 2,
+        "recordCount": 2303,
+        "dimensions": 1024,
+        "recordsHashMatches": true,
+        "vectorsHashMatches": true,
+        "vectorByteLengthMatches": true,
+        "missingInputHashes": 0,
+        "offsetsMatch": true,
+        "sqliteVectorMatches": 2303,
+        "sqliteInputMatches": 2303
+      }
+    ],
+    "hashesBefore": {
+      ".lina/ownership.json": {
+        "size": 218,
+        "mtime": "2026-09-28T19:54:18.893Z",
+        "sha256": "5eeb042b3b749dd49e0c898c049865be2f1157d9b459a26469306ec866e0df69"
+      },
+      ".lina/devices/440d9ef0-9ff9-424e-ae55-7c386b885ec8.json": {
+        "size": 212,
+        "mtime": "2026-09-28T19:57:12.875Z",
+        "sha256": "836c114bfdd18cb9fef070254d2a4cffe08bc497bcd5f95fcfd8707fc8b73db2"
+      },
+      ".lina/index/manifest.json": {
+        "size": 2206,
+        "mtime": "2026-10-06T11:21:11.084Z",
+        "sha256": "43964a96171ebd29c8f79f06626f6bb3a36edcd299e487ca6b6bd8daf6e3166a"
+      },
+      ".lina/index/embeddings.jsonl": {
+        "size": 45284131,
+        "mtime": "2026-10-06T11:21:10.698Z",
+        "sha256": "70a22abddcb66f9dafc9385759f97eea49a8a2038434101b4a8c6aa611fd2f40"
+      },
+      ".lina/index/embeddings.binary.manifest.json": {
+        "size": 1006,
+        "mtime": "2026-10-06T11:19:21.721Z",
+        "sha256": "2de215f51280c96d0ba982503db659c172fd552b913bf766491e6d0a1fbd6019"
+      },
+      ".lina/index/embeddings.meta.jsonl": {
+        "size": 610425,
+        "mtime": "2026-10-06T11:19:21.717Z",
+        "sha256": "28da45864f7f4e68059f45a60c2001c8cf888fe6e732b907a771aba3cfb95193"
+      },
+      ".lina/index/embeddings.vectors.f32": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:19:21.71Z",
+        "sha256": "79c6782a27df3429863adf8f1152b0ffeae77e4b8f96bd525ce8ac4da0ebc65a"
+      },
+      ".lina/published/CURRENT": {
+        "size": 17,
+        "mtime": "2026-10-06T11:21:14.419Z",
+        "sha256": "131ac252e86bf948bf3c0eae4b5cf710b16840bac060f01fa5d4fe0439aab988"
+      },
+      ".lina/published/generations/generation-000001/manifest.json": {
+        "size": 536,
+        "mtime": "2026-10-05T13:07:53.076Z",
+        "sha256": "8c223c760ef1e300242589264938ab4dbe90050ea25714bd9627f252263306a1"
+      },
+      ".lina/published/generations/generation-000001/records.json": {
+        "size": 795832,
+        "mtime": "2026-10-05T13:07:52.635Z",
+        "sha256": "08b6b4aa74e190d29c590454990a2171e68715115ce2c226aec1149c3e0bdfde"
+      },
+      ".lina/published/generations/generation-000001/vectors.bin": {
+        "size": 9416704,
+        "mtime": "2026-10-05T13:07:52.612Z",
+        "sha256": "7ee64164eec088c9c5a008a92cfad6d9aaa4a0fb0e273642f5cafd414d7bf69a"
+      },
+      ".lina/published/generations/generation-000002/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:16:31.849Z",
+        "sha256": "06025a20bed3b7d98f4828d3f09e00ff51efa13a8b4b269cbfb901a42d8c3f5c"
+      },
+      ".lina/published/generations/generation-000002/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:16:31.848Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000002/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:16:31.845Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000003/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:48:11.105Z",
+        "sha256": "f5fb50efdd27d483b37da7dd8273af022f1898aedc6c75af5d0ce1652a103a34"
+      },
+      ".lina/published/generations/generation-000003/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:48:11.103Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000003/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:48:11.012Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000004/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:48:18.207Z",
+        "sha256": "54e44e07a2cef289060aa3f3d196d13696e8dc9c363667da0adbd6074d00c617"
+      },
+      ".lina/published/generations/generation-000004/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:48:18.206Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000004/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:48:18.203Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000005/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:05:53.102Z",
+        "sha256": "f10d528598376df8619ee58cceb2ec472ab5cdf90ca5caaec4c888fea06778d3"
+      },
+      ".lina/published/generations/generation-000005/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:05:53.101Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000005/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:05:53.098Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000006/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:05:54.258Z",
+        "sha256": "a220fb15f58112c9c4ed1a337adc5db359b0164ddaac00282153cefe0325f447"
+      },
+      ".lina/published/generations/generation-000006/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:05:54.254Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000006/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:05:54.251Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000007/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:14:55.622Z",
+        "sha256": "3d66028013bf55f4e387953d54c413e7f03d25d8965ffb51e84eabf935adc8f8"
+      },
+      ".lina/published/generations/generation-000007/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:14:55.615Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000007/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:14:55.611Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000008/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:17:19.764Z",
+        "sha256": "38f1d50d41a7986ec408a075699696601e922875d0691ff66b90cab76e146766"
+      },
+      ".lina/published/generations/generation-000008/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:17:19.763Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000008/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:17:19.76Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000009/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-06T11:21:07.675Z",
+        "sha256": "49ca8b9d8752b66ee2756c3f01f417fa10222d790135ec235746b35e62e6365d"
+      },
+      ".lina/published/generations/generation-000009/records.json": {
+        "size": 870389,
+        "mtime": "2026-10-06T11:21:07.674Z",
+        "sha256": "abc3a261c7427f1eb038ca1e404fafd227692c1079ae081983b2522d2000d27f"
+      },
+      ".lina/published/generations/generation-000009/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:21:07.667Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000010/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-06T11:21:14.336Z",
+        "sha256": "9e852e0ba9660a307ed3241ea3a7fac20db53d09131edc554fe3212894caeff7"
+      },
+      ".lina/published/generations/generation-000010/records.json": {
+        "size": 870389,
+        "mtime": "2026-10-06T11:21:14.334Z",
+        "sha256": "abc3a261c7427f1eb038ca1e404fafd227692c1079ae081983b2522d2000d27f"
+      },
+      ".lina/published/generations/generation-000010/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:21:14.327Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      "sqlite": {
+        "size": 10874880,
+        "mtime": "2026-10-06T11:19:11.674Z",
+        "sha256": "9742c1a6057191d65f1d063e80f789187f1872fb01f97177cc0cf91daff1c9a0"
+      },
+      "sqliteWal": {
+        "absent": true
+      }
+    },
+    "hashesAfter": {
+      ".lina/ownership.json": {
+        "size": 218,
+        "mtime": "2026-09-28T19:54:18.893Z",
+        "sha256": "5eeb042b3b749dd49e0c898c049865be2f1157d9b459a26469306ec866e0df69"
+      },
+      ".lina/devices/440d9ef0-9ff9-424e-ae55-7c386b885ec8.json": {
+        "size": 212,
+        "mtime": "2026-09-28T19:57:12.875Z",
+        "sha256": "836c114bfdd18cb9fef070254d2a4cffe08bc497bcd5f95fcfd8707fc8b73db2"
+      },
+      ".lina/index/manifest.json": {
+        "size": 2206,
+        "mtime": "2026-10-06T11:21:11.084Z",
+        "sha256": "43964a96171ebd29c8f79f06626f6bb3a36edcd299e487ca6b6bd8daf6e3166a"
+      },
+      ".lina/index/embeddings.jsonl": {
+        "size": 45284131,
+        "mtime": "2026-10-06T11:21:10.698Z",
+        "sha256": "70a22abddcb66f9dafc9385759f97eea49a8a2038434101b4a8c6aa611fd2f40"
+      },
+      ".lina/index/embeddings.binary.manifest.json": {
+        "size": 1006,
+        "mtime": "2026-10-06T11:19:21.721Z",
+        "sha256": "2de215f51280c96d0ba982503db659c172fd552b913bf766491e6d0a1fbd6019"
+      },
+      ".lina/index/embeddings.meta.jsonl": {
+        "size": 610425,
+        "mtime": "2026-10-06T11:19:21.717Z",
+        "sha256": "28da45864f7f4e68059f45a60c2001c8cf888fe6e732b907a771aba3cfb95193"
+      },
+      ".lina/index/embeddings.vectors.f32": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:19:21.71Z",
+        "sha256": "79c6782a27df3429863adf8f1152b0ffeae77e4b8f96bd525ce8ac4da0ebc65a"
+      },
+      ".lina/published/CURRENT": {
+        "size": 17,
+        "mtime": "2026-10-06T11:21:14.419Z",
+        "sha256": "131ac252e86bf948bf3c0eae4b5cf710b16840bac060f01fa5d4fe0439aab988"
+      },
+      ".lina/published/generations/generation-000001/manifest.json": {
+        "size": 536,
+        "mtime": "2026-10-05T13:07:53.076Z",
+        "sha256": "8c223c760ef1e300242589264938ab4dbe90050ea25714bd9627f252263306a1"
+      },
+      ".lina/published/generations/generation-000001/records.json": {
+        "size": 795832,
+        "mtime": "2026-10-05T13:07:52.635Z",
+        "sha256": "08b6b4aa74e190d29c590454990a2171e68715115ce2c226aec1149c3e0bdfde"
+      },
+      ".lina/published/generations/generation-000001/vectors.bin": {
+        "size": 9416704,
+        "mtime": "2026-10-05T13:07:52.612Z",
+        "sha256": "7ee64164eec088c9c5a008a92cfad6d9aaa4a0fb0e273642f5cafd414d7bf69a"
+      },
+      ".lina/published/generations/generation-000002/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:16:31.849Z",
+        "sha256": "06025a20bed3b7d98f4828d3f09e00ff51efa13a8b4b269cbfb901a42d8c3f5c"
+      },
+      ".lina/published/generations/generation-000002/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:16:31.848Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000002/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:16:31.845Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000003/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:48:11.105Z",
+        "sha256": "f5fb50efdd27d483b37da7dd8273af022f1898aedc6c75af5d0ce1652a103a34"
+      },
+      ".lina/published/generations/generation-000003/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:48:11.103Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000003/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:48:11.012Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000004/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T17:48:18.207Z",
+        "sha256": "54e44e07a2cef289060aa3f3d196d13696e8dc9c363667da0adbd6074d00c617"
+      },
+      ".lina/published/generations/generation-000004/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T17:48:18.206Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000004/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T17:48:18.203Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000005/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:05:53.102Z",
+        "sha256": "f10d528598376df8619ee58cceb2ec472ab5cdf90ca5caaec4c888fea06778d3"
+      },
+      ".lina/published/generations/generation-000005/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:05:53.101Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000005/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:05:53.098Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000006/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:05:54.258Z",
+        "sha256": "a220fb15f58112c9c4ed1a337adc5db359b0164ddaac00282153cefe0325f447"
+      },
+      ".lina/published/generations/generation-000006/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:05:54.254Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000006/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:05:54.251Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000007/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:14:55.622Z",
+        "sha256": "3d66028013bf55f4e387953d54c413e7f03d25d8965ffb51e84eabf935adc8f8"
+      },
+      ".lina/published/generations/generation-000007/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:14:55.615Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000007/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:14:55.611Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000008/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-05T18:17:19.764Z",
+        "sha256": "38f1d50d41a7986ec408a075699696601e922875d0691ff66b90cab76e146766"
+      },
+      ".lina/published/generations/generation-000008/records.json": {
+        "size": 797026,
+        "mtime": "2026-10-05T18:17:19.763Z",
+        "sha256": "923d522c1d45bfe6a10a024ff3ca59349593052d3dc4b1c4dee2caa48a715510"
+      },
+      ".lina/published/generations/generation-000008/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-05T18:17:19.76Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000009/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-06T11:21:07.675Z",
+        "sha256": "49ca8b9d8752b66ee2756c3f01f417fa10222d790135ec235746b35e62e6365d"
+      },
+      ".lina/published/generations/generation-000009/records.json": {
+        "size": 870389,
+        "mtime": "2026-10-06T11:21:07.674Z",
+        "sha256": "abc3a261c7427f1eb038ca1e404fafd227692c1079ae081983b2522d2000d27f"
+      },
+      ".lina/published/generations/generation-000009/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:21:07.667Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      ".lina/published/generations/generation-000010/manifest.json": {
+        "size": 534,
+        "mtime": "2026-10-06T11:21:14.336Z",
+        "sha256": "9e852e0ba9660a307ed3241ea3a7fac20db53d09131edc554fe3212894caeff7"
+      },
+      ".lina/published/generations/generation-000010/records.json": {
+        "size": 870389,
+        "mtime": "2026-10-06T11:21:14.334Z",
+        "sha256": "abc3a261c7427f1eb038ca1e404fafd227692c1079ae081983b2522d2000d27f"
+      },
+      ".lina/published/generations/generation-000010/vectors.bin": {
+        "size": 9433088,
+        "mtime": "2026-10-06T11:21:14.327Z",
+        "sha256": "4f7b232ca1293c35ddab6af7ec003f3eac0a57dc9d9aff34f3eb315f332b163f"
+      },
+      "sqlite": {
+        "size": 10874880,
+        "mtime": "2026-10-06T11:19:11.674Z",
+        "sha256": "9742c1a6057191d65f1d063e80f789187f1872fb01f97177cc0cf91daff1c9a0"
+      },
+      "sqliteWal": {
+        "absent": true
+      }
+    },
+    "changedFiles": [],
+    "current": "generation-000010"
+  },
+  "historicalStatusBeforeOwnershipCacheFix": {
+    "g6Status": "FAIL final diagnosis; backfill/publication v2/shadow PASS; not formally closed",
+    "conclusion": "READY_FOR_FIX",
+    "cutoverStatus": "BLOCKED"
+  },
+  "ownershipCacheFix": {
+    "status": "PASS",
+    "g6Status": "PASS",
+    "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+    "runtimeEvidence": "docs/architecture/evidence/G6-BINARY-OWNERSHIP-CACHE-FIX-RUNTIME-001.json",
+    "currentAtTaskStart": "generation-000010",
+    "currentAfterFirstG6": "generation-000011",
+    "currentAfterFinalG6": "generation-000012",
+    "authority": {
+      "token": {
+        "producerDeviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      },
+      "decision": {
+        "authorized": true,
+        "status": "authorized",
+        "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      }
+    },
+    "binary": {
+      "status": "valid",
+      "format": "binary-v1",
+      "sourcePublicationId": "emb-muwmm5xy-ilpu83dvcx",
+      "binaryGenerationId": "derived-emb-muwmm5xy-ilpu83dvcx",
+      "recordCount": 2303,
+      "dimensions": 1024,
+      "byteLength": 9433088,
+      "updatedAt": "2026-10-06T11:59:46.670Z"
+    },
+    "shadow": {
+      "status": "PASS",
+      "generationId": "generation-000012",
+      "formatVersion": 2,
+      "cutoverEligible": true,
+      "level": "L2",
+      "summary": {
+        "legacyCount": 2303,
+        "publishedCount": 2303,
+        "divergenceCount": 0,
+        "countsByClass": {},
+        "truncated": false
+      },
+      "divergences": [],
+      "providerCalls": 0,
+      "capturedAt": "2026-10-06T11:59:48.271Z",
+      "durationMs": 110,
+      "legacyLoadMs": 450
+    },
+    "backfillCounts": {
+      "BACKFILLED_VERIFIED": 0,
+      "ALREADY_PRESENT": 2303,
+      "NOT_RECOVERABLE": 0,
+      "AMBIGUOUS": 0,
+      "SOURCE_MISSING": 0,
+      "SOURCE_CHANGED": 0
+    },
+    "recordsTotal": 2303,
+    "equivalenceDivergences": 0,
+    "providerCalls": 0,
+    "reembeddingCalls": 0,
+    "safety": {
+      "oldGenerationsByteIdentical": true,
+      "notesByteIdentical": true,
+      "ownershipAndDeviceByteIdentical": true,
+      "sqliteRecordsIdentical": true,
+      "sqliteSpacesIdentical": true,
+      "canonicalVectorsAndInputHashesIdentical": true,
+      "sqliteToCanonicalIdentical": true,
+      "sqliteToBinaryIdentical": true,
+      "sqliteToPublishedIdentical": true
+    },
+    "notesCompared": 1293,
+    "oldGenerationFilesCompared": 30,
+    "gates": {
+      "npm test": "PASS: 180 files / 2374 tests",
+      "typecheck": "PASS",
+      "lint:obsidian:strict": "PASS: zero warnings",
+      "build": "PASS",
+      "release-check": "PASS",
+      "git diff --check": "PASS"
+    },
+    "testCoverage": {
+      "characterizationBeforeChanges": 22,
+      "auditCasesPreserved": 22,
+      "newRegressionCases": 17,
+      "focusedIncludingBinaryWorker": 42
+    },
+    "implementation": [
+      "OwnershipGate.evaluateAndCache is the sole authoritative cache-write boundary for evaluate/acquireFence/assertFence",
+      "Both allow and deny acquisitions update RAM cache; owner/epoch mismatches and identity/role changes during evaluation deny",
+      "Evaluation revision prevents older completions from overwriting newer cache state",
+      "BinaryWorker production preflight acquires no-auto-claim fence, asserts it and uses returned boolean directly",
+      "Automatic binary maintenance awaits async authorization; mutable tasks recheck stop/dispose after preflight",
+      "Controller fencing at durable writes remains unchanged"
+    ],
+    "residualFindings": [
+      "Pre-existing automatic M3 diagnostic runs on plugin reload and rewrites SQLite timestamps/metadata and legacy publication identity. Initial safety comparison therefore failed despite unchanged vectors/input hashes. The failed attempt is preserved in runtime evidence.previousAttempt. Final isolated G6 repetition proves exact records/spaces identity after startup settled.",
+      "Binary validation requires requestAnimationFrame; hidden Obsidian windows suspend progress. Runtime proof restored the existing window; production scheduler unchanged.",
+      "Historical synchronous null-cache optimism remains outside binary mutable preflight, which always resolves current authority.",
+      "G1/G2/G3 remain pending; cutover remains blocked."
+    ],
+    "commitCreated": false,
+    "pushExecuted": false,
+    "head": "620a2c62b3a907927c12bd72e25b847caa6f3e61"
+  },
+  "status": "PASS",
+  "auditConclusionBeforeFix": "READY_FOR_FIX",
+  "cacheSynchronizedDuringBinaryPreflight": true,
+  "historicalCacheWriter": [
+    "OwnershipGate.evaluate",
+    "OwnershipGate.assertFence",
+    "OwnershipGate.invalidate"
+  ],
+  "historicalCacheReader": [
+    "OwnershipGate.isAuthorizedSync",
+    "BinaryWorker.createOrUpdate via injected canPublish",
+    "OwnershipGate.getProvenance/validateArtifact"
+  ],
+  "historicalInvalidState": {
+    "authorized": false,
+    "status": "epoch-mismatch",
+    "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+    "epoch": 3,
+    "reason": "Ownership epoch mismatch: expected epoch [object Object], but manifest is at epoch 3."
+  },
+  "historicalInvalidationGap": "acquireFence(options) updates neither positive nor negative cached decisions; no production call to OwnershipGate.invalidate found; binary preflight relies on cache before entering fenced controller; null cache is optimistic in isAuthorizedSync",
+  "historicalAffectedPath": "diagnoseG6EmbeddingInputHashBackfill -> createOrUpdateBinaryEmbeddingCopy -> MaintenanceEngine.runBinaryTask -> BinaryWorker.createOrUpdate -> isAuthorizedSync=false -> undefined -> generic producer error",
+  "historicalRecommendedFix": "B: fresh no-auto-claim authority/fence for each mutable binary preflight, preserve per-mutation controller fence; synchronize acquireFence(options) lastDecision for both accepted/rejected decisions. Do not use invalidate() alone, because null permits synchronous authorization. Correct untyped harness expectedEpoch call."
+}

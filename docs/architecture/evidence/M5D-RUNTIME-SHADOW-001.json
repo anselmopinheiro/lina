@@ -1,0 +1,115 @@
+{
+  "phase": "M5D-RUNTIME-SHADOW-001",
+  "status": "PASS",
+  "scope": "desktop-producer-runtime-validated",
+  "capturedAt": "2026-10-05",
+  "scenarios": {
+    "DESKTOP_FLAG_OFF": {
+      "environment": {
+        "platform": "win32",
+        "electron": "39.8.3",
+        "node": "22.22.1",
+        "obsidian": "1.12.7",
+        "vault": "zettel"
+      },
+      "device": {
+        "role": "producer",
+        "name": "TESTES"
+      },
+      "flag": {
+        "companionPublishedGenerationShadowEnabled": false
+      },
+      "generationId": null,
+      "comparisonLevel": "L2",
+      "status": "IDLE",
+      "divergenceCount": 0,
+      "legacyCount": null,
+      "publishedCount": null,
+      "legacyDurationMs": null,
+      "shadowDurationMs": null,
+      "providerCalls": 0,
+      "evidenceLevel": "OBSIDIAN_RUNTIME",
+      "interpretation": "Shadow não arrancou quando a flag está desativada; zero leituras publicadas; caminho legado continuou sozinho com providerCalls = 0."
+    },
+    "DESKTOP_FLAG_ON": {
+      "environment": {
+        "platform": "win32",
+        "electron": "39.8.3",
+        "node": "22.22.1",
+        "obsidian": "1.12.7",
+        "vault": "zettel"
+      },
+      "device": {
+        "role": "producer",
+        "name": "TESTES"
+      },
+      "flag": {
+        "companionPublishedGenerationShadowEnabled": true
+      },
+      "generationId": "generation-000008",
+      "comparisonLevel": "L2",
+      "status": "PASS",
+      "divergenceCount": 0,
+      "legacyCount": 2303,
+      "publishedCount": 2303,
+      "legacyDurationMs": 126,
+      "shadowDurationMs": 124,
+      "providerCalls": 0,
+      "evidenceLevel": "OBSIDIAN_RUNTIME",
+      "interpretation": "Shadow executou em paralelo; geração publicada generation-000008 lida via WebCrypto; L2 desktop; equivalência perfeita 2303/2303; 0 divergências; providerCalls = 0; durações legada e shadow medidas separadamente."
+    }
+  },
+  "legacyAuthoritative": {
+    "contract": "getRuntimeEmbeddingIndex continua a devolver o índice legado; shadow executa separadamente sem bloquear nem alterar os resultados entregues ao utilizador.",
+    "evidenceLevel": "OBSIDIAN_RUNTIME",
+    "integrationEvidenceLevel": "INTEGRATION_TEST"
+  },
+  "controlledFailures": {
+    "DIVERGED": {
+      "evidenceLevel": "UNIT_TEST",
+      "source": "tests/index/publishedGenerationEquivalence.test.ts"
+    },
+    "TARGET_PARTIAL": {
+      "evidenceLevel": "UNIT_TEST",
+      "source": "tests/index/publishedGenerationReader.test.ts"
+    },
+    "HASH_MISMATCH": {
+      "evidenceLevel": "UNIT_TEST",
+      "source": "tests/index/publishedGenerationReader.test.ts"
+    },
+    "DOWNGRADE_REJECTED": {
+      "evidenceLevel": "UNIT_TEST",
+      "source": "tests/index/publishedGenerationReader.test.ts"
+    },
+    "CURRENT_CHANGED": {
+      "evidenceLevel": "UNIT_TEST",
+      "source": "tests/index/publishedGenerationReader.test.ts"
+    },
+    "singleFlight": {
+      "evidenceLevel": "INTEGRATION_TEST",
+      "source": "tests/index/publishedGenerationShadowAudit.test.ts"
+    },
+    "dedup": {
+      "evidenceLevel": "INTEGRATION_TEST",
+      "source": "tests/index/publishedGenerationShadowAudit.test.ts"
+    }
+  },
+  "platformValidation": {
+    "producerDesktop": {
+      "status": "PASS",
+      "evidenceLevel": "OBSIDIAN_RUNTIME"
+    },
+    "companionDesktop": {
+      "status": "NÃO_EXECUTADO",
+      "evidenceLevel": "NÃO_EXECUTADO"
+    },
+    "android": {
+      "status": "NÃO_EXECUTADO",
+      "evidenceLevel": "NÃO_EXECUTADO"
+    },
+    "ios": {
+      "status": "NÃO_EXECUTADO",
+      "evidenceLevel": "NÃO_EXECUTADO"
+    }
+  }
+}

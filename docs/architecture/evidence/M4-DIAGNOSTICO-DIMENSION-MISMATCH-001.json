@@ -1,0 +1,15 @@
+{
+  "summary": { "totalRecords": 2299, "okRecords": 2299, "mismatchRecords": 0 },
+  "spaces": [
+    { "spaceId": "ollama:nomic-embed-text:4", "model": "nomic-embed-text", "dimensions": 4, "recordCount": 0 },
+    { "spaceId": "ollama:nomic-embed-text:1024", "model": "nomic-embed-text", "dimensions": 1024, "recordCount": 2299 }
+  ],
+  "dimensionDistribution": { "1024": 2299 },
+  "issues": [],
+  "suspectedOrigin": "M4 publication service calls SqliteProducerLocalStore.getSpace() without spaceId. Its LIMIT 1 query selects the empty 4d space rather than the populated 1024d space; Builder then compares every 1024d BLOB to dimension 4.",
+  "evidence": [
+    "Read-only SQLite query: embedding_records count=2299; length(embedding_blob)/4=1024 for all records.",
+    "src/index/publishedGenerationPublicationService.ts calls store.getSpace() without an identifier.",
+    "src/index/sqliteProducerLocalStore.ts getSpace() uses LIMIT 1 when no spaceId is supplied."
+  ]
+}

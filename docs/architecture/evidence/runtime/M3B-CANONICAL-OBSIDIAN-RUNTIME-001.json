@@ -1,0 +1,61 @@
+{
+  "executionContext": "obsidian-plugin",
+  "role": "active-producer",
+  "dbPath": ".lina-local/db/lina-producer.db",
+  "environment": {
+    "nodeVersion": "22.22.1",
+    "electronVersion": "39.8.3",
+    "obsidianVersion": "1.12.7",
+    "sqliteAvailable": true
+  },
+  "flags": {
+    "producerSqliteCanonicalEnabled": true,
+    "producerSqliteShadowWriteEnabled": true,
+    "producerSqliteBootstrapEnabled": true,
+    "producerSqliteEquivalenceAuditEnabled": true
+  },
+  "timeline": [
+    {
+      "step": "canonical-sqlite-start",
+      "timestamp": "2026-10-05T09:52:12.195Z"
+    },
+    {
+      "step": "canonical-sqlite-pass",
+      "timestamp": "2026-10-05T09:52:16.044Z"
+    },
+    {
+      "step": "legacy-projection-start",
+      "timestamp": "2026-10-05T09:52:16.044Z"
+    },
+    {
+      "step": "legacy-projection-pass",
+      "timestamp": "2026-10-05T09:52:19.172Z"
+    }
+  ],
+  "eligibility": {
+    "eligible": true,
+    "mode": "SQLITE_CANONICAL_MODE"
+  },
+  "canonicalWriteResult": {
+    "success": true,
+    "mode": "SQLITE_CANONICAL_MODE",
+    "sqliteWritePassed": true,
+    "legacyProjectionPassed": true,
+    "recordsCount": 2299
+  },
+  "reprojectionResult": {
+    "success": true,
+    "recordsCount": 2299,
+    "providerCallsCount": 0
+  },
+  "reopenTest": {
+    "reopenPassed": true,
+    "storeReopened": true,
+    "schemaVersion": 1,
+    "recordCount": 2299,
+    "isEquivalent": true,
+    "divergenceCount": 0,
+    "matchedCount": 2299
+  },
+  "timestamp": "2026-10-05T09:52:19.349Z"
+}

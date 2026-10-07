@@ -1,0 +1,16 @@
+{
+  "phase": "M4",
+  "conclusion": "PASS",
+  "capturedAt": "2026-10-05",
+  "requirements": [
+    { "status": "PASS", "evidenceLevel": "UNIT_TEST", "evidence": "Builder, Writer F1-F7, retry, immutability and CURRENT recovery tests passed." },
+    { "status": "PASS", "evidenceLevel": "INTEGRATION_TEST", "evidence": "Canonical writer invokes immutable projection after legacy projection and preserves SQLite authority on failure." },
+    { "status": "PASS", "evidenceLevel": "OBSIDIAN_RUNTIME", "evidence": "Monotonic generation IDs 000001..000008 and CURRENT advancement observed in the zettel test vault." },
+    { "status": "PASS", "evidenceLevel": "OBSIDIAN_RUNTIME", "evidence": "CURRENT_MISSING_TMP_VALID: RECOVERED_TMP -> CURRENT=generation-000006, tmp removed, providerCalls=0; second run NO_OP; SHA-256 of generations unchanged." },
+    { "status": "PASS", "evidenceLevel": "STATIC_AND_SUITE", "evidence": "Full suite 174 files / 2292 tests, typecheck and git diff --check green; no references to published/CURRENT in src/companion or src/search, no git changes there." }
+  ],
+  "providerCalls": 0,
+  "companionMigrated": false,
+  "m5Started": false,
+  "notRerun": ["lint:obsidian", "build"]
+}

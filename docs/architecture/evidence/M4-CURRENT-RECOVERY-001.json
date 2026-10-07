@@ -1,0 +1,64 @@
+{
+  "phase": "M4-CURRENT-RECOVERY-001",
+  "capturedAt": "2026-10-05",
+  "evidenceKind": "obsidian-runtime-controlled-proof",
+  "vault": "zettel (test vault)",
+  "testScenario": "CURRENT_MISSING_TMP_VALID",
+  "setup": "Obsidian fully closed; CURRENT removed and CURRENT.tmp written with generation-000006 (only pointer files touched); Obsidian reopened and 'Lina: Diagnose m4 immutable publication' executed.",
+  "recoveryResult": {
+    "currentBeforeRecovery": null,
+    "currentTmpBeforeRecovery": "generation-000006",
+    "finalGenerationsBeforeRecovery": ["generation-000001", "generation-000002", "generation-000003", "generation-000004", "generation-000005", "generation-000006"],
+    "validFinalGenerations": ["generation-000001", "generation-000002", "generation-000003", "generation-000004", "generation-000005", "generation-000006"],
+    "targetGenerationValidated": true,
+    "recoveryAction": "RECOVERED_TMP",
+    "currentAfterRecovery": "generation-000006",
+    "currentTmpAfterRecovery": null,
+    "providerCalls": 0,
+    "generationBytesUnchanged": true,
+    "status": "PASS",
+    "timestamp": "2026-10-05T18:14:55.753Z"
+  },
+  "publicationResult": {
+    "note": "The diagnostic command publishes after recovery; evaluated separately from recoveryResult.",
+    "generationId": "generation-000007",
+    "currentAfter": "generation-000007",
+    "providerCalls": 0,
+    "status": "PASS"
+  },
+  "idempotencyRun": {
+    "recoveryResult": {
+      "currentBeforeRecovery": "generation-000007",
+      "currentTmpBeforeRecovery": null,
+      "recoveryAction": "NO_OP",
+      "currentAfterRecovery": "generation-000007",
+      "validFinalGenerations": 7,
+      "providerCalls": 0,
+      "status": "PASS",
+      "timestamp": "2026-10-05T18:17:19.789Z"
+    },
+    "publicationResult": { "generationId": "generation-000008", "currentAfter": "generation-000008", "providerCalls": 0, "status": "PASS" }
+  },
+  "immutability": {
+    "method": "SHA-256 of manifest.json, records.json and vectors.bin of every final generation, before vs after each run",
+    "generations1to6AfterRun1": "identical",
+    "generations1to7AfterRun2": "identical",
+    "generationBytesUnchanged": true
+  },
+  "automatedTests": {
+    "command": "npx vitest run",
+    "testFiles": 174,
+    "tests": 2292,
+    "passed": true,
+    "typecheck": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "limitations": [
+    "No isolated recovery command exists; recovery was observed via the diagnostic command's recovery report (captured before publication).",
+    "Generations 000007 and 000008 were created by the diagnostic runs (expected publications, not recovery side effects).",
+    "Hash baseline files were kept in the session scratchpad, not in the repository."
+  ],
+  "providerCalls": 0,
+  "generationsModified": false,
+  "runtimeRecoveryProof": "PASS"
+}

@@ -86,9 +86,15 @@ function createHarness(): {
     indexExcludedPathContains: "",
     indexExcludedContentContains: "",
   };
+  const producerId = "11111111-1111-4111-8111-111111111111";
+  plugin.localDeviceId = producerId;
+  adapter.setFile(".lina/ownership.json", JSON.stringify({
+    schemaVersion: 1, activeProducerId: producerId, epoch: 1,
+    acquiredAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+  }));
   plugin.localDeviceState = {
     schemaVersion: 2,
-    deviceId: "producer-test-device",
+    deviceId: producerId,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
     role: "producer",

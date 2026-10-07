@@ -111,6 +111,8 @@ export interface LinaDeviceSettings extends Record<string, unknown> {
   embeddingsTimeout?: string;
   embeddingStorageReadPreference?: "jsonl" | "prefer-binary";
   maintainBinaryEmbeddingCopy?: boolean;
+  /** M5C local-only shadow audit; it never selects the published generation for search. */
+  companionPublishedGenerationShadowEnabled?: boolean;
 }
 
 export interface LinaSettings extends Record<string, unknown> {
@@ -139,6 +141,11 @@ export interface LinaSettings extends Record<string, unknown> {
   generateOnlyMissingEmbeddings: boolean;
   embeddingUpdateMode?: EmbeddingUpdateMode;
   producerSqliteShadowWriteEnabled?: boolean;
+  producerSqliteBootstrapEnabled?: boolean;
+  producerSqliteEquivalenceAuditEnabled?: boolean;
+  producerSqliteCanonicalEnabled?: boolean;
+  /** M4: immutable SQLite-derived generation publication; Consumer remains legacy. */
+  producerImmutableGenerationPublicationEnabled?: boolean;
 
   // Índice
   checkSyncOnStartup?: boolean;
@@ -253,7 +260,7 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
 let activeSettings: LinaSettings | null = null;
 let saveActiveSettings: (() => void) | null = null;
 
-type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy">;
+type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy" | "companionPublishedGenerationShadowEnabled">;
 
 function hashDeviceToken(value: string): string {
   let hash = 0;
@@ -635,6 +642,16 @@ export function getLocalMaintainBinaryEmbeddingCopy(): boolean {
   return ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy === true;
 }
 
+export function getLocalPublishedGenerationShadowEnabled(): boolean {
+  return ensureCurrentDeviceSettings().companionPublishedGenerationShadowEnabled === true;
+}
+
+export function setLocalPublishedGenerationShadowEnabled(value: boolean): void {
+  if (!activeSettings) return;
+  ensureCurrentDeviceSettings().companionPublishedGenerationShadowEnabled = value;
+  saveActiveSettings?.();
+}
+
 export function setLocalMaintainBinaryEmbeddingCopy(value: boolean): void {
   if (!activeSettings) return;
   ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy = value;
@@ -749,6 +766,11 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   generateEmbeddingsOnStartup: false,
   generateOnlyMissingEmbeddings: true,
   embeddingUpdateMode: "manual",
+  producerSqliteShadowWriteEnabled: true,
+  producerSqliteBootstrapEnabled: true,
+  producerSqliteEquivalenceAuditEnabled: true,
+  producerSqliteCanonicalEnabled: false,
+  producerImmutableGenerationPublicationEnabled: false,
 
   // Índice
   checkSyncOnStartup: false,

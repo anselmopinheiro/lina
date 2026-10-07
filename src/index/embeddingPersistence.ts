@@ -18,6 +18,7 @@ import { recoverTextIndexPublication } from "./indexStore";
 import { evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 import { performProducerSqliteShadowWrite, type ShadowWriteOptions } from "./sqliteProducerShadowWriter";
+import type { EmbeddingSourceProvenance } from "./producerLocalStoreTypes";
 
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
@@ -103,6 +104,18 @@ export interface EmbeddingPublicationInfo {
   provenance?: ArtifactProvenance;
   fence?: EmbeddingWriteFence;
   shadowWriteOptions?: ShadowWriteOptions;
+}
+
+/** Extracts the immutable text/embedding pair that produced canonical records. */
+export function extractCanonicalEmbeddingSourceProvenance(manifest: Record<string, unknown> | undefined): EmbeddingSourceProvenance | null {
+  const embeddings = manifest?.embeddings;
+  if (!manifest || typeof manifest.generationId !== "string" || !manifest.generationId.trim()) return null;
+  if (typeof manifest.chunksDigest !== "string" || !manifest.chunksDigest.trim()) return null;
+  if (!embeddings || typeof embeddings !== "object") return null;
+  const value = embeddings as Record<string, unknown>;
+  if (typeof value.publicationId !== "string" || !value.publicationId.trim()) return null;
+  if (!Number.isSafeInteger(value.sourceTotalChunks) || typeof value.sourceTotalChunks !== "number" || value.sourceTotalChunks < 0) return null;
+  return { sourceTextGenerationId: manifest.generationId, sourceChunksDigest: manifest.chunksDigest, sourcePublicationId: value.publicationId, sourceRecordCount: value.sourceTotalChunks };
 }
 
 function createEmbeddingPublicationId(): string {
@@ -916,6 +929,30 @@ function buildManifestCandidate(
     },
     vectorContract,
   };
+}
+
+export async function readCanonicalEmbeddingRecords(app: App): Promise<{
+  records: EmbeddingRecord[];
+  manifest?: Record<string, unknown>;
+  valid: boolean;
+  reason?: string;
+}> {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  if (!(await fileExists(app, files.canonicalEmbeddings))) {
+    return { records: [], valid: true, reason: "missing-embeddings-file" };
+  }
+  try {
+    const content = await app.vault.adapter.read(files.canonicalEmbeddings);
+    const parsed = parseEmbeddingRecords(content, undefined, undefined, false);
+    let manifest: Record<string, unknown> | undefined;
+    if (await fileExists(app, files.canonicalManifest)) {
+      const manifestStr = await app.vault.adapter.read(files.canonicalManifest);
+      manifest = JSON.parse(manifestStr) as Record<string, unknown>;
+    }
+    return { records: parsed.records, manifest, valid: parsed.valid, reason: parsed.reason };
+  } catch (err) {
+    return { records: [], valid: false, reason: errorMessage(err) };
+  }
 }
 
 export async function publishCanonicalEmbeddings(

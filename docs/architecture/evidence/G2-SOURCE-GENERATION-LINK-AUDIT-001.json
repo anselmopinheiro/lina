@@ -1,0 +1,33 @@
+{
+  "phase": "G2-SOURCE-GENERATION-LINK-AUDIT-001",
+  "kind": "read-only audit and contract design",
+  "capturedAt": "2026-10-06",
+  "result": "READY_FOR_FIX",
+  "g2Status": "BLOCKED",
+  "cutoverStatus": "BLOCKED_BY_G2_G3",
+  "scope": { "implementation": false, "providerCalls": 0, "reembeddingCalls": 0, "sqliteModified": false, "currentModified": false, "commitOrPush": false },
+  "sourceOfTruth": {
+    "textual": ".lina/index/notes.json + .lina/index/chunks.jsonl + .lina/index/manifest.json",
+    "vectorForM4": "Producer SQLite embedding_spaces + embedding_records",
+    "legacyCompatibility": ".lina/index/embeddings.jsonl and manifest embeddings section"
+  },
+  "sourceArtifacts": {
+    "textGenerationId": "gen-muvb41fn-elt8zhju",
+    "notesDigest": "sha256:8466c6b01821448a3c65222e1a24c0ce40d603f83500338bc10687d16d7ddccb",
+    "chunksDigest": "sha256:1fc6195999522568fd3edcd3e2ccf6d195a9c17705d656d20d607be3bdd84cb2",
+    "canonicalEmbeddingPublicationId": "emb-mux5mh1x-1gb0mzhzx1",
+    "canonicalEmbeddingSourceTextGenerationId": "gen-muvb41fn-elt8zhju",
+    "totalChunks": 2303
+  },
+  "existingGenerationIdentity": { "m4Current": "generation-000013", "formatVersion": 3, "recordCount": 2303, "hasSourceTextGenerationId": false, "hasSourcePublicationId": false, "hasSourceChunksDigest": false },
+  "globalCorpusIdentity": { "exists": true, "kind": "text manifest generationId + chunksDigest", "m4CarriesIt": false },
+  "recordLevelIdentity": { "textHash": "per chunk", "embeddingInputHash": "per final embedding input", "sufficientForNamedGlobalSnapshot": false },
+  "driftDetection": { "m4Isolated": "not detectable; silent", "legacyCompanion": "can compare sourceTextGenerationId when using legacy manifest", "m4Reader": "does not expose source provenance" },
+  "currentManifestProvenance": { "formatVersion": 3, "semanticContract": "present and validated", "sourceProvenance": "absent" },
+  "recommendedProvenanceContract": ["sourceTextGenerationId", "sourceChunksDigest", "sourcePublicationId", "sourceRecordCount"],
+  "formatVersionImpact": { "v1": "recovery-readable, not cutover eligible after G2", "v2": "recovery-readable, not cutover eligible after G2", "v3": "recovery-readable, not cutover eligible after G2 because provenance is absent", "v4": "required for explicit verified source provenance" },
+  "cutoverEligibilityRule": "integrityValid && formatVersion === 4 && semanticContractValid && sourceProvenanceValid && source provenance matches the source snapshot used by records/vectors",
+  "recommendedFix": "Carry canonical text generation/publication/digest provenance into SQLite and M4; validate and expose it through Reader, M5 and Companion. Do not infer it for v1-v3.",
+  "validation": { "typecheck": "PASS", "diffCheck": "PASS", "focusedTests": "NOT_NEEDED: audit derives from source and current artefacts" },
+  "git": { "head": "620a2c62b3a907927c12bd72e25b847caa6f3e61", "branch": "master", "commitCreated": false, "pushExecuted": false }
+}

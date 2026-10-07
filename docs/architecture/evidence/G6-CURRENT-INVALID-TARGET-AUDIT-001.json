@@ -1,0 +1,121 @@
+{
+  "phase": "G6-CURRENT-INVALID-TARGET-AUDIT-001",
+  "kind": "audit",
+  "capturedAt": "2026-10-06",
+  "conclusion": "READY_FOR_FIX",
+  "current": "generation-000008",
+  "currentTmp": null,
+  "finalGenerations": [
+    "generation-000001",
+    "generation-000002",
+    "generation-000003",
+    "generation-000004",
+    "generation-000005",
+    "generation-000006",
+    "generation-000007",
+    "generation-000008"
+  ],
+  "stagingResidual": [],
+  "currentTarget": "generation-000008",
+  "currentTargetFormatVersion": 1,
+  "currentTargetMissingEmbeddingInputHash": 2303,
+  "generations": [
+    {
+      "generationId": "generation-000001",
+      "formatVersion": 1,
+      "recordCount": 2299,
+      "hasEmbeddingInputHashCount": 0,
+      "missingEmbeddingInputHashCount": 2299,
+      "integrityValid": true,
+      "validatorStatus": "INVALID",
+      "validatorReason": "MISSING_INPUT_HASH"
+    },
+    {
+      "generationId": "generation-000002..000008",
+      "formatVersion": 1,
+      "recordCount": 2303,
+      "hasEmbeddingInputHashCount": 0,
+      "missingEmbeddingInputHashCount": 2303,
+      "integrityValid": true,
+      "validatorStatus": "INVALID",
+      "validatorReason": "MISSING_INPUT_HASH"
+    }
+  ],
+  "validatorFailure": {
+    "code": "MISSING_INPUT_HASH",
+    "location": "src/index/publishedGenerationValidator.ts:31",
+    "onlyError": true,
+    "generationsFailing": 8,
+    "readerStatusForPreG6": "RECORDS_INVALID (records-contract)"
+  },
+  "rootCause": "G6 made embeddingInputHash mandatory in Validator and Reader without bumping formatVersion (still 1) and without a backward-compatible path; all existing generations predate G6 and lack the field.",
+  "compatibilityClassification": "FORMAT_COMPATIBILITY_GAP",
+  "isDataCorruption": false,
+  "downstreamImpact": {
+    "publicationDeadlock": "recoverPublishedGenerationPointer returns CURRENT_INVALID_TARGET when no generation validates; publishSqliteCanonicalGeneration and publishImmutableGeneration return before building, so generation-000009 cannot be published until old generations are acceptable pointer targets.",
+    "startup": "recovery is only invoked in publication paths; startup does not fail",
+    "canonicalWrites": "each canonical write attempts publication and records a non-fatal M4 failure; SQLite and legacy unaffected",
+    "shadowM5": "Reader returns RECORDS_INVALID for CURRENT"
+  },
+  "contractComparison": {
+    "formatVersionChanged": false,
+    "embeddingInputHashMandatory": true,
+    "generationsPredateChange": true,
+    "oldGenerationsStructurallyValid": true,
+    "validatorAcceptsOldFormat": false,
+    "explicitBackwardCompatibility": false
+  },
+  "recommendedFix": {
+    "strategy": "C + B with limited A",
+    "steps": [
+      "formatVersion 2 requires embeddingInputHash on every record",
+      "Validator/Reader distinguish integrityValid from cutoverEligible; v1 with valid integrity is a pointable read-only legacy generation (cutoverEligible=false)",
+      "publish generation-000009 (v2) from SQLite v2, providerCalls=0; older generations stay immutable"
+    ],
+    "rejected": [
+      "B alone (blocked by recovery)",
+      "A alone (leaves ambiguous format)",
+      "global validator relaxation",
+      "editing records.json",
+      "manual CURRENT repoint",
+      "deleting generations"
+    ]
+  },
+  "backfillIdempotence": {
+    "method": "read-only: planEmbeddingInputHashBackfill on a copy of the vault SQLite v2 plus chunks.jsonl; diagnose command not re-run because it reprojects legacy, publishes M4 and updates the 3E copy",
+    "sqliteSchemaVersion": 2,
+    "rowsWithEmbeddingInputHash": 2303,
+    "ALREADY_PRESENT": 2303,
+    "BACKFILLED_VERIFIED": 0,
+    "NOT_RECOVERABLE": 0,
+    "AMBIGUOUS": 0,
+    "SOURCE_MISSING": 0,
+    "SOURCE_CHANGED": 0,
+    "storedEqualsRecomputed": 2303,
+    "firstRunBackfillStatus": "PASS",
+    "publishedGenerationStatus": "FAIL"
+  },
+  "providerRequired": false,
+  "providerCalls": 0,
+  "dataModified": false,
+  "currentModified": false,
+  "commitOrPush": false,
+  "outOfScope": [
+    "G1",
+    "G2",
+    "G3",
+    "cutover",
+    "GC of generations 1-8",
+    "refactor of the G6 diagnose command"
+  ],
+  "cutoverStatus": "BLOCKED",
+  "fixFollowUp": {
+    "capturedAt": "2026-10-06",
+    "status": "PUBLICATION_AND_SHADOW_PASS_FINAL_G6_FAIL",
+    "publishedFormatVersion": 2,
+    "legacyV1IntegrityAccepted": true,
+    "legacyV1CutoverEligible": false,
+    "runtimeProof": "OBSIDIAN_RUNTIME: v2 000009 and shadow pass; final binary diagnosis fails due harness cached epoch mismatch; CURRENT 000010",
+    "cutoverStatus": "BLOCKED"
+  }
+}

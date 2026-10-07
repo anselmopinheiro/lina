@@ -327,6 +327,26 @@ function buildRuntimeIndex(
   };
 }
 
+/** Binary vectors are only a derivative of the canonical records. Validate the
+ * same enriched-input identity before accepting their metadata at runtime. */
+function binaryMetadataMatchesCurrentChunks(
+  index: RuntimeEmbeddingIndex,
+  chunks: readonly Chunk[]
+): boolean {
+  if (index.records.length !== chunks.length) return false;
+  const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk] as const));
+  if (chunksById.size !== chunks.length) return false;
+  for (const record of index.records) {
+    const chunk = chunksById.get(record.chunkId);
+    if (!chunk || record.path !== chunk.path || record.index !== chunk.chunkIndex || record.textHash !== chunk.textHash
+      || !record.embeddingInputHash
+      || record.embeddingInputHash !== hashContent(buildEmbeddingInput(chunk, index.sourceIdentity.prefixMode))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export class RuntimeEmbeddingIndexCache {
   private index: RuntimeEmbeddingIndex | null = null;
   private loading: Promise<RuntimeEmbeddingIndex | null> | null = null;
@@ -470,12 +490,19 @@ export class RuntimeEmbeddingIndexCache {
               const afterValidation = await readRuntimeEmbeddingSourceIdentity(this.app);
               if (!sameSourceIdentity(source, afterValidation)) return null;
             }
+            if (!binaryMetadataMatchesCurrentChunks(binary, chunks)) {
+              this.debug?.("binary-fallback", { reason: "binary-input-hash-invalid", status: "invalid" });
+              fallbackReason = "binary-invalid";
+              binaryFailureReason = "binary-invalid";
+              lastErrorCode = "binary-input-hash-invalid";
+            } else {
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
             this.loadedPreference = preference;
             this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
             this.debug?.("binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
+            }
           }
           this.debug?.("binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
           fallbackReason = "binary-outdated";

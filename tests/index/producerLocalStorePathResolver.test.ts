@@ -13,8 +13,8 @@ import {
 
 describe("ProducerLocalStore Path Resolver (Phase M0)", () => {
   describe("Constants and Contracts", () => {
-    it("exports canonical schema version 1 and default db name", () => {
-      expect(PRODUCER_STORE_SCHEMA_VERSION).toBe(1);
+    it("exports canonical schema version 3 and default db name", () => {
+      expect(PRODUCER_STORE_SCHEMA_VERSION).toBe(3);
       expect(PRODUCER_STORE_DEFAULT_DB_NAME).toBe("lina-producer.db");
     });
   });

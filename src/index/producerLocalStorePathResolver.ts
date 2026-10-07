@@ -11,6 +11,7 @@
  * 4. Obsidian Linter Conformance: Pure TypeScript implementation without top-level Node.js module imports.
  */
 
+import type { DataAdapter } from "obsidian";
 import {
   PRODUCER_STORE_DEFAULT_DB_NAME,
   type ProducerLocalStorePathResolution,
@@ -214,8 +215,17 @@ export class DefaultProducerLocalStorePathResolver implements ProducerLocalStore
   private readonly vaultBasePath: string;
   private readonly context?: PathEnvironmentContext;
 
-  constructor(vaultBasePath: string, context?: PathEnvironmentContext) {
-    this.vaultBasePath = vaultBasePath;
+  constructor(vaultBasePathOrAdapter: string | DataAdapter | { getBasePath?: () => string; path?: string }, context?: PathEnvironmentContext) {
+    if (typeof vaultBasePathOrAdapter === "string") {
+      this.vaultBasePath = vaultBasePathOrAdapter;
+    } else if (vaultBasePathOrAdapter && typeof vaultBasePathOrAdapter === "object") {
+      const adapter = vaultBasePathOrAdapter as { getBasePath?: () => string; path?: string };
+      this.vaultBasePath = typeof adapter.getBasePath === "function"
+        ? adapter.getBasePath()
+        : (typeof adapter.path === "string" ? adapter.path : "");
+    } else {
+      this.vaultBasePath = "";
+    }
     this.context = context;
   }
 

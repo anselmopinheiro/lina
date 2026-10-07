@@ -1,0 +1,277 @@
+{
+  "phase": "G6-EMBEDDING-INPUT-HASH-FIX-001",
+  "capturedAt": "2026-10-06",
+  "status": "PASS",
+  "implementation": {
+    "sqliteSchemaVersion": 2,
+    "column": "embedding_records.embedding_input_hash",
+    "legacyVectorContractColumnPreserved": true,
+    "providerCallsByBackfill": 0,
+    "binaryRuntimeRequiresEmbeddingInputHash": true,
+    "publishedGenerationRecordsCarryEmbeddingInputHash": true,
+    "publishedFormatVersion": 2,
+    "legacyV1IntegrityAccepted": true
+  },
+  "automatedTests": {
+    "persistenceAndPublishedGeneration": {
+      "files": 8,
+      "tests": 99,
+      "status": "PASS"
+    },
+    "backfillAndRuntime": {
+      "files": 3,
+      "tests": 56,
+      "status": "PASS"
+    },
+    "fullSuite": {
+      "files": 178,
+      "tests": 2353,
+      "status": "PASS"
+    },
+    "typecheck": "PASS",
+    "strictLint": "PASS",
+    "diffCheck": "PASS",
+    "build": "PASS"
+  },
+  "runtimeProof": {
+    "status": "PASS",
+    "g6Status": "PASS",
+    "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+    "runtimeEvidence": "docs/architecture/evidence/G6-BINARY-OWNERSHIP-CACHE-FIX-RUNTIME-001.json",
+    "currentAtTaskStart": "generation-000010",
+    "currentAfterFirstG6": "generation-000011",
+    "currentAfterFinalG6": "generation-000012",
+    "authority": {
+      "token": {
+        "producerDeviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      },
+      "decision": {
+        "authorized": true,
+        "status": "authorized",
+        "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      }
+    },
+    "binary": {
+      "status": "valid",
+      "format": "binary-v1",
+      "sourcePublicationId": "emb-muwmm5xy-ilpu83dvcx",
+      "binaryGenerationId": "derived-emb-muwmm5xy-ilpu83dvcx",
+      "recordCount": 2303,
+      "dimensions": 1024,
+      "byteLength": 9433088,
+      "updatedAt": "2026-10-06T11:59:46.670Z"
+    },
+    "shadow": {
+      "status": "PASS",
+      "generationId": "generation-000012",
+      "formatVersion": 2,
+      "cutoverEligible": true,
+      "level": "L2",
+      "summary": {
+        "legacyCount": 2303,
+        "publishedCount": 2303,
+        "divergenceCount": 0,
+        "countsByClass": {},
+        "truncated": false
+      },
+      "divergences": [],
+      "providerCalls": 0,
+      "capturedAt": "2026-10-06T11:59:48.271Z",
+      "durationMs": 110,
+      "legacyLoadMs": 450
+    },
+    "backfillCounts": {
+      "BACKFILLED_VERIFIED": 0,
+      "ALREADY_PRESENT": 2303,
+      "NOT_RECOVERABLE": 0,
+      "AMBIGUOUS": 0,
+      "SOURCE_MISSING": 0,
+      "SOURCE_CHANGED": 0
+    },
+    "recordsTotal": 2303,
+    "equivalenceDivergences": 0,
+    "providerCalls": 0,
+    "reembeddingCalls": 0,
+    "safety": {
+      "oldGenerationsByteIdentical": true,
+      "notesByteIdentical": true,
+      "ownershipAndDeviceByteIdentical": true,
+      "sqliteRecordsIdentical": true,
+      "sqliteSpacesIdentical": true,
+      "canonicalVectorsAndInputHashesIdentical": true,
+      "sqliteToCanonicalIdentical": true,
+      "sqliteToBinaryIdentical": true,
+      "sqliteToPublishedIdentical": true
+    },
+    "notesCompared": 1293,
+    "oldGenerationFilesCompared": 30,
+    "gates": {
+      "npm test": "PASS: 180 files / 2374 tests",
+      "typecheck": "PASS",
+      "lint:obsidian:strict": "PASS: zero warnings",
+      "build": "PASS",
+      "release-check": "PASS",
+      "git diff --check": "PASS"
+    },
+    "testCoverage": {
+      "characterizationBeforeChanges": 22,
+      "auditCasesPreserved": 22,
+      "newRegressionCases": 17,
+      "focusedIncludingBinaryWorker": 42
+    },
+    "implementation": [
+      "OwnershipGate.evaluateAndCache is the sole authoritative cache-write boundary for evaluate/acquireFence/assertFence",
+      "Both allow and deny acquisitions update RAM cache; owner/epoch mismatches and identity/role changes during evaluation deny",
+      "Evaluation revision prevents older completions from overwriting newer cache state",
+      "BinaryWorker production preflight acquires no-auto-claim fence, asserts it and uses returned boolean directly",
+      "Automatic binary maintenance awaits async authorization; mutable tasks recheck stop/dispose after preflight",
+      "Controller fencing at durable writes remains unchanged"
+    ],
+    "residualFindings": [
+      "Pre-existing automatic M3 diagnostic runs on plugin reload and rewrites SQLite timestamps/metadata and legacy publication identity. Initial safety comparison therefore failed despite unchanged vectors/input hashes. The failed attempt is preserved in runtime evidence.previousAttempt. Final isolated G6 repetition proves exact records/spaces identity after startup settled.",
+      "Binary validation requires requestAnimationFrame; hidden Obsidian windows suspend progress. Runtime proof restored the existing window; production scheduler unchanged.",
+      "Historical synchronous null-cache optimism remains outside binary mutable preflight, which always resolves current authority.",
+      "G1/G2/G3 remain pending; cutover remains blocked."
+    ],
+    "commitCreated": false,
+    "pushExecuted": false,
+    "head": "620a2c62b3a907927c12bd72e25b847caa6f3e61"
+  },
+  "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+  "historicalStatusBeforeOwnershipCacheFix": {
+    "status": "FAIL",
+    "cutoverStatus": "BLOCKED_BY_G1_G2_G3_G6"
+  },
+  "ownershipCacheFix": {
+    "status": "PASS",
+    "g6Status": "PASS",
+    "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+    "runtimeEvidence": "docs/architecture/evidence/G6-BINARY-OWNERSHIP-CACHE-FIX-RUNTIME-001.json",
+    "currentAtTaskStart": "generation-000010",
+    "currentAfterFirstG6": "generation-000011",
+    "currentAfterFinalG6": "generation-000012",
+    "authority": {
+      "token": {
+        "producerDeviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      },
+      "decision": {
+        "authorized": true,
+        "status": "authorized",
+        "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+        "epoch": 3
+      }
+    },
+    "binary": {
+      "status": "valid",
+      "format": "binary-v1",
+      "sourcePublicationId": "emb-muwmm5xy-ilpu83dvcx",
+      "binaryGenerationId": "derived-emb-muwmm5xy-ilpu83dvcx",
+      "recordCount": 2303,
+      "dimensions": 1024,
+      "byteLength": 9433088,
+      "updatedAt": "2026-10-06T11:59:46.670Z"
+    },
+    "shadow": {
+      "status": "PASS",
+      "generationId": "generation-000012",
+      "formatVersion": 2,
+      "cutoverEligible": true,
+      "level": "L2",
+      "summary": {
+        "legacyCount": 2303,
+        "publishedCount": 2303,
+        "divergenceCount": 0,
+        "countsByClass": {},
+        "truncated": false
+      },
+      "divergences": [],
+      "providerCalls": 0,
+      "capturedAt": "2026-10-06T11:59:48.271Z",
+      "durationMs": 110,
+      "legacyLoadMs": 450
+    },
+    "backfillCounts": {
+      "BACKFILLED_VERIFIED": 0,
+      "ALREADY_PRESENT": 2303,
+      "NOT_RECOVERABLE": 0,
+      "AMBIGUOUS": 0,
+      "SOURCE_MISSING": 0,
+      "SOURCE_CHANGED": 0
+    },
+    "recordsTotal": 2303,
+    "equivalenceDivergences": 0,
+    "providerCalls": 0,
+    "reembeddingCalls": 0,
+    "safety": {
+      "oldGenerationsByteIdentical": true,
+      "notesByteIdentical": true,
+      "ownershipAndDeviceByteIdentical": true,
+      "sqliteRecordsIdentical": true,
+      "sqliteSpacesIdentical": true,
+      "canonicalVectorsAndInputHashesIdentical": true,
+      "sqliteToCanonicalIdentical": true,
+      "sqliteToBinaryIdentical": true,
+      "sqliteToPublishedIdentical": true
+    },
+    "notesCompared": 1293,
+    "oldGenerationFilesCompared": 30,
+    "gates": {
+      "npm test": "PASS: 180 files / 2374 tests",
+      "typecheck": "PASS",
+      "lint:obsidian:strict": "PASS: zero warnings",
+      "build": "PASS",
+      "release-check": "PASS",
+      "git diff --check": "PASS"
+    },
+    "testCoverage": {
+      "characterizationBeforeChanges": 22,
+      "auditCasesPreserved": 22,
+      "newRegressionCases": 17,
+      "focusedIncludingBinaryWorker": 42
+    },
+    "implementation": [
+      "OwnershipGate.evaluateAndCache is the sole authoritative cache-write boundary for evaluate/acquireFence/assertFence",
+      "Both allow and deny acquisitions update RAM cache; owner/epoch mismatches and identity/role changes during evaluation deny",
+      "Evaluation revision prevents older completions from overwriting newer cache state",
+      "BinaryWorker production preflight acquires no-auto-claim fence, asserts it and uses returned boolean directly",
+      "Automatic binary maintenance awaits async authorization; mutable tasks recheck stop/dispose after preflight",
+      "Controller fencing at durable writes remains unchanged"
+    ],
+    "residualFindings": [
+      "Pre-existing automatic M3 diagnostic runs on plugin reload and rewrites SQLite timestamps/metadata and legacy publication identity. Initial safety comparison therefore failed despite unchanged vectors/input hashes. The failed attempt is preserved in runtime evidence.previousAttempt. Final isolated G6 repetition proves exact records/spaces identity after startup settled.",
+      "Binary validation requires requestAnimationFrame; hidden Obsidian windows suspend progress. Runtime proof restored the existing window; production scheduler unchanged.",
+      "Historical synchronous null-cache optimism remains outside binary mutable preflight, which always resolves current authority.",
+      "G1/G2/G3 remain pending; cutover remains blocked."
+    ],
+    "commitCreated": false,
+    "pushExecuted": false,
+    "head": "620a2c62b3a907927c12bd72e25b847caa6f3e61"
+  },
+  "g6Status": "PASS",
+  "historicalRuntimeProof": {
+    "vault": "zettel",
+    "status": "PARTIAL_PASS_FINAL_DIAGNOSIS_FAIL",
+    "currentBefore": "generation-000008",
+    "publishedGeneration": "generation-000009",
+    "publishedFormatVersion": 2,
+    "recordCount": 2303,
+    "missingInputHashes": 0,
+    "integrityValid": true,
+    "cutoverEligible": true,
+    "shadowStatus": "PASS",
+    "shadowLevel": "L2",
+    "equivalenceDivergences": 0,
+    "binaryStatus": "error",
+    "publishedGenerationStatus": "PASS",
+    "ALREADY_PRESENT": 2303,
+    "BACKFILLED_VERIFIED": 0,
+    "currentAfter": "generation-000010",
+    "oldGenerationsByteIdentical": true,
+    "providerCalls": 0,
+    "reembeddingCalls": 0,
+    "reason": "BinaryWorker refused stale epoch-mismatch cached by malformed initial harness evaluate call. No repair/retry after final diagnosis failure."
+  }
+}

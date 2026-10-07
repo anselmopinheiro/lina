@@ -1,0 +1,122 @@
+{
+  "phase": "M6-CUTOVER-READINESS-AUDIT-001",
+  "kind": "audit",
+  "capturedAt": "2026-10-06",
+  "verdict": "BLOCKED",
+  "goNoGo": "NO-GO",
+  "currentGeneration": "generation-000015",
+  "currentFormatVersion": 5,
+  "cutoverEligible": {
+    "realData": true,
+    "readerPolicy": "formatVersion === 5 only (see B1, B3)"
+  },
+  "shadowStatus": "PASS",
+  "shadowLevel": "L2",
+  "shadowDivergences": 0,
+  "shadowEvidence": {
+    "level": "NODE_HARNESS_REAL_VAULT",
+    "note": "Real Lina modules (Reader, ShadowAuditor, RuntimeEmbeddingIndexCache) run in Node against real vault files; not an Obsidian runtime run. Earlier OBSIDIAN_RUNTIME PASS was reported before this task and not re-verified.",
+    "legacyRecords": 2303,
+    "publishedRecords": 2303,
+    "providerCalls": 0
+  },
+  "authoritativeSource": "legacy embeddings.jsonl (optional 3E binary copy) via RuntimeEmbeddingIndexCache",
+  "shadowSource": "publishedGenerationReader -> comparator -> PublishedGenerationShadowAuditor",
+  "cutoverPoint": "LinaPlugin.getRuntimeEmbeddingIndex (main.ts:1805); single choke point for sidebar, hybrid search and semantic modal",
+  "contractV5": {
+    "integrityValid": true,
+    "g6EmbeddingInputHash": "2303/2303",
+    "g1ContractIdRecomputes": true,
+    "g1EqualsLegacyManifestContract": true,
+    "g2SourceTextGenerationIdMatches": true,
+    "g2SourceChunksDigestMatchesRecomputed": true,
+    "g2SourcePublicationIdMatchesLegacy": true,
+    "g2SourceRecordCountMatches": true,
+    "g3ProducerDeviceIdEqualsActiveProducer": true,
+    "g3ProducerEpochEqualsOwnershipEpoch": true,
+    "current": "generation-000015",
+    "currentTmp": null,
+    "finalGenerations": 15
+  },
+  "g4Status": "RESOLVED for Reader/shadow (no node:*, injected WebCrypto); Builder/Validator/Writer keep node:crypto in Producer-only desktop path",
+  "g5Status": "OPEN_DEBT: publishedGenerationBuilder.ts:62 uses localeCompare; Reader and comparator are order-independent",
+  "g7Status": "OPEN_NON_BLOCKING_DEBT: no publication dedupe; 15 generations / 147 MB; generations 9-15 share identical vectorsSha256 and recordsSha256; GC out of scope; mobile sync cost",
+  "g8Status": "CONFIRMED_UNWIRED: companionSearch/companionDeltaSearch have no production callers; cutover belongs in the shared runtime path",
+  "g9DesktopStatus": "Desktop Producer shadow OBSIDIAN_RUNTIME PASS (reported); Companion desktop NAO_EXECUTADO",
+  "g9AndroidStatus": "NAO_EXECUTADO",
+  "g9IosStatus": "NAO_EXECUTADO",
+  "runtimeCacheStatus": "NOT_READY: sameSourceIdentity has no generationId/vectorContractId/published storageFormat and no CURRENT-change invalidation; NOT_TESTED for published",
+  "companionReadOnlyStatus": "NOT_SATISFIED: Reader and shadow are read-only, but onload runs diagnoseM3Canonical (forced producer role and flags, opens SQLite, reprojects shared legacy files) and diagnoseRuntimeSqlite (writes .lina/producer) on every desktop device (STATIC)",
+  "fallbackStrategy": "published with explicit legacy fallback: fallback only for availability failures (NO_CURRENT, CURRENT_TMP_ONLY, TARGET_MISSING, TARGET_PARTIAL, CURRENT_CHANGED, RESOURCE_LIMIT) and always visible in diagnostics; integrity/contract/provenance failures block the published source with no silent fallback; legacy used only when vectorContractId equals the published one; no fallback to another published generation on downgrade; strict published-only mode for validation",
+  "rollbackStrategy": "device-scoped cutover flag default false; turning it off invalidates the runtime cache and selection returns to legacy; legacy and 3E remain maintained by the Producer; no SQLite, generation, embedding or provider change; round-trip rollback test required before any activation",
+  "flags": {
+    "companionPublishedGenerationShadowEnabled": "false by default, device-scoped, exists",
+    "producerImmutableGenerationPublicationEnabled": "false by default, exists",
+    "producerSqliteCanonicalEnabled": "false by default, exists but ignored by the M3 startup diagnostic",
+    "cutoverFlag": "does not exist; required, device-scoped, default false"
+  },
+  "m3Impact": {
+    "blocksM6": true,
+    "affectsCompanion": true,
+    "alteratesProvenanceG1G2G3": false,
+    "alteratesCurrent": false,
+    "unexpectedPublication": "not by the M3 diagnostic itself",
+    "rewritesLegacyOnEveryReload": true,
+    "evidence": "STATIC (main.ts:541-548, 4600, 4616-4655; sqliteProducerCanonicalWriter.ts:75); not executed on a Companion device"
+  },
+  "findings": [
+    { "id": "B1", "kind": "contract", "evidence": "NODE_HARNESS_REAL_VAULT", "text": "Reader accepts a v5 generation whose records lack embeddingInputHash (status OK, cutoverEligible true); parseRecords enforces it only for v2-v4." },
+    { "id": "B2", "kind": "companion-read-only", "evidence": "STATIC", "text": "diagnoseM3Canonical runs at every desktop load with role forced to producer and all SQLite flags forced true, bypassing role, ownership and settings; diagnoseRuntimeSqlite writes into .lina/producer on every device." },
+    { "id": "B3", "kind": "provenance", "evidence": "NODE_HARNESS_REAL_VAULT", "text": "Reader returns OK and cutoverEligible true for a foreign producerDeviceId, an epoch ahead of ownership and a sourcePublicationId unrelated to the legacy publication; no consumer-side provenance policy exists." },
+    { "id": "B4", "kind": "git", "evidence": "git status", "text": "No checkpoint: master at 620a2c6 with 89 uncommitted entries (14 modified, 75 untracked) mixing M2-M5, G6, G1, G2, G3, scripts and docs; tracked main.js diff is +13842 lines." }
+  ],
+  "failureCoverage": {
+    "1_currentAbsent": "TESTED",
+    "2_currentMalformed": "TESTED",
+    "3_targetMissing": "TESTED",
+    "4_targetPartial": "TESTED",
+    "5_hashMismatch": "TESTED",
+    "6_vectorsInvalid": "TESTED",
+    "7_semanticContractMismatch": "PARTIALLY_TESTED",
+    "8_sourceProvenanceMismatch": "NOT_TESTED",
+    "9_producerProvenanceMismatch": "NOT_TESTED",
+    "10_currentChangesDuringRead": "TESTED",
+    "11_downgrade": "TESTED",
+    "12_staleRuntimeCache": "NOT_TESTED",
+    "13_legacyUnavailable": "PARTIALLY_TESTED",
+    "14_publishedUnavailable": "PARTIALLY_TESTED",
+    "15_publishedInvalidLegacyValid": "PARTIALLY_TESTED"
+  },
+  "performanceDesktopNode": {
+    "legacyJsonlLoadMs": "913-978",
+    "legacyJsonlBytes": 45210768,
+    "publishedFullReadMs": 52,
+    "publishedShadowL2TotalMs": "62-65",
+    "vectorMaterialization": "direct Float32Array view, no copy",
+    "mobileMeasured": false
+  },
+  "gitSafety": {
+    "branch": "master",
+    "head": "620a2c6",
+    "statusEntries": 89,
+    "modified": 14,
+    "untracked": 75,
+    "diffStat": "14 files changed, 8640 insertions(+), 6101 deletions(-)",
+    "diffCheck": "PASS",
+    "safeToStartM6WithoutCheckpoint": false,
+    "commitMade": false
+  },
+  "validation": {
+    "typecheck": "PASS",
+    "gitDiffCheck": "PASS",
+    "focusedTests": { "files": 3, "tests": 56, "status": "PASS" },
+    "fullSuite": "NOT_RUN",
+    "build": "NOT_RUN"
+  },
+  "remainingBlockers": ["B1", "B2", "B3", "B4"],
+  "m6DesignRequirements": ["published cache identity (generationId, vectorContractId, digests, storage format) and CURRENT re-read", "cutover flag device-scoped default false", "source selection with explicit legacy fallback", "tests for failure scenarios 8, 9 and 12", "align semanticCapability/lifecycle identity with the published source", "per-device runtime validation (Companion desktop, Android, iOS) before enabling"],
+  "providerCalls": 0,
+  "dataModified": false,
+  "currentModified": false,
+  "commitOrPush": false
+}

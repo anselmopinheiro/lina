@@ -30,6 +30,35 @@ export interface DatabaseSyncLike {
   close(): void;
 }
 
+interface SqliteRecordRow {
+  chunk_id: string;
+  space_id: string;
+  note_path: string;
+  chunk_index: number;
+  text_hash: string;
+  vector_contract_id: string;
+  embedding_input_hash?: string;
+  embedding_blob: Uint8Array | ArrayBuffer;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SqliteSpaceRow {
+  space_id: string;
+  vector_contract_id: string;
+  provider: string;
+  model: string;
+  dimension: number;
+  dtype: string;
+  input_version: number;
+  created_at: string;
+  updated_at: string;
+  source_text_generation_id?: string | null;
+  source_chunks_digest?: string | null;
+  source_publication_id?: string | null;
+  source_record_count?: number | null;
+}
+
 export type DatabaseSyncConstructor = new (databasePath: string) => DatabaseSyncLike;
 
 /**
@@ -107,12 +136,14 @@ function resolveNodeSqliteConstructor(): DatabaseSyncConstructor | null {
 export class SqliteProducerLocalStore implements ProducerLocalStore {
   private readonly databasePath: string;
   private readonly dbConstructor?: DatabaseSyncConstructor;
+  private readonly customDbInstance?: DatabaseSyncLike;
   private db: DatabaseSyncLike | null = null;
   private currentSchemaVersion = 0;
 
   constructor(options: SqliteProducerLocalStoreOptions) {
     this.databasePath = options.databasePath;
     this.dbConstructor = options.dbConstructor;
+    this.customDbInstance = options.customDbInstance;
     if (options.customDbInstance) {
       this.db = options.customDbInstance;
     }
@@ -132,6 +163,12 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
 
   public open(): void {
     if (this.db) {
+      this.applyPragmasAndMigrations();
+      return;
+    }
+
+    if (this.customDbInstance) {
+      this.db = this.customDbInstance;
       this.applyPragmasAndMigrations();
       return;
     }
@@ -173,6 +210,11 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
     this.db.exec("PRAGMA foreign_keys = ON;");
 
     this.runMigrations();
+    const integrity = this.db.prepare("PRAGMA integrity_check;").get() as { integrity_check?: unknown } | undefined;
+    if (integrity?.integrity_check !== undefined && integrity.integrity_check !== "ok") {
+      const detail = typeof integrity.integrity_check === "string" ? integrity.integrity_check : "non-string result";
+      throw new Error(`SQLite integrity check failed: ${detail}`);
+    }
   }
 
   private runMigrations(): void {
@@ -212,6 +254,7 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
             chunk_index INTEGER NOT NULL,
             text_hash TEXT NOT NULL,
             vector_contract_id TEXT NOT NULL,
+            embedding_input_hash TEXT,
             embedding_blob BLOB NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -222,14 +265,31 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
           VALUES (1, '${new Date().toISOString()}', 'Phase M1 initial schema for embedding spaces and records');
         `);
         this.db.exec("COMMIT;");
-        this.currentSchemaVersion = PRODUCER_STORE_SCHEMA_VERSION;
       } catch (err) {
         this.db.exec("ROLLBACK;");
         throw err;
       }
-    } else {
-      this.currentSchemaVersion = activeVersion;
     }
+    if (activeVersion < 2) {
+      this.db.exec("BEGIN TRANSACTION;");
+      try {
+        if (activeVersion >= 1) this.db.exec("ALTER TABLE embedding_records ADD COLUMN embedding_input_hash TEXT;");
+        this.db.exec(`INSERT INTO schema_migrations (version, applied_at, description) VALUES (2, '${new Date().toISOString()}', 'G6 preserve embedding input hashes');`);
+        this.db.exec("COMMIT;");
+      } catch (err) { this.db.exec("ROLLBACK;"); throw err; }
+    }
+    if (activeVersion < 3) {
+      this.db.exec("BEGIN TRANSACTION;");
+      try {
+        if (activeVersion >= 1) this.db.exec("ALTER TABLE embedding_spaces ADD COLUMN source_text_generation_id TEXT;");
+        if (activeVersion >= 1) this.db.exec("ALTER TABLE embedding_spaces ADD COLUMN source_chunks_digest TEXT;");
+        if (activeVersion >= 1) this.db.exec("ALTER TABLE embedding_spaces ADD COLUMN source_publication_id TEXT;");
+        if (activeVersion >= 1) this.db.exec("ALTER TABLE embedding_spaces ADD COLUMN source_record_count INTEGER;");
+        this.db.exec(`INSERT INTO schema_migrations (version, applied_at, description) VALUES (3, '${new Date().toISOString()}', 'G2 retain immutable source provenance');`);
+        this.db.exec("COMMIT;");
+      } catch (err) { this.db.exec("ROLLBACK;"); throw err; }
+    }
+    this.currentSchemaVersion = PRODUCER_STORE_SCHEMA_VERSION;
   }
 
   public upsertEmbeddingSpace(space: EmbeddingSpaceRecord): void {
@@ -238,8 +298,9 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
     }
     const stmt = this.db.prepare(`
       INSERT INTO embedding_spaces (
-        space_id, vector_contract_id, provider, model, dimension, dtype, input_version, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        space_id, vector_contract_id, provider, model, dimension, dtype, input_version, created_at, updated_at,
+        source_text_generation_id, source_chunks_digest, source_publication_id, source_record_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(space_id) DO UPDATE SET
         vector_contract_id = excluded.vector_contract_id,
         provider = excluded.provider,
@@ -247,6 +308,10 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
         dimension = excluded.dimension,
         dtype = excluded.dtype,
         input_version = excluded.input_version,
+        source_text_generation_id = excluded.source_text_generation_id,
+        source_chunks_digest = excluded.source_chunks_digest,
+        source_publication_id = excluded.source_publication_id,
+        source_record_count = excluded.source_record_count,
         updated_at = excluded.updated_at;
     `);
 
@@ -260,6 +325,10 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
       space.inputVersion,
       space.createdAt,
       space.updatedAt
+      , space.sourceProvenance?.sourceTextGenerationId ?? null
+      , space.sourceProvenance?.sourceChunksDigest ?? null
+      , space.sourceProvenance?.sourcePublicationId ?? null
+      , space.sourceProvenance?.sourceRecordCount ?? null
     );
   }
 
@@ -274,14 +343,15 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
 
     const stmt = this.db.prepare(`
       INSERT INTO embedding_records (
-        chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_blob, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_input_hash, embedding_blob, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(chunk_id) DO UPDATE SET
         space_id = excluded.space_id,
         note_path = excluded.note_path,
         chunk_index = excluded.chunk_index,
         text_hash = excluded.text_hash,
         vector_contract_id = excluded.vector_contract_id,
+        embedding_input_hash = excluded.embedding_input_hash,
         embedding_blob = excluded.embedding_blob,
         updated_at = excluded.updated_at;
     `);
@@ -292,7 +362,8 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
       record.notePath,
       record.chunkIndex,
       record.textHash,
-      record.inputHash,
+      record.vectorContractId,
+      record.embeddingInputHash ?? null,
       blob,
       record.createdAt,
       record.updatedAt
@@ -319,22 +390,15 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
   public getEmbeddingRecord(chunkId: string): ProducerEmbeddingRecord | null {
     if (!this.db) return null;
     const row = this.db.prepare(`
-      SELECT chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_blob, created_at, updated_at
+      SELECT chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_input_hash, embedding_blob, created_at, updated_at
       FROM embedding_records WHERE chunk_id = ?;
-    `).get(chunkId) as {
-      chunk_id: string;
-      space_id: string;
-      note_path: string;
-      chunk_index: number;
-      text_hash: string;
-      vector_contract_id: string;
-      embedding_blob: Uint8Array | ArrayBuffer;
-      created_at: string;
-      updated_at: string;
-    } | undefined;
+    `).get(chunkId) as SqliteRecordRow | undefined;
 
     if (!row) return null;
+    return this.mapRowToProducerRecord(row);
+  }
 
+  private mapRowToProducerRecord(row: SqliteRecordRow): ProducerEmbeddingRecord {
     let blobBuffer: ArrayBuffer;
     if (row.embedding_blob instanceof ArrayBuffer) {
       blobBuffer = row.embedding_blob;
@@ -353,11 +417,87 @@ export class SqliteProducerLocalStore implements ProducerLocalStore {
       notePath: row.note_path,
       chunkIndex: row.chunk_index,
       textHash: row.text_hash,
-      inputHash: row.vector_contract_id,
+      vectorContractId: row.vector_contract_id,
+      embeddingInputHash: typeof row.embedding_input_hash === "string" ? row.embedding_input_hash : undefined,
       embeddingBlob: float32,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+  }
+
+  public getAllRecords(spaceId?: string): ProducerEmbeddingRecord[] {
+    if (!this.db) return [];
+    const sql = spaceId
+      ? "SELECT chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_input_hash, embedding_blob, created_at, updated_at FROM embedding_records WHERE space_id = ? ORDER BY chunk_id ASC;"
+      : "SELECT chunk_id, space_id, note_path, chunk_index, text_hash, vector_contract_id, embedding_input_hash, embedding_blob, created_at, updated_at FROM embedding_records ORDER BY chunk_id ASC;";
+    const rows = (spaceId ? this.db.prepare(sql).all(spaceId) : this.db.prepare(sql).all()) as SqliteRecordRow[];
+    return rows.map((r) => this.mapRowToProducerRecord(r));
+  }
+
+  public getSpace(spaceId?: string): EmbeddingSpaceRecord | null {
+    if (!this.db) return null;
+    const sql = spaceId
+      ? "SELECT space_id, vector_contract_id, provider, model, dimension, dtype, input_version, created_at, updated_at, source_text_generation_id, source_chunks_digest, source_publication_id, source_record_count FROM embedding_spaces WHERE space_id = ?;"
+      : "SELECT space_id, vector_contract_id, provider, model, dimension, dtype, input_version, created_at, updated_at, source_text_generation_id, source_chunks_digest, source_publication_id, source_record_count FROM embedding_spaces LIMIT 1;";
+    const row = (spaceId ? this.db.prepare(sql).get(spaceId) : this.db.prepare(sql).get()) as SqliteSpaceRow | undefined;
+    if (!row) return null;
+    return {
+      spaceId: row.space_id,
+      vectorContractId: row.vector_contract_id,
+      provider: row.provider,
+      model: row.model,
+      dimensions: row.dimension,
+      inputVersion: row.input_version,
+      prefixMode: String("none"),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      sourceProvenance: typeof row.source_text_generation_id === "string" && typeof row.source_chunks_digest === "string" && typeof row.source_publication_id === "string" && typeof row.source_record_count === "number"
+        ? { sourceTextGenerationId: row.source_text_generation_id, sourceChunksDigest: row.source_chunks_digest, sourcePublicationId: row.source_publication_id, sourceRecordCount: row.source_record_count }
+        : undefined,
+    };
+  }
+
+  public deleteRecordsForNote(notePath: string): number {
+    if (!this.db) return 0;
+    const stmt = this.db.prepare("DELETE FROM embedding_records WHERE note_path = ?;");
+    const info = stmt.run(notePath) as { changes?: number } | undefined;
+    return info?.changes ?? 0;
+  }
+
+  public deleteRecordsByChunkIds(chunkIds: readonly string[]): number {
+    if (!this.db || chunkIds.length === 0) return 0;
+    let deleted = 0;
+    this.db.exec("BEGIN TRANSACTION;");
+    try {
+      const stmt = this.db.prepare("DELETE FROM embedding_records WHERE chunk_id = ?;");
+      for (const id of chunkIds) {
+        const res = stmt.run(id) as { changes?: number } | undefined;
+        deleted += res?.changes ?? 0;
+      }
+      this.db.exec("COMMIT;");
+    } catch (err) {
+      this.db.exec("ROLLBACK;");
+      throw err;
+    }
+    return deleted;
+  }
+
+  public replaceAllRecords(space: EmbeddingSpaceRecord, records: readonly ProducerEmbeddingRecord[]): void {
+    if (!this.db) {
+      throw new Error("Cannot replace all records: SQLite store is not open.");
+    }
+    this.db.exec("BEGIN TRANSACTION;");
+    try {
+      this.db.exec("DELETE FROM embedding_records;");
+      this.upsertEmbeddingSpace(space);
+      for (const record of records) {
+        this.upsertEmbeddingRecord(record);
+      }
+      this.db.exec("COMMIT;");
+    } catch (err) {
+      this.db.exec("ROLLBACK;");
+      throw err;
+    }
   }
 
   public countRecords(spaceId?: string): number {

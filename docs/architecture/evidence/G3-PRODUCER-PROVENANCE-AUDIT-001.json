@@ -1,0 +1,44 @@
+{
+  "phase": "G3-PRODUCER-PROVENANCE-AUDIT-001",
+  "deviceIdentitySource": {
+    "file": "src/device/deviceIdentity.ts",
+    "function": "getOrCreatePersistentDeviceId",
+    "storage": "Obsidian local storage / lina_device_id",
+    "stablePerInstallation": true,
+    "synchronized": false,
+    "canonicalOwnershipReference": "ownership.json.activeProducerId"
+  },
+  "ownershipSource": {
+    "file": "src/device/deviceOwnership.ts",
+    "path": ".lina/ownership.json",
+    "fields": ["activeProducerId", "epoch"],
+    "authority": "activeProducerId plus epoch"
+  },
+  "epochSource": {
+    "field": "OwnershipManifest.epoch",
+    "persistence": "atomic ownership manifest",
+    "increments": ["transferOwnership", "relinquishOwnership"]
+  },
+  "fenceSemantics": {
+    "file": "src/device/ownershipGate.ts",
+    "acquireFence": "returns { producerDeviceId, epoch } after authoritative evaluation",
+    "assertFence": "re-reads ownership and requires same producer and epoch",
+    "additionalToken": false
+  },
+  "currentManifestProducerProvenance": {
+    "generationId": "generation-000014",
+    "formatVersion": 4,
+    "present": ["createdAt", "sourcePublicationId", "sourceTextGenerationId", "sourceChunksDigest", "sourceRecordCount"],
+    "missing": ["producerDeviceId", "producerEpoch", "ownerDeviceId", "ownerEpoch", "fenceToken", "publicationId"]
+  },
+  "toctouRisk": "M4 publication and CURRENT promotion do not receive or reassert OwnershipFenceToken after canonical SQLite work.",
+  "recommendedProducerContract": ["producerDeviceId", "producerEpoch"],
+  "recommendedCapturePoint": "Acquire fence before SQLite snapshot; assert same fence at SQLite commit, canonical projection, final generation promotion and CURRENT replacement.",
+  "recoveryImpact": "v1-v4 remain structurally recoverable/current-pointable but cutover-ineligible; v5 authority mismatch is recoverable but cutover-ineligible.",
+  "companionImpact": "Read-only comparison against synchronized ownership.json; no SQLite or Producer-local state required.",
+  "formatVersionImpact": "New formatVersion 5 required; v4 cannot acquire a second semantic contract.",
+  "cutoverEligibilityRule": "Integrity G6 && semantic G1 && source provenance G2 && v5 producer fence provenance matching current valid ownership.",
+  "recommendedFix": "Inject fence into M4 publication writer, persist producerDeviceId/producerEpoch in v5 manifest, fail closed and revalidate before promotion; no SQLite schema, provider or reembedding change.",
+  "g3Status": "PASS_AFTER_G3-PRODUCER-PROVENANCE-FIX-001",
+  "cutoverStatus": "PRECUTOVER_BLOCKERS_CLEARED_CUTOVER_NOT_EXECUTED"
+}

@@ -1,0 +1,11 @@
+{
+  "current": "generation-000001",
+  "existingGenerations": ["generation-000001"],
+  "candidateGenerationId": "generation-000001",
+  "maxGenerationId": 1,
+  "stagingState": "empty",
+  "promotedNotCurrent": false,
+  "contentChanged": "not determined; publication was rejected before a candidate was built",
+  "rootCause": "publishedGenerationPublicationService filters DataAdapter.list().folders as basenames although Obsidian returns complete folder paths.",
+  "recommendedFix": "normalize folder paths to basenames before parsing IDs; preserve ANTI_DOWNGRADE."
+}

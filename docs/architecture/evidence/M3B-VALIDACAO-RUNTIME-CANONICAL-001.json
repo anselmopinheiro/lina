@@ -1,0 +1,60 @@
+{
+  "executionContext": "obsidian-plugin",
+  "role": "active-producer",
+  "environment": {
+    "nodeVersion": "22.22.1",
+    "electronVersion": "39.8.3",
+    "obsidianVersion": "1.12.7",
+    "sqliteAvailable": true
+  },
+  "flags": {
+    "producerSqliteShadowWriteEnabled": true,
+    "producerSqliteBootstrapEnabled": true,
+    "producerSqliteEquivalenceAuditEnabled": true,
+    "producerSqliteCanonicalEnabled": true
+  },
+  "runtimeProofArtifact": "docs/architecture/evidence/runtime/M3B-CANONICAL-OBSIDIAN-RUNTIME-001.json",
+  "requirements": {
+    "cutover": {
+      "status": "PASS",
+      "evidenceLevel": "OBSIDIAN_RUNTIME",
+      "evidence": "Executado e capturado com node:sqlite nativo (Node 22.22.1 / Electron 39.8.3 / Obsidian 1.12.7) no papel Active Producer. Sequência temporal SQLite-first (canonical-sqlite-start -> canonical-sqlite-pass -> legacy-projection-start -> legacy-projection-pass) confirmada em M3B-CANONICAL-OBSIDIAN-RUNTIME-001.json."
+    },
+    "reopenPersistence": {
+      "status": "PASS",
+      "evidenceLevel": "OBSIDIAN_RUNTIME",
+      "evidence": "Verificado no artefacto M3B-CANONICAL-OBSIDIAN-RUNTIME-001.json: reabertura da DB SQLite confirma schema V1, 2299 registos mantidos, 0 divergências (isEquivalent = true, matchedCount = 2299)."
+    },
+    "reprojectionWithoutAi": {
+      "status": "PASS",
+      "evidenceLevel": "OBSIDIAN_RUNTIME",
+      "evidence": "Verificado no artefacto M3B-CANONICAL-OBSIDIAN-RUNTIME-001.json: reprojeção legada efetuada a partir da DB SQLite com 0 chamadas de IA (providerCallsCount = 0)."
+    },
+    "preCutoverEquivalence": {
+      "status": "PASS",
+      "evidenceLevel": "UNIT_TEST",
+      "evidence": "Testado em producerSqliteCanonicalRuntimeValidation.test.ts (R1): evaluateCanonicalWriteEligibility bloqueia cutover em caso de divergência prévia."
+    },
+    "sqliteFailureBlocksProjection": {
+      "status": "PASS",
+      "evidenceLevel": "UNIT_TEST",
+      "evidence": "Testado em producerSqliteCanonicalRuntimeValidation.test.ts (R3): erro de gravação no SQLite impede o arranque da projeção legada."
+    },
+    "projectionFailureIsolation": {
+      "status": "PASS",
+      "evidenceLevel": "UNIT_TEST",
+      "evidence": "Testado em producerSqliteCanonicalRuntimeValidation.test.ts (R4): falha na projeção legada não invalida nem corrompe a transação canónica SQLite."
+    },
+    "projectionRetry": {
+      "status": "PASS",
+      "evidenceLevel": "UNIT_TEST",
+      "evidence": "Testado em producerSqliteCanonicalRuntimeValidation.test.ts (R4): reprojectLegacyFromSqlite recupera a projeção degradada sem regeneração de IA."
+    },
+    "operationalRollback": {
+      "status": "PASS",
+      "evidenceLevel": "UNIT_TEST",
+      "evidence": "Testado em producerSqliteCanonicalRuntimeValidation.test.ts (R7): desativação da flag reverte autoridade para modo legado mantendo dados SQLite intactos."
+    }
+  },
+  "conclusion": "PASS"
+}

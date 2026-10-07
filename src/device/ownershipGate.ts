@@ -171,6 +171,7 @@ export interface IOwnershipGate {
  */
 export class OwnershipGate implements IOwnershipGate {
   private lastDecision: OwnershipGateDecision | null = null;
+  private evaluationRevision = 0;
 
   constructor(
     private readonly adapter?: OwnershipDataAdapter,
@@ -179,24 +180,33 @@ export class OwnershipGate implements IOwnershipGate {
     private readonly autoClaim: boolean = true
   ) {}
 
-  async evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision> {
-    if (!this.adapter) {
-      const decision: OwnershipGateDecision = {
-        authorized: true,
-        status: "authorized",
-      };
-      this.lastDecision = decision;
+  /** All authoritative evaluations synchronize the derived cache through this boundary. */
+  private async evaluateAndCache(
+    expectedEpoch?: number,
+    options: EvaluateOwnershipGateOptions = { autoClaimIfUnclaimed: this.autoClaim },
+    expectedOwner?: string,
+  ): Promise<OwnershipGateDecision> {
+    const revision = ++this.evaluationRevision;
+    const deviceId = this.getDeviceId();
+    const role = this.getRole();
+    let decision: OwnershipGateDecision = this.adapter
+      ? await evaluateOwnershipGate(this.adapter, deviceId, role, expectedEpoch, options)
+      : { authorized: true, status: "authorized", activeProducerId: expectedOwner, epoch: expectedEpoch };
+    if (deviceId !== this.getDeviceId() || role !== this.getRole()) {
+      decision = { authorized: false, status: "ownership-unreadable", reason: "Local authority changed during evaluation." };
+    } else if (decision.authorized && expectedOwner && decision.activeProducerId !== expectedOwner) {
+      decision = { ...decision, authorized: false, status: "standby-producer", reason: "Fence producer does not match current ownership." };
+    }
+    // An older completion cannot overwrite a newer evaluation or invalidation.
+    if (revision !== this.evaluationRevision) {
       return decision;
     }
-    const decision = await evaluateOwnershipGate(
-      this.adapter,
-      this.getDeviceId(),
-      this.getRole(),
-      expectedEpoch,
-      { autoClaimIfUnclaimed: this.autoClaim }
-    );
     this.lastDecision = decision;
     return decision;
+  }
+
+  async evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision> {
+    return this.evaluateAndCache(expectedEpoch);
   }
 
   async canPublish(): Promise<boolean> {
@@ -208,9 +218,7 @@ export class OwnershipGate implements IOwnershipGate {
   }
 
   async acquireFence(options?: EvaluateOwnershipGateOptions): Promise<OwnershipFenceToken | undefined> {
-    const decision = options && this.adapter
-      ? await evaluateOwnershipGate(this.adapter, this.getDeviceId(), this.getRole(), undefined, options)
-      : await this.evaluate();
+    const decision = await this.evaluateAndCache(undefined, options);
     if (!decision.authorized || !decision.activeProducerId || !decision.epoch) {
       return undefined;
     }
@@ -218,16 +226,7 @@ export class OwnershipGate implements IOwnershipGate {
   }
 
   async assertFence(token: OwnershipFenceToken): Promise<boolean> {
-    const decision = this.adapter
-      ? await evaluateOwnershipGate(
-        this.adapter,
-        this.getDeviceId(),
-        this.getRole(),
-        token.epoch,
-        { autoClaimIfUnclaimed: false }
-      )
-      : { authorized: true, status: "authorized" as const, activeProducerId: token.producerDeviceId, epoch: token.epoch };
-    this.lastDecision = decision;
+    const decision = await this.evaluateAndCache(token.epoch, { autoClaimIfUnclaimed: false }, token.producerDeviceId);
     return decision.authorized && decision.activeProducerId === token.producerDeviceId && decision.epoch === token.epoch;
   }
 
@@ -300,6 +299,7 @@ export class OwnershipGate implements IOwnershipGate {
   }
 
   invalidate(): void {
+    ++this.evaluationRevision;
     this.lastDecision = null;
   }
 

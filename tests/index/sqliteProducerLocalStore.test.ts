@@ -78,9 +78,10 @@ class TestInMemoryDatabaseSync implements DatabaseSyncLike {
             chunk_index: params[3],
             text_hash: params[4],
             vector_contract_id: params[5],
-            embedding_blob: params[6],
-            created_at: params[7],
-            updated_at: params[8],
+            embedding_input_hash: params[6],
+            embedding_blob: params[7],
+            created_at: params[8],
+            updated_at: params[9],
           };
           if (idx >= 0) {
             self.tables.embedding_records[idx] = rec;
@@ -166,7 +167,7 @@ describe("SQLite Producer Local Store & Shadow Writer (Phase M1)", () => {
       expect(mockDb.executedSqls).toContain("PRAGMA foreign_keys = ON;");
     });
 
-    it("initializes schema version 1 idempotently", () => {
+    it("initializes schema version 3 idempotently", () => {
       const store = new SqliteProducerLocalStore({
         databasePath: externalDbPath,
         customDbInstance: mockDb,
@@ -174,13 +175,25 @@ describe("SQLite Producer Local Store & Shadow Writer (Phase M1)", () => {
 
       store.open();
       expect(store.getSchemaVersion()).toBe(PRODUCER_STORE_SCHEMA_VERSION);
-      expect(mockDb.tables.schema_migrations.length).toBe(1);
+      expect(mockDb.tables.schema_migrations.length).toBe(3);
       expect(mockDb.tables.schema_migrations[0].version).toBe(1);
+      expect(mockDb.tables.schema_migrations[1].version).toBe(2);
+      expect(mockDb.tables.schema_migrations[2].version).toBe(3);
 
       // Reopen idempotency
       store.open();
       expect(store.getSchemaVersion()).toBe(PRODUCER_STORE_SCHEMA_VERSION);
-      expect(mockDb.tables.schema_migrations.length).toBe(1);
+      expect(mockDb.tables.schema_migrations.length).toBe(3);
+    });
+
+    it("migrates an existing v1 database to v3 without removing vector contracts", () => {
+      mockDb.tables.schema_migrations.push({ version: 1, applied_at: "t", description: "v1" });
+      const store = new SqliteProducerLocalStore({ databasePath: externalDbPath, customDbInstance: mockDb });
+      store.open();
+      expect(store.getSchemaVersion()).toBe(3);
+      expect(mockDb.tables.schema_migrations.map((entry) => entry.version)).toEqual([1, 2, 3]);
+      expect(mockDb.executedSqls.some((sql) => sql.includes("ALTER TABLE embedding_records ADD COLUMN embedding_input_hash TEXT;"))).toBe(true);
+      expect(mockDb.executedSqls.some((sql) => sql.includes("DROP COLUMN") || sql.includes("vector_contract_id") && sql.includes("DROP"))).toBe(false);
     });
   });
 
@@ -209,7 +222,8 @@ describe("SQLite Producer Local Store & Shadow Writer (Phase M1)", () => {
         notePath: "Folder/Note.md",
         chunkIndex: 0,
         textHash: "hash-abc",
-        inputHash: "hash-input-abc",
+        vectorContractId: space.vectorContractId,
+        embeddingInputHash: "hash-input-abc",
         embeddingBlob: sampleEmbedding,
         createdAt: now,
         updatedAt: now,

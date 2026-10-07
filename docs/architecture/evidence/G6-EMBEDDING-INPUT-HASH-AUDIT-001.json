@@ -1,0 +1,20 @@
+{
+  "phase": "G6-EMBEDDING-INPUT-HASH-AUDIT-001",
+  "capturedAt": "2026-10-06",
+  "mode": "read-only audit and design",
+  "rootCause": "M3 mapEmbeddingRecordToProducerRecord substitutes the vector contract ID into the provisional inputHash field; SQLite stores it in vector_contract_id and reprojectLegacyFromSqlite omits embeddingInputHash. M4 then publishes the already-incomplete record.",
+  "semanticDefinition": "hashContent(buildEmbeddingInput(chunk, prefixMode)); the enriched document input includes basename, path, chunk index, chunk text and document prefix when configured.",
+  "lossPoint": ["sqliteProducerCanonicalWriter.mapEmbeddingRecordToProducerRecord", "sqliteProducerLocalStore.embedding_records.vector_contract_id", "sqliteProducerCanonicalWriter.reprojectLegacyFromSqlite", "publishedGenerationBuilder records.json"],
+  "affectedRecords": { "legacyJsonl": 2303, "legacyWithEmbeddingInputHash": 0, "binary3EMetadataWithoutEmbeddingInputHash": 2303, "publishedGeneration": "generation-000008", "publishedWithoutEmbeddingInputHash": 2303 },
+  "searchImpact": { "chunks": 2303, "validByCalculateEmbeddingState": 0, "missingInputHash": 2303, "jsonlRuntimeIndex": "null", "binary3E": "masks the issue because its reader does not rerun calculateEmbeddingState", "configuredPreference": "prefer-binary" },
+  "recoverability": { "currentSnapshot": "RECOVERABLE_WITHOUT_PROVIDER", "global": "PARTIALLY_RECOVERABLE", "condition": "current chunk and verified preparation identity must be available; missing historical chunks are not recoverable from SQLite, 3E or M4 alone" },
+  "migrationNeeded": true,
+  "providerRequired": false,
+  "recommendedFix": "SQLite schema v2 adds embedding_input_hash; split ProducerEmbeddingRecord vectorContractId from embeddingInputHash; preserve the real hash through canonical write, reprojection, 3E and M4; perform conservative deterministic backfill only when input can be reconstructed and verified.",
+  "cutoverStatus": "BLOCKED_BY_G1_G2_G3_G6",
+  "historicalFinding": "embeddingInputHash existed in Git before M1; no vault backup/checkpoint was available for inspection",
+  "implementationStatus": "IMPLEMENTED_RUNTIME_PROOF_PENDING",
+  "fixEvidence": "docs/architecture/evidence/G6-EMBEDDING-INPUT-HASH-FIX-001.json",
+  "dataModified": false,
+  "providerCalls": 0
+}

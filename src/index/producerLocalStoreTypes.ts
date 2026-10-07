@@ -12,12 +12,20 @@
 
 import type { VectorContractV1 } from "./vectorContract";
 
-export const PRODUCER_STORE_SCHEMA_VERSION = 1;
+export const PRODUCER_STORE_SCHEMA_VERSION = 3;
 export const PRODUCER_STORE_DEFAULT_DB_NAME = "lina-producer.db";
 
 /**
  * Metadata record for a distinct embedding vector space in the local store.
  */
+/** Immutable source identity captured when embeddings are produced. */
+export interface EmbeddingSourceProvenance {
+  readonly sourceTextGenerationId: string;
+  readonly sourceChunksDigest: string;
+  readonly sourcePublicationId: string;
+  readonly sourceRecordCount: number;
+}
+
 export interface EmbeddingSpaceRecord {
   readonly spaceId: string;
   readonly provider: string;
@@ -29,6 +37,10 @@ export interface EmbeddingSpaceRecord {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly vectorContract?: VectorContractV1;
+  /** Absent only for pre-G2 SQLite rows; v4 publication rejects those rows. */
+  readonly sourceProvenance?: EmbeddingSourceProvenance;
+  /** Ephemeral publication fence; never persisted by SQLite. */
+  readonly publicationProducerProvenance?: { readonly producerDeviceId: string; readonly producerEpoch: number };
 }
 
 /**
@@ -40,7 +52,8 @@ export interface ProducerEmbeddingRecord {
   readonly notePath: string;
   readonly chunkIndex: number;
   readonly textHash: string;
-  readonly inputHash: string;
+  readonly vectorContractId: string;
+  readonly embeddingInputHash?: string;
   readonly embeddingBlob: Float32Array | ArrayBuffer;
   readonly createdAt: string;
   readonly updatedAt: string;

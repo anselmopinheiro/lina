@@ -83,6 +83,7 @@ export class BinaryWorker {
         return undefined;
       }
     }
+    if (!this.canMaintain()) return undefined;
     return this.run("create-or-update", this.options.createOrUpdate, true);
   }
 
@@ -97,6 +98,7 @@ export class BinaryWorker {
         return false;
       }
     }
+    if (!this.canMaintain()) return false;
     await this.run("remove", async () => {
       await this.options.remove();
       return { status: "absent" };
@@ -111,23 +113,27 @@ export class BinaryWorker {
     if (!this.canMaintain()) {
       return;
     }
-    if (this.options.canPublish && this.options.canPublish() === false) {
-      return;
-    }
     if (!publicationId) {
       console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
       return;
     }
-    void this.run(
+    void this.runAutomaticMaintenance(publicationId).catch((error: unknown) => {
+      this.options.onAutomaticMaintenanceFailure({ status: "error", reason: error instanceof Error ? error.message : "binary-preflight-failed" });
+    });
+  }
+
+  private async runAutomaticMaintenance(publicationId: string): Promise<void> {
+    if (this.options.canPublish && !(await this.options.canPublish())) return;
+    if (!this.canMaintain()) return;
+    const summary = await this.run(
       "published-maintenance",
       () => this.options.maintainAfterPublication(publicationId),
-    ).then((summary) => {
-      if (summary.status === "valid") {
-        this.options.onBinaryPublicationReady();
-        return;
-      }
-      this.options.onAutomaticMaintenanceFailure(summary);
-    });
+    );
+    if (summary.status === "valid") {
+      this.options.onBinaryPublicationReady();
+      return;
+    }
+    this.options.onAutomaticMaintenanceFailure(summary);
   }
 
   private canMaintain(): boolean {

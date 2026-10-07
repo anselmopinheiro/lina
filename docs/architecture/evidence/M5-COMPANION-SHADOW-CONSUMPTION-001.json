@@ -1,0 +1,126 @@
+{
+  "phase": "M5-COMPANION-SHADOW-CONSUMPTION-001",
+  "kind": "audit-implementation-and-evidence",
+  "capturedAt": "2026-10-05",
+  "conclusion": "PASS",
+  "conclusionScope": "shadow mode validated (M5A-M5D Desktop Producer); cutover remains strictly BLOCKED by G1, G2, G3, G6",
+  "subphases": {
+    "m5a": { "status": "PASS", "description": "PublishedGenerationReader (read-only, DataAdapter + WebCrypto)" },
+    "m5b": { "status": "PASS", "description": "PublishedGenerationEquivalence (pure comparator L1/L2, 9 classes)" },
+    "m5c": { "status": "PASS", "description": "PublishedGenerationShadowAuditor (single-flight, in-memory diagnostics, diagnose command)" },
+    "m5d": { "status": "PASS", "scope": "Desktop Producer Runtime", "artifact": "docs/architecture/evidence/M5D-RUNTIME-SHADOW-001.json" }
+  },
+  "platformStatus": {
+    "producerDesktop": { "status": "PASS", "evidenceLevel": "OBSIDIAN_RUNTIME" },
+    "companionDesktop": { "status": "NÃO_EXECUTADO", "evidenceLevel": "NÃO_EXECUTADO" },
+    "android": { "status": "NÃO_EXECUTADO", "evidenceLevel": "NÃO_EXECUTADO" },
+    "ios": { "status": "NÃO_EXECUTADO", "evidenceLevel": "NÃO_EXECUTADO" }
+  },
+  "desktopRuntimeEvidence": {
+    "flagOff": {
+      "status": "IDLE",
+      "generationId": null,
+      "comparisonLevel": "L2",
+      "divergenceCount": 0,
+      "providerCalls": 0,
+      "evidenceLevel": "OBSIDIAN_RUNTIME"
+    },
+    "flagOn": {
+      "status": "PASS",
+      "generationId": "generation-000008",
+      "comparisonLevel": "L2",
+      "legacyCount": 2303,
+      "publishedCount": 2303,
+      "divergenceCount": 0,
+      "legacyDurationMs": 126,
+      "shadowDurationMs": 124,
+      "providerCalls": 0,
+      "evidenceLevel": "OBSIDIAN_RUNTIME"
+    }
+  },
+  "m5a": {
+    "status": "IMPLEMENTED_PASS",
+    "module": "src/index/publishedGenerationReader.ts",
+    "integration": "detached from critical search path; called by PublishedGenerationShadowAuditor",
+    "tests": {
+      "file": "tests/index/publishedGenerationReader.test.ts",
+      "passed": 12
+    },
+    "guarantees": [
+      "read-only adapter port",
+      "providerCalls=0",
+      "no node:*",
+      "no SQLite",
+      "no writer/recovery import"
+    ]
+  },
+  "m5b": {
+    "status": "IMPLEMENTED_PASS",
+    "module": "src/index/publishedGenerationEquivalence.ts",
+    "api": "compareLegacyAndPublished({level, legacy, published, maxReportedDivergences?}) + publishedSnapshotFromReadResult",
+    "levels": {
+      "L1": "recordCount, dimensions, provider, model, vectorContractId, dtype, publicationId, named hashes (only fields present on both sides)",
+      "L2": "L1 + per-chunkId path/index/textHash/dimension/vectors, absences/extras, duplicates"
+    },
+    "classes": [
+      "LEGACY_ONLY",
+      "PUBLISHED_ONLY",
+      "METADATA_MISMATCH",
+      "VECTOR_MISMATCH",
+      "DIMENSION_MISMATCH",
+      "CONTRACT_MISMATCH",
+      "HASH_MISMATCH",
+      "DUPLICATE_IDENTITY",
+      "READ_ERROR"
+    ],
+    "additionalClasses": [],
+    "vectorRule": "Math.fround(legacy) === float32, no tolerance, NaN equals NaN",
+    "duplicates": "detected per side with occurrences and impact; id excluded from record comparison",
+    "g6": "embeddingInputHash neither read, invented nor normalised",
+    "tests": {
+      "file": "tests/index/publishedGenerationEquivalence.test.ts",
+      "passed": 29
+    }
+  },
+  "m5c": {
+    "status": "IMPLEMENTED_PASS",
+    "flag": { "key": "deviceSettingsById.<device>.companionPublishedGenerationShadowEnabled", "default": false },
+    "integrationPoint": "LinaPlugin.getRuntimeEmbeddingIndex() after the authoritative legacy RuntimeEmbeddingIndex resolves",
+    "deliveryContract": "returns the exact legacy index; shadow is scheduled without awaiting",
+    "diagnostic": { "storage": "memory-only", "statuses": ["IDLE", "RUNNING", "PASS", "DIVERGED", "READER_ERROR"], "desktopLevel": "L2", "mobileLevel": "L1", "providerCalls": 0 },
+    "command": "Lina: Diagnose m5 shadow",
+    "tests": { "file": "tests/index/publishedGenerationShadowAudit.test.ts", "focusedPassed": 47 }
+  },
+  "m5d": {
+    "status": "IMPLEMENTED_PASS",
+    "scope": "desktop-producer-runtime-validated",
+    "artifact": "docs/architecture/evidence/M5D-RUNTIME-SHADOW-001.json"
+  },
+  "cutoverStatus": "BLOCKED",
+  "cutoverBlockers": [
+    {
+      "id": "G1",
+      "severity": "blocks-cutover",
+      "text": "M4 manifest lacks inputVersion and prefixMode required by RuntimeEmbeddingSourceIdentity."
+    },
+    {
+      "id": "G2",
+      "severity": "blocks-cutover",
+      "text": "M4 manifest has no sourcePublicationId/sourceTextGenerationId linking to the legacy publication."
+    },
+    {
+      "id": "G3",
+      "severity": "blocks-cutover",
+      "text": "No provenance (producerDeviceId/producerEpoch) on generations."
+    },
+    {
+      "id": "G6",
+      "severity": "blocks-cutover",
+      "text": "embeddingInputHash lost in canonical path (inputHash stores contractId; reprojection and records.json omit it); embeddingState treats such records as missing-input-hash."
+    }
+  ],
+  "providerCalls": 0,
+  "codeChanged": false,
+  "vaultChanged": false,
+  "commitOrPush": false
+}

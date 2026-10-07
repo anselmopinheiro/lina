@@ -1,0 +1,25 @@
+{
+  "executionContext": "obsidian-plugin",
+  "canonicalModeEnabled": true,
+  "preCutoverEquivalent": true,
+  "sqliteCanonicalWritePassed": true,
+  "legacyProjectionPassed": true,
+  "reopenPassed": true,
+  "projectionFailureIsolationPassed": true,
+  "projectionRetryPassed": true,
+  "providerCallsDuringReprojection": 0,
+  "dbOutsideVault": true,
+  "environment": {
+    "nodeVersion": "22.22.1",
+    "electronVersion": "39.8.3",
+    "obsidianVersion": "1.12.7",
+    "sqliteAvailable": true
+  },
+  "flags": {
+    "producerSqliteShadowWriteEnabled": true,
+    "producerSqliteBootstrapEnabled": true,
+    "producerSqliteEquivalenceAuditEnabled": true,
+    "producerSqliteCanonicalEnabled": false
+  },
+  "conclusion": "PASS"
+}

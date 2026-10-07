@@ -1,0 +1,120 @@
+{
+  "phase": "G1-PUBLISHED-INPUT-CONTRACT-AUDIT-001",
+  "kind": "read-only audit and contract design",
+  "capturedAt": "2026-10-06",
+  "result": "READY_FOR_FIX",
+  "cutoverStatus": "BLOCKED_BY_G1_G2_G3",
+  "scope": {
+    "implementation": false,
+    "migration": false,
+    "providerCalls": 0,
+    "reembeddingCalls": 0,
+    "sqliteModified": false,
+    "m4Modified": false,
+    "currentModified": false,
+    "commitOrPush": false
+  },
+  "inputVersionSemantics": {
+    "valueInCurrentCode": 1,
+    "definition": "Version of the document embedding-input construction strategy, not provider or model version.",
+    "code": "src/index/embeddingGenerator.ts: EMBEDDING_INPUT_VERSION",
+    "affectsSemanticIdentity": true,
+    "inVectorContractId": true,
+    "inEmbeddingInputHashDirectly": false,
+    "canChangeWithoutModelChange": true
+  },
+  "prefixModeSemantics": {
+    "values": ["none", "nomic-search-query-document"],
+    "documentPrefix": "search_document: ",
+    "queryPrefix": "search_query: ",
+    "documentApplication": "buildEmbeddingInput -> applyEmbeddingPrefix(..., false)",
+    "queryApplication": "hybridSearch -> applyEmbeddingPrefix(..., true)",
+    "affectsSemanticIdentity": true,
+    "inVectorContractId": true,
+    "affectsEmbeddingInputHash": true
+  },
+  "flow": [
+    "chunker Chunk",
+    "embeddingGenerator.buildEmbeddingInput",
+    "applyEmbeddingPrefix",
+    "generateProviderEmbeddings / generateProviderEmbedding",
+    "hashContent(final document input) -> embeddingInputHash",
+    "embeddingPersistence.publishCanonicalEmbeddings",
+    "SqliteProducerLocalStore",
+    "publishedGenerationBuilder.buildImmutableGeneration",
+    "publishedGenerationReader / Validator / Comparator"
+  ],
+  "currentPersistence": {
+    "canonicalJsonlManifest": { "inputVersion": "EXPLICITLY_PERSISTED", "prefixMode": "EXPLICITLY_PERSISTED", "vectorContract": "EXPLICITLY_PERSISTED" },
+    "sqlite": { "inputVersion": "EXPLICITLY_PERSISTED", "prefixMode": "NOT_PERSISTED", "note": "embedding_spaces has input_version but no prefix_mode; getSpace returns literal none." },
+    "m4V2Manifest": { "inputVersion": "ABSENT", "prefixMode": "ABSENT", "vectorContract": "ABSENT", "vectorContractId": "EXPLICITLY_PERSISTED" },
+    "m4V2Record": { "embeddingInputHash": "EXPLICITLY_PERSISTED", "inputVersion": "ABSENT", "prefixMode": "ABSENT" },
+    "binary3EManifest": { "inputVersion": "EXPLICITLY_PERSISTED as inputFormatVersion", "prefixMode": "EXPLICITLY_PERSISTED" }
+  },
+  "currentManifestState": {
+    "current": "generation-000012",
+    "formatVersion": 2,
+    "provider": "mistral",
+    "model": "mistral-embed",
+    "dimensions": 1024,
+    "dtype": "float32",
+    "vectorContractId": "vec:e7b5684ec28eb8ed4f994135183c04c367809873f9135a7f8c6f218b5eea2f51",
+    "recordCount": 2303,
+    "inputVersion": "ABSENT",
+    "prefixMode": "ABSENT",
+    "metric": "ABSENT",
+    "vectorContract": "ABSENT",
+    "recordsWithEmbeddingInputHash": 2303,
+    "recordsWithInputVersion": 0,
+    "recordsWithPrefixMode": 0
+  },
+  "derivability": {
+    "vectorContractId": { "inputVersion": "NOT_DERIVABLE", "prefixMode": "NOT_DERIVABLE", "reason": "SHA-256 identifier is not invertible; candidate enumeration from current code is not historical proof." },
+    "embeddingInputHash": { "inputVersion": "NOT_DERIVABLE", "prefixMode": "NOT_DERIVABLE", "reason": "Per-record hash is non-invertible and does not encode the global contract." },
+    "settings": { "inputVersion": "DERIVABLE_ONLY_FROM_CURRENT_CODE", "prefixMode": "DERIVABLE_ONLY_FROM_CURRENT_CODE" },
+    "sqlite": { "inputVersion": "EXPLICITLY_PERSISTED", "prefixMode": "NOT_DERIVABLE" },
+    "legacyJsonl": { "inputVersion": "EXPLICITLY_PERSISTED", "prefixMode": "EXPLICITLY_PERSISTED" },
+    "binary3E": { "inputVersion": "EXPLICITLY_PERSISTED", "prefixMode": "EXPLICITLY_PERSISTED" },
+    "currentCode": { "inputVersion": "DERIVABLE_ONLY_FROM_CURRENT_CODE", "prefixMode": "DERIVABLE_ONLY_FROM_CURRENT_CODE" },
+    "m4V2Manifest": { "inputVersion": "NOT_DERIVABLE", "prefixMode": "NOT_DERIVABLE" }
+  },
+  "cutoverRisk": {
+    "sameModelDifferentInputVersion": ["undetectable from isolated v2", "false-match", "degraded-results", "space-mixing"],
+    "sameModelDifferentPrefixMode": ["undetectable from isolated v2", "false-match", "degraded-results", "space-mixing"],
+    "queryCorpusContractMismatch": ["undetectable from isolated v2", "false-match", "degraded-results", "space-mixing"],
+    "codeUpgradePreparationChange": ["undetectable from isolated v2", "false-match", "unnecessary-reembedding-or-mixing"],
+    "companionOldGenerationNewRuntime": ["undetectable from isolated v2", "false-match", "degraded-results", "space-mixing"]
+  },
+  "relationshipWithEmbeddingInputHash": {
+    "g6": "Establishes record-level evidence that the concrete document input matched a hash.",
+    "g1": "Requires a global, explicit and reproducible input contract for the generation.",
+    "substitution": false,
+    "bothRequired": true
+  },
+  "recommendedManifestContract": {
+    "formatVersion": 3,
+    "required": ["provider", "model", "dimensions", "dtype=float32", "metric=cosine", "inputVersion", "prefixMode", "vectorContract", "vectorContractId", "recordCount", "digests"],
+    "recordRequired": ["vectorContractId", "embeddingInputHash", "chunk identity and layout metadata"],
+    "cutoverEligibleRule": "Only a valid v3 manifest with an explicit, recomputable VectorContract and complete record hashes may be cutoverEligible."
+  },
+  "formatVersionImpact": {
+    "v1": "Readable for integrity/recovery; never cutover eligible.",
+    "v2": "Readable for integrity/recovery; must become not cutover eligible because it omits explicit input identity.",
+    "v3": "Required for new cutover-eligible generations.",
+    "reason": "An optional v2 extension would leave ambiguous v2 generations and retain the current unsound eligibility rule."
+  },
+  "recommendedFix": "Implement a new v3 published manifest with explicit inputVersion, prefixMode, metric and VectorContractV1; validate recomputation and propagate identity to Reader, Validator, Comparator, Shadow, Companion and mobile. Do not infer or migrate old v2 values.",
+  "findings": [
+    "M4 builder omits inputVersion/prefixMode despite receiving an EmbeddingSpaceRecord that exposes both.",
+    "M4 v2 Validator and Reader grant cutover eligibility solely because formatVersion equals 2.",
+    "M5 comparison only compares fields available on both sides, so a PASS cannot prove omitted input identity.",
+    "SQLite schema omits prefix_mode and getSpace fabricates none; this is not a historical source for prefixMode.",
+    "Automatic M3 diagnostic SQLite metadata rewrite remains outside G1 scope."
+  ],
+  "validation": {
+    "typecheck": "PASS",
+    "diffCheck": "PASS",
+    "focusedTests": "NOT_NEEDED: direct code and artifact inspection proved the semantics"
+  },
+  "git": { "head": "620a2c62b3a907927c12bd72e25b847caa6f3e61", "branch": "master", "commitCreated": false, "pushExecuted": false }
+}
