@@ -1,0 +1,42 @@
+{
+  "phase": "M6-MINI-B5-N1-N2-FIX-001",
+  "scope": ["N1", "N2", "N3"],
+  "n1Status": "PASS",
+  "n2Status": "PASS",
+  "n3TestGapStatus": "PASS",
+  "diagnoseM3RoleGuard": "effective role must be producer",
+  "diagnoseM3OwnershipGuard": "acquireFence without auto-claim",
+  "diagnoseM3FenceGuard": "revalidated before durable mutations",
+  "diagnoseM3FlagsGuard": "reads real SQLite settings",
+  "sourceExpectationCompleteness": "all four source fields required for MATCH",
+  "producerExpectationCompleteness": "activeProducerId and epoch required for MATCH",
+  "consumerEligibilityContract": "evaluatePublishedGenerationForConsumer",
+  "startupDiagnosticsTest": "PASS",
+  "readerV5InputHashTest": "PASS",
+  "linaLocalGitignoreDecision": "added; runtime-local state",
+  "m6Status": "NOT_STARTED",
+  "cutoverStatus": "NOT_STARTED",
+  "n1": {
+    "status": "PASS",
+    "manualDiagnostic": "diagnose-m3-canonical",
+    "guards": ["desktop", "effective producer role", "canonical flag", "ownership fence"],
+    "fenceBoundaries": ["before SQLite write", "before legacy projection", "before immutable publication/reprojection"],
+    "startupScheduling": false
+  },
+  "n2": {
+    "status": "PASS",
+    "consumerGate": "fail-closed",
+    "requiredInputs": ["structuralStatus", "semanticStatus", "complete source provenance", "complete ownership provenance"],
+    "implicitStructuralOrSemanticDefaults": false
+  },
+  "n3": {
+    "status": "PASS",
+    "tests": [
+      "PublishedGenerationReader rejects v5 records without embeddingInputHash",
+      "M6 startup diagnostics are not scheduled by onload",
+      "canonical writer blocks a stale ownership fence"
+    ]
+  },
+  "runtimeExecution": "not required by this source-level remediation; full automated validation is recorded with the change",
+  "excluded": ["M6 implementation", "cutover", "consumer source selection", "consumer cache", "commit", "push"]
+}

@@ -15,6 +15,7 @@ import {
   setDeviceSettingsContext,
   getLocalEmbeddingStorageReadPreference,
   getLocalPublishedGenerationShadowEnabled,
+  getLocalPublishedGenerationCutoverEnabled,
   getLegacyFingerprintDeviceId,
   migrateSettings,
   resolveLoadedSettings,
@@ -70,6 +71,7 @@ import {
 import {
   type VectorContractV1,
   extractVectorContract,
+  createVectorContract,
 } from "./src/index/vectorContract";
 import {
   type ProducerStateV1,
@@ -103,7 +105,9 @@ import {
 } from "./src/index/embeddingPersistence";
 import { BINARY_EMBEDDING_FILES, createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { getEmbeddingBinaryResourceLimits } from "./src/index/embeddingBinaryStorage";
-import { PublishedGenerationReader } from "./src/index/publishedGenerationReader";
+import { PublishedGenerationReader, evaluatePublishedGenerationSemanticContract } from "./src/index/publishedGenerationReader";
+import { evaluatePublishedGenerationForConsumer, type ConsumerPublishedGenerationEligibility } from "./src/index/consumerPublishedGenerationEligibility";
+import { PublishedRuntimeEmbeddingIndexCache } from "./src/search/publishedRuntimeEmbeddingIndexCache";
 import { PublishedGenerationShadowAuditor, type PublishedShadowDiagnostic } from "./src/index/publishedGenerationShadowAudit";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
@@ -335,6 +339,8 @@ export default class LinaPlugin extends Plugin {
   private localDeviceState?: DeviceState;
   private deviceRuntimeState: DeviceRuntimeState | null = null;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
+  private publishedRuntimeEmbeddingIndexCache?: PublishedRuntimeEmbeddingIndexCache;
+  private publishedRuntimeSelection: { selectedSource: "LEGACY" | "PUBLISHED" | "LEGACY_FALLBACK" | "PUBLISHED_BLOCKED"; publishedGenerationId?: string; fallbackActive: boolean; fallbackReason?: string; fallbackCount: number; lastReaderStatus?: string; lastConsumerEligibility?: ConsumerPublishedGenerationEligibility; legacyContractMatch?: boolean } = { selectedSource: "LEGACY", fallbackActive: false, fallbackCount: 0 };
   private publishedGenerationShadowAuditor?: PublishedGenerationShadowAuditor;
   private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
@@ -1814,9 +1820,56 @@ export default class LinaPlugin extends Plugin {
       );
     }
     const legacy = await this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
-    if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
-    return legacy;
+    if (!getLocalPublishedGenerationCutoverEnabled()) {
+      this.publishedRuntimeEmbeddingIndexCache?.invalidate();
+      this.publishedRuntimeSelection = { selectedSource: "LEGACY", fallbackActive: false, fallbackCount: 0 };
+      if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
+      return legacy;
+    }
+
+    const reader = new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
+    const read = await reader.read();
+    const fallback = (reason: string, blocked = false): RuntimeEmbeddingIndex | null => {
+      this.publishedRuntimeEmbeddingIndexCache?.invalidate();
+      this.publishedRuntimeSelection = {
+        selectedSource: blocked ? "PUBLISHED_BLOCKED" : "LEGACY_FALLBACK",
+        publishedGenerationId: read.generationId,
+        fallbackActive: !blocked,
+        fallbackReason: reason,
+        fallbackCount: this.publishedRuntimeSelection.fallbackCount + (blocked ? 0 : 1),
+        lastReaderStatus: read.status,
+      };
+      return blocked ? null : legacy;
+    };
+    if (read.status !== "OK" || !read.index || read.formatVersion !== 5) {
+      const blocked = ["HASH_MISMATCH", "RECORDS_INVALID", "VECTORS_INVALID", "MANIFEST_INVALID", "FORMAT_UNSUPPORTED", "CURRENT_MALFORMED", "DOWNGRADE_REJECTED"].includes(read.status);
+      return fallback(read.status, blocked);
+    }
+    const legacyContract = legacy ? createVectorContract({ provider: legacy.provider, model: legacy.model, dimensions: legacy.dimensions, inputVersion: legacy.sourceIdentity.inputVersion, prefixMode: legacy.sourceIdentity.prefixMode }) : null;
+    const semantic = evaluatePublishedGenerationSemanticContract(read.index, legacyContract);
+    const canonical = await readCanonicalEmbeddingRecords(this.app);
+    const source = canonical.valid ? extractCanonicalEmbeddingSourceProvenance(canonical.manifest) ?? undefined : undefined;
+    const ownership = await loadOwnership(this.app.vault.adapter);
+    const eligibility = evaluatePublishedGenerationForConsumer(read.index, {
+      structuralStatus: read.cutoverEligible === true ? "VALID" : "INVALID",
+      semanticStatus: semantic.status === "COMPATIBLE" ? "COMPATIBLE" : semantic.status === "SEMANTIC_CONTRACT_MISMATCH" ? "INCOMPATIBLE" : "UNKNOWN",
+      source,
+      ownership: ownership?.activeProducerId ? { activeProducerId: ownership.activeProducerId, epoch: ownership.epoch } : undefined,
+    });
+    const contractMatch = semantic.status === "COMPATIBLE";
+    if (!eligibility.eligible) {
+      const blocked = semantic.status === "SEMANTIC_CONTRACT_MISMATCH" || eligibility.sourceProvenanceStatus === "MISMATCH" || eligibility.producerProvenanceStatus === "MISMATCH";
+      const result = fallback(eligibility.reason ?? semantic.status, blocked || !contractMatch);
+      this.publishedRuntimeSelection = { ...this.publishedRuntimeSelection, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+      return result;
+    }
+    this.publishedRuntimeEmbeddingIndexCache ??= new PublishedRuntimeEmbeddingIndexCache();
+    const published = this.publishedRuntimeEmbeddingIndexCache.getOrCreate(read.index);
+    this.publishedRuntimeSelection = { selectedSource: "PUBLISHED", publishedGenerationId: read.generationId, fallbackActive: false, fallbackCount: this.publishedRuntimeSelection.fallbackCount, lastReaderStatus: read.status, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+    return published;
   }
+
+  getPublishedRuntimeSelectionDiagnostic(): Readonly<typeof this.publishedRuntimeSelection> { return { ...this.publishedRuntimeSelection }; }
 
   getPublishedGenerationShadowDiagnostic(): PublishedShadowDiagnostic {
     return this.publishedGenerationShadowAuditor?.getDiagnostic() ?? { status: "IDLE", level: getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2", providerCalls: 0, capturedAt: new Date(0).toISOString() };
@@ -1842,15 +1895,17 @@ export default class LinaPlugin extends Plugin {
   }
 
   getEmbeddingReadDiagnosticState(): EmbeddingReadDiagnosticState {
-    return this.runtimeEmbeddingIndexCache?.getDiagnosticState() ?? {
+    const diagnostic = this.runtimeEmbeddingIndexCache?.getDiagnosticState() ?? {
       configuredPreference: getLocalEmbeddingStorageReadPreference(),
       effectiveSource: "not-loaded",
       fallbackReason: "none",
     };
+    return { ...diagnostic, selectedSource: this.publishedRuntimeSelection.selectedSource, publishedGenerationId: this.publishedRuntimeSelection.publishedGenerationId, publishedFallbackActive: this.publishedRuntimeSelection.fallbackActive, publishedFallbackReason: this.publishedRuntimeSelection.fallbackReason, publishedFallbackCount: this.publishedRuntimeSelection.fallbackCount };
   }
 
   invalidateRuntimeEmbeddingIndex(reason: RuntimeEmbeddingIndexInvalidationReason): void {
     this.runtimeEmbeddingIndexCache?.invalidate(reason);
+    this.publishedRuntimeEmbeddingIndexCache?.invalidate();
   }
 
   private getBinaryEmbeddingCopyController(): BinaryEmbeddingCopyController {
@@ -4249,7 +4304,8 @@ export default class LinaPlugin extends Plugin {
       const adapter = this.app.vault.adapter;
       const dirPath = normalizePath(".lina/producer");
       const filePath = normalizePath(".lina/producer/sqlite-runtime-diagnostic.json");
-      if (await adapter.exists(dirPath)) {
+      const canWriteProducerDiagnostic = getDeviceRole() === "producer" && await this.getOwnershipGate().canPublish();
+      if (canWriteProducerDiagnostic && await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
       }
     } catch {
@@ -4590,10 +4646,12 @@ export default class LinaPlugin extends Plugin {
     canonicalWriteResult?: CanonicalWriteResult;
     reprojectionResult?: ReprojectionResult;
     reopenTest?: Record<string, unknown>;
+    status: "PASS" | "BLOCKED" | "FAIL";
+    reason?: string;
     timestamp: string;
   }> {
     const isDesktop = Platform.isDesktop;
-    const role = "producer"; // Force Active Producer role scope for canonical write diagnostic execution
+    const role = getDeviceRole();
     const pathResolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
     const pathResolution = pathResolver.resolveStorePath();
 
@@ -4612,14 +4670,36 @@ export default class LinaPlugin extends Plugin {
     };
 
     const flags = {
-      producerSqliteCanonicalEnabled: true,
-      producerSqliteShadowWriteEnabled: true,
-      producerSqliteBootstrapEnabled: true,
-      producerSqliteEquivalenceAuditEnabled: true,
+      producerSqliteCanonicalEnabled: this.settings.producerSqliteCanonicalEnabled === true,
+      producerSqliteShadowWriteEnabled: this.settings.producerSqliteShadowWriteEnabled === true,
+      producerSqliteBootstrapEnabled: this.settings.producerSqliteBootstrapEnabled === true,
+      producerSqliteEquivalenceAuditEnabled: this.settings.producerSqliteEquivalenceAuditEnabled === true,
     };
 
-    if (isDesktop) {
+    let status: "PASS" | "BLOCKED" | "FAIL" = "BLOCKED";
+    let reason: string | undefined = !isDesktop
+      ? "desktop-runtime-required"
+      : role !== "producer"
+        ? "active-producer-required"
+        : !flags.producerSqliteCanonicalEnabled
+          ? "canonical-mode-disabled"
+          : undefined;
+
+    if (!reason) {
       try {
+        const ownershipGate = this.getOwnershipGate();
+        const fence = await ownershipGate.acquireFence({ autoClaimIfUnclaimed: false });
+        if (!fence) {
+          reason = "ownership-fence-rejected";
+          timeline.push({ step: "ownership-fence-blocked", timestamp: new Date().toISOString() });
+          throw new Error(reason);
+        }
+        const assertFence = () => ownershipGate.assertFence(fence);
+        if (!await assertFence()) {
+          reason = "ownership-fence-rejected";
+          timeline.push({ step: "ownership-fence-blocked", timestamp: new Date().toISOString() });
+          throw new Error(reason);
+        }
         const store = new SqliteProducerLocalStore({
           databasePath: pathResolution.databasePath,
         });
@@ -4640,24 +4720,29 @@ export default class LinaPlugin extends Plugin {
 
         // 1. Evaluate eligibility
         eligibility = await evaluateCanonicalWriteEligibility(this.app, store, {
-          enabled: true,
+          enabled: flags.producerSqliteCanonicalEnabled,
           deviceRole: role,
-          preCutoverAuditRequired: false,
+          preCutoverAuditRequired: flags.producerSqliteEquivalenceAuditEnabled,
+          assertFence,
         });
 
         // 2. Perform canonical write (SQLite first)
         canonicalWriteResult = await performProducerSqliteCanonicalWrite(this.app, legacyData.records, pubInfo, {
-          enabled: true,
+          enabled: flags.producerSqliteCanonicalEnabled,
           deviceRole: role,
           store,
-          preCutoverAuditRequired: false,
+          preCutoverAuditRequired: flags.producerSqliteEquivalenceAuditEnabled,
+          assertFence,
         });
-        timeline.push({ step: "canonical-sqlite-pass", timestamp: new Date().toISOString() });
-
-        // 3. Perform reprojection from SQLite without AI
-        timeline.push({ step: "legacy-projection-start", timestamp: new Date().toISOString() });
-        reprojectionResult = await reprojectLegacyFromSqlite(this.app, store, pubInfo);
-        timeline.push({ step: "legacy-projection-pass", timestamp: new Date().toISOString() });
+        if (canonicalWriteResult.success) {
+          timeline.push({ step: "canonical-sqlite-pass", timestamp: new Date().toISOString() });
+          // 3. Perform reprojection from SQLite without AI.
+          timeline.push({ step: "legacy-projection-start", timestamp: new Date().toISOString() });
+          reprojectionResult = await reprojectLegacyFromSqlite(this.app, store, pubInfo, { assertFence });
+          timeline.push({ step: "legacy-projection-pass", timestamp: new Date().toISOString() });
+        } else {
+          reprojectionResult = { success: false, recordsCount: legacyData.records.length, providerCallsCount: 0, error: canonicalWriteResult.error ?? "canonical-write-failed" };
+        }
 
         store.close();
 
@@ -4678,14 +4763,18 @@ export default class LinaPlugin extends Plugin {
           divergenceCount: audit.divergenceCount,
         };
         reopenStore.close();
+        status = canonicalWriteResult.success && reprojectionResult.success ? "PASS" : "FAIL";
+        reason = canonicalWriteResult.error ?? reprojectionResult.error;
       } catch (err) {
         console.warn("Lina: M3 canonical diagnostic exception:", err);
+        status = reason === "ownership-fence-rejected" ? "BLOCKED" : "FAIL";
+        reason ??= err instanceof Error ? err.message : String(err);
       }
     }
 
     const report = {
       executionContext: isDesktop ? "obsidian-plugin" : "obsidian-mobile",
-      role: "active-producer",
+      role,
       dbPath: pathResolution.databasePath,
       environment,
       flags,
@@ -4694,6 +4783,8 @@ export default class LinaPlugin extends Plugin {
       canonicalWriteResult,
       reprojectionResult,
       reopenTest,
+      status,
+      ...(reason ? { reason } : {}),
       timestamp: new Date().toISOString(),
     };
 
@@ -4701,7 +4792,7 @@ export default class LinaPlugin extends Plugin {
       const adapter = this.app.vault.adapter;
       const dirPath = normalizePath(".lina/producer");
       const filePath = normalizePath(".lina/producer/m3-canonical-diagnostic.json");
-      if (await adapter.exists(dirPath)) {
+      if (status !== "BLOCKED" && await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
       }
     } catch {

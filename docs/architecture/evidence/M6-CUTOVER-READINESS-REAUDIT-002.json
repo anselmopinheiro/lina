@@ -1,0 +1,120 @@
+{
+  "phase": "M6-CUTOVER-READINESS-REAUDIT-002",
+  "kind": "audit",
+  "capturedAt": "2026-10-07",
+  "b1Status": "PASS",
+  "b2Status": "PASS_STARTUP_PARTIAL_EXPLICIT_COMMANDS",
+  "b3Status": "PASS_POLICY_WITH_FAIL_OPEN_FINDING",
+  "b4Status": "PASS",
+  "branch": "master",
+  "head": "7cfe7ef7fb3bf36d5b3f832fed4bcef2d9cc8724",
+  "checkpointMessage": "chore: checkpoint pre-m6 published generation pipeline",
+  "worktreeStatus": "clean-except-.lina-local-untracked",
+  "pushPerformed": false,
+  "currentGeneration": "generation-000015",
+  "currentFormatVersion": 5,
+  "currentRecordCount": 2303,
+  "currentIntegrity": "OK",
+  "currentCutoverEligibility": "true-by-format-only; consumer gate MATCH/MATCH on real data",
+  "g1": "PASS",
+  "g2": "PASS",
+  "g3": "PASS",
+  "g6": "PASS",
+  "shadowStatus": "PASS",
+  "shadowLevel": "L2",
+  "shadowEvidenceLevel": "NODE_HARNESS_REAL_VAULT",
+  "shadowLegacyCount": 2303,
+  "shadowPublishedCount": 2303,
+  "shadowDivergences": 0,
+  "shadowProviderCalls": 0,
+  "g4Status": "RESOLVED_READER_SHADOW",
+  "g5Status": "OPEN_NON_BLOCKING_DEBT",
+  "g7Status": "OPEN_NON_BLOCKING_OPERATIONAL_DEBT",
+  "g8Status": "CONFIRMED_getRuntimeEmbeddingIndex",
+  "g9DesktopStatus": "NOT_EXECUTED (Producer shadow OBSIDIAN_RUNTIME PASS reported earlier, not re-verified; Companion desktop NOT_EXECUTED)",
+  "g9AndroidStatus": "NOT_EXECUTED",
+  "g9IosStatus": "NOT_EXECUTED",
+  "evidenceByItem": {
+    "b1": {
+      "static": "reader:198 requires embeddingInputHash for formatVersion>=2; validator:60 requires v2..v5",
+      "nodeHarnessRealVault": "v5 copy without hashes -> RECORDS_INVALID/records-contract, cutoverEligible=false",
+      "unitTest": "v1 readable without hash; only v2 'without hash' rejection is covered by a committed test"
+    },
+    "b2": {
+      "static": "runDiagnostics is empty; diagnoseM3Canonical/diagnoseRuntimeSqlite only called from commands; no production caller sets shadowWriteOptions",
+      "integrationTest": "ABSENT (no test executes onload)",
+      "obsidianRuntime": "NOT_EXECUTED"
+    },
+    "b3": {
+      "nodeHarnessRealVault": "gate matrix verified against real index/manifest/ownership",
+      "readOnly": true,
+      "wiredInProduction": false
+    }
+  },
+  "gateMatrix": {
+    "real_match": "MATCH/MATCH eligible=true",
+    "no_source": "UNKNOWN/MATCH eligible=false",
+    "no_ownership": "MATCH/UNKNOWN eligible=false",
+    "chunks_digest_mismatch": "MISMATCH/MATCH eligible=false",
+    "record_count_mismatch": "MISMATCH/MATCH eligible=false",
+    "text_generation_other": "STALE/MATCH eligible=false",
+    "publication_id_other": "STALE/MATCH eligible=false",
+    "active_producer_other": "MATCH/MISMATCH eligible=false",
+    "ownership_epoch_ahead": "MATCH/STALE eligible=false",
+    "ownership_epoch_behind": "MATCH/FUTURE eligible=false",
+    "ownership_missing_epoch": "MATCH/UNKNOWN eligible=false",
+    "empty_source_object": "MATCH/MATCH eligible=true (FAIL-OPEN, N2)",
+    "only_chunks_digest": "MATCH/MATCH eligible=true (FAIL-OPEN, N2)"
+  },
+  "remainingM6Requirements": [
+    "device-scoped cutover flag default false",
+    "published source identity in RuntimeEmbeddingIndexCache",
+    "CURRENT re-read/invalidation",
+    "published source selection in getRuntimeEmbeddingIndex",
+    "explicit legacy fallback",
+    "rollback by flag",
+    "failure scenario 12: stale published cache",
+    "semanticCapability/lifecycle aligned with selected source"
+  ],
+  "fallbackPolicy": {
+    "allowed": ["NO_CURRENT", "CURRENT_TMP_ONLY", "TARGET_MISSING", "TARGET_PARTIAL", "CURRENT_CHANGED", "RESOURCE_LIMIT"],
+    "noSilentFallback": ["HASH_MISMATCH", "RECORDS_INVALID", "VECTORS_INVALID", "MANIFEST_INVALID", "SEMANTIC_CONTRACT_MISMATCH", "SOURCE_PROVENANCE_MISMATCH", "PRODUCER_PROVENANCE_MISMATCH"],
+    "undefinedInB3": ["STALE", "FUTURE", "UNKNOWN"],
+    "recommendation": "treat STALE/FUTURE/UNKNOWN as availability failure: explicit, visible, counted legacy fallback; never authoritative"
+  },
+  "rollback": "flag OFF -> invalidate runtime cache -> next getOrLoad returns legacy; no generation deletion, no SQLite change, no provider, no reembedding",
+  "lina-local": {
+    "classification": "local runtime, SQLite producer store (~10 MB)",
+    "blocksM6": false,
+    "gitignore": "separate small debt; recommended early; not changed in this audit"
+  },
+  "newBlockers": [],
+  "newFindings": [
+    {
+      "id": "N1",
+      "severity": "must-fix-before-enabling-cutover",
+      "summary": "diagnose-m3-canonical command forces role=producer and all SQLite flags true, ignores role/ownership/flags; a Desktop Companion running it manually writes SQLite and reprojects the legacy index (rollback target). Startup call removed by B2; command body not guarded.",
+      "evidence": "STATIC main.ts:4596,4614-4654,4659; sqliteProducerCanonicalWriter.ts:75"
+    },
+    {
+      "id": "N2",
+      "severity": "must-fix-at-start-of-M6",
+      "summary": "Consumer provenance gate is fail-open when the source expectation is empty or partial ({} or a single matching field yields MATCH/eligible=true). Gate also hardcodes structuralStatus=VALID and semanticStatus=COMPATIBLE, and Reader cutoverEligible is format-only, so a future caller can bypass the gate.",
+      "evidence": "NODE_HARNESS probe + consumerPublishedGenerationEligibility.ts:9-16"
+    },
+    {
+      "id": "N3",
+      "severity": "non-blocking-test-gaps",
+      "summary": "Committed B1 test covers only v2; no test proves onload no longer runs diagnostics; no test for empty/partial source expectation."
+    }
+  ],
+  "validations": {
+    "typecheck": "PASS",
+    "gitDiffCheck": "PASS",
+    "focusedTests": "PASS 5 files / 65 tests",
+    "fullSuiteNotRerun": "passed at B4 checkpoint; no product file changed since"
+  },
+  "m6Status": "NOT_STARTED",
+  "cutoverStatus": "NOT_STARTED",
+  "verdict": "READY_WITH_NON_BLOCKING_DEBT"
+}

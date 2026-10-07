@@ -238,6 +238,19 @@ describe("Sqlite Producer Canonical Writer (Phase M3)", () => {
       expect(store.countRecords()).toBe(2);
     });
 
+    it("blocks durable writes when the ownership fence is no longer current", async () => {
+      const res = await performProducerSqliteCanonicalWrite(mockApp, sampleRecords, pubInfo, {
+        enabled: true,
+        deviceRole: "producer",
+        store,
+        preCutoverAuditRequired: false,
+        assertFence: async () => false,
+      });
+
+      expect(res).toMatchObject({ success: false, sqliteWritePassed: false, legacyProjectionPassed: false, error: "ownership-fence-rejected" });
+      expect(store.countRecords()).toBe(0);
+    });
+
     it("6. SQLite failure blocks publication of new legacy state", async () => {
       // Force SQLite write failure
       store.replaceAllRecords = () => {

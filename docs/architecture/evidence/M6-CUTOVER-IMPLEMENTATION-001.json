@@ -1,0 +1,22 @@
+{
+  "cutoverFlag": "companionPublishedGenerationCutoverEnabled",
+  "defaultValue": false,
+  "selectedSourceOff": "LEGACY",
+  "selectedSourceOn": "PUBLISHED when reader, semantic contract and provenance gate all pass",
+  "publishedGeneration": "CURRENT read on each runtime request",
+  "consumerEligibility": "evaluatePublishedGenerationForConsumer",
+  "fallbackPolicy": "explicit legacy fallback only for published unavailability; integrity/contract/provenance mismatch blocks",
+  "fallbackEvents": "diagnostic selectedSource/fallback fields",
+  "runtimeCacheIdentity": "published-v5 + generation + contract + source provenance + producer provenance",
+  "currentInvalidation": "reader is re-run on every selector call",
+  "rollbackProof": "flag false invalidates published cache and selects legacy",
+  "semanticCapabilityAlignment": "runtime source identity carries published generation contract",
+  "desktopProducerRuntime": "NOT_EXECUTED",
+  "desktopCompanionRuntime": "NOT_EXECUTED",
+  "androidRuntime": "NOT_EXECUTED",
+  "iosRuntime": "NOT_EXECUTED",
+  "providerCalls": 0,
+  "reembedding": 0,
+  "m6Status": "IMPLEMENTATION_PENDING_FULL_VALIDATION",
+  "cutoverActivationStatus": "DEVICE_SCOPED_NOT_ACTIVATED"
+}

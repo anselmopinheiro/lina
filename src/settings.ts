@@ -113,6 +113,8 @@ export interface LinaDeviceSettings extends Record<string, unknown> {
   maintainBinaryEmbeddingCopy?: boolean;
   /** M5C local-only shadow audit; it never selects the published generation for search. */
   companionPublishedGenerationShadowEnabled?: boolean;
+  /** Opt-in, device-local M6 runtime source selector. */
+  companionPublishedGenerationCutoverEnabled?: boolean;
 }
 
 export interface LinaSettings extends Record<string, unknown> {
@@ -260,7 +262,7 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
 let activeSettings: LinaSettings | null = null;
 let saveActiveSettings: (() => void) | null = null;
 
-type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy" | "companionPublishedGenerationShadowEnabled">;
+type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy" | "companionPublishedGenerationShadowEnabled" | "companionPublishedGenerationCutoverEnabled">;
 
 function hashDeviceToken(value: string): string {
   let hash = 0;
@@ -649,6 +651,17 @@ export function getLocalPublishedGenerationShadowEnabled(): boolean {
 export function setLocalPublishedGenerationShadowEnabled(value: boolean): void {
   if (!activeSettings) return;
   ensureCurrentDeviceSettings().companionPublishedGenerationShadowEnabled = value;
+  saveActiveSettings?.();
+}
+
+/** M6: never synchronized; published runtime selection is opt-in per device. */
+export function getLocalPublishedGenerationCutoverEnabled(): boolean {
+  return ensureCurrentDeviceSettings().companionPublishedGenerationCutoverEnabled === true;
+}
+
+export function setLocalPublishedGenerationCutoverEnabled(value: boolean): void {
+  if (!activeSettings) return;
+  ensureCurrentDeviceSettings().companionPublishedGenerationCutoverEnabled = value;
   saveActiveSettings?.();
 }
 

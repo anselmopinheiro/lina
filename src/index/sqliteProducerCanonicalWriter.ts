@@ -32,6 +32,8 @@ export interface CanonicalWriteOptions {
   readonly shadowWriteOptions?: { databasePath?: string };
   readonly immutablePublicationEnabled?: boolean;
   readonly immutablePublicationAdapter?: PublishedGenerationFileAdapter;
+  /** Revalidate ownership immediately before every durable mutation. */
+  readonly assertFence?: () => Promise<boolean>;
 }
 
 export interface CanonicalEligibilityResult {
@@ -58,6 +60,11 @@ export interface ReprojectionResult {
   readonly recordsCount: number;
   readonly providerCallsCount: number;
   readonly error?: string;
+}
+
+async function hasCurrentFence(options: Pick<CanonicalWriteOptions, "assertFence">): Promise<boolean> {
+  if (!options.assertFence) return true;
+  try { return await options.assertFence(); } catch { return false; }
 }
 
 /**
@@ -179,6 +186,9 @@ export async function performProducerSqliteCanonicalWrite(
       auditReport: eligibility.auditReport,
     };
   }
+  if (!await hasCurrentFence(options)) {
+    return { success: false, mode: "LEGACY_MODE", sqliteWritePassed: false, legacyProjectionPassed: false, recordsCount: records.length, error: "ownership-fence-rejected", auditReport: eligibility.auditReport };
+  }
 
   // Step 2: Canonical SQLite Transaction
   const space = buildSpaceRecord(info);
@@ -197,6 +207,9 @@ export async function performProducerSqliteCanonicalWrite(
       error: errorMsg,
       auditReport: eligibility.auditReport,
     };
+  }
+  if (!await hasCurrentFence(options)) {
+    return { success: false, mode: "SQLITE_CANONICAL_MODE", sqliteWritePassed: true, legacyProjectionPassed: false, recordsCount: records.length, error: "ownership-fence-rejected", auditReport: eligibility.auditReport };
   }
 
   // Step 3: Legacy Projection (Compatibility Publication)
@@ -218,6 +231,9 @@ export async function performProducerSqliteCanonicalWrite(
   // M4 is a second, retryable projection. It runs only after canonical SQLite
   // commit and the legacy compatibility projection; it never changes authority.
   if (legacyProjectionPassed && options.immutablePublicationEnabled && options.immutablePublicationAdapter) {
+    if (!await hasCurrentFence(options)) {
+      return { success: false, mode: "SQLITE_CANONICAL_MODE", sqliteWritePassed: true, legacyProjectionPassed, recordsCount: records.length, error: "ownership-fence-rejected", auditReport: eligibility.auditReport };
+    }
     const canonicalState = await readCanonicalEmbeddingRecords(app);
     const sourceProvenance = canonicalState.valid ? extractCanonicalEmbeddingSourceProvenance(canonicalState.manifest) : null;
     immutablePublication = await publishSqliteCanonicalGeneration(store, {
@@ -251,7 +267,8 @@ export async function performProducerSqliteCanonicalWrite(
 export async function reprojectLegacyFromSqlite(
   app: App,
   store: SqliteProducerLocalStore,
-  info: EmbeddingPublicationInfo
+  info: EmbeddingPublicationInfo,
+  options: Pick<CanonicalWriteOptions, "assertFence"> = {}
 ): Promise<ReprojectionResult> {
   const providerCallsCount = 0;
   if (!store.isOpen) {
@@ -286,6 +303,7 @@ export async function reprojectLegacyFromSqlite(
   });
 
   try {
+    if (!await hasCurrentFence(options)) return { success: false, recordsCount: legacyRecords.length, providerCallsCount, error: "ownership-fence-rejected" };
     const pubResult = await publishCanonicalEmbeddings(app, legacyRecords, info);
     if (!pubResult.success) {
       return {

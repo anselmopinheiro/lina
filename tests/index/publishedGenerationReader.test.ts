@@ -55,6 +55,11 @@ describe("PublishedGenerationReader M5A", () => {
     adapter.text.set(`${root}/CURRENT`, "generation-000001");
     expect((await reader(adapter).read()).status).toBe("RECORDS_INVALID");
   });
+  it("rejects v5 without input hashes", async () => {
+    const adapter = new FakeAdapter(); await addValid(adapter, "generation-000001", 5, false);
+    adapter.text.set(`${root}/CURRENT`, "generation-000001");
+    expect((await reader(adapter).read()).status).toBe("RECORDS_INVALID");
+  });
   it("rejects a v3 manifest whose recomputed contract differs", async () => {
     const adapter = new FakeAdapter(); await addValid(adapter, "generation-000001", 3, true);
     adapter.text.set(`${root}/CURRENT`, "generation-000001");

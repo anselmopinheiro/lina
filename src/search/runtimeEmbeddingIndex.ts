@@ -21,9 +21,17 @@ export interface RuntimeEmbeddingSourceIdentity extends Required<PublishedEmbedd
   updatedAt: string;
   canonicalMtime: number;
   canonicalSize: number;
-  storageFormat?: "jsonl-v1" | "binary-v1";
+  storageFormat?: "jsonl-v1" | "binary-v1" | "published-v5";
   publicationId?: string;
   binaryGenerationId?: string;
+  generationId?: string;
+  vectorContractId?: string;
+  sourceTextGenerationId?: string;
+  sourceChunksDigest?: string;
+  sourcePublicationId?: string;
+  producerDeviceId?: string;
+  producerEpoch?: number;
+  currentIdentity?: string;
 }
 
 export interface RuntimeEmbeddingIndex {
@@ -74,6 +82,11 @@ export interface EmbeddingReadDiagnosticState {
    * without treating a guarded canonical file as an empty corpus.
    */
   binaryFailureReason?: Exclude<EmbeddingReadFallbackReason, "none" | "binary-disabled" | "jsonl-read-failed" | "canonical-manifest-invalid" | "configured-source-resource-limit" | "fallback-source-resource-limit" | "no-safe-source" | "cancelled">;
+  selectedSource?: "LEGACY" | "PUBLISHED" | "LEGACY_FALLBACK" | "PUBLISHED_BLOCKED";
+  publishedGenerationId?: string;
+  publishedFallbackActive?: boolean;
+  publishedFallbackReason?: string;
+  publishedFallbackCount?: number;
 }
 
 function monotonicNow(): number { return typeof window !== "undefined" ? window.performance?.now?.() ?? Date.now() : Date.now(); }
