@@ -877,3 +877,36 @@ Lina — Assistente para Obsidian
   margin-top: 4px;
   font-size: var(--font-ui-small);
 }
+
+.lina-m6-tests-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.lina-m6-tests-panel h2,
+.lina-m6-tests-panel h3 {
+  margin: 0;
+}
+
+.lina-m6-tests-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+.lina-m6-tests-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lina-m6-tests-label { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.lina-m6-tests-value { overflow-wrap: anywhere; user-select: text; }
+.lina-m6-tests-toggle { overflow-wrap: anywhere; }
+.lina-m6-tests-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lina-m6-tests-actions button { min-height: 32px; }

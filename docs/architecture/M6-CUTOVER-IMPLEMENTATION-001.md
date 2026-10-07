@@ -1,4 +1,4 @@
-# M6 — cutover controlado do runtime para geração publicada
+# M6 — Cutover controlado do runtime para geração publicada
 
 O selector foi integrado exclusivamente em `LinaPlugin.getRuntimeEmbeddingIndex()`. A flag `companionPublishedGenerationCutoverEnabled` é local por dispositivo e tem default efetivo `false`.
 
@@ -8,4 +8,24 @@ Indisponibilidade do artefacto publicado produz `LEGACY_FALLBACK` observável. I
 
 O cutover é device-scoped e reversível ao desligar a flag. Não altera SQLite, ownership, `CURRENT`, gerações, embeddings ou chama providers.
 
-Runtime desktop Producer e Companion, Android e iOS permanecem não executados nesta implementação; a flag não é ativada automaticamente.
+## Validação Runtime
+- **Producer Desktop Runtime:** `PASS` (validado no vault `zettel` com `generation-000015`, 2303 registos, `providerCalls = 0`, `reembedding = 0`).
+- **Companion Desktop Runtime:** `PASS`.
+- **Android Companion Runtime:** `PASS` (`OFF → LEGACY`, `ON → PUBLISHED`, `OFF → LEGACY`; pesquisa semântica e híbrida aprovadas; sem crash, provider calls ou reembedding).
+- **iOS Runtime:** `OUT_OF_SCOPE`.
+
+```text
+M6_RUNTIME_VALIDATED_PLATFORMS = Desktop Producer + Desktop Companion + Android Companion
+M6 = CLOSED_WITH_NON_BLOCKING_DEBT
+```
+
+Findings residuais: `G5` (`localeCompare` no Builder), `G7` (deduplicação/GC de
+generations) e a persistência física de `deviceSettingsById` em `data.json` são
+`NON_BLOCKING_DEBT`. iOS é `OUT_OF_SCOPE`. O painel **Testes M6** permanece uma
+UI técnica temporária de diagnóstico.
+
+Artefactos de evidência:
+- `docs/architecture/evidence/M6-CUTOVER-IMPLEMENTATION-001.json`
+- `docs/architecture/evidence/M6-RUNTIME-DESKTOP-VALIDATION-001.json`
+- `docs/architecture/evidence/M6-RUNTIME-COMPANION-DESKTOP-VALIDATION-001.json` (pré-condição Companion não disponível)
+- `docs/architecture/evidence/M6-RUNTIME-ANDROID-VALIDATION-001.json`

@@ -23,7 +23,7 @@ export type DetachedGlobalValue<K extends DetachedGlobalKey> =
   number;
 export type DetachedGlobalReadValue<K extends DetachedGlobalKey> = DetachedGlobalValue<K> | undefined;
 export type DetachedLocalKey = PureLocalSettingKey;
-export type DetachedLocalValue<K extends DetachedLocalKey> = K extends "maintainBinaryEmbeddingCopy" ? boolean : string;
+export type DetachedLocalValue<K extends DetachedLocalKey> = K extends "maintainBinaryEmbeddingCopy" | "companionPublishedGenerationCutoverEnabled" ? boolean : string;
 export interface DetachedSettingsPorts {
   getGlobal<K extends DetachedGlobalKey>(key: K): DetachedGlobalReadValue<K>;
   setGlobal<K extends DetachedGlobalKey>(

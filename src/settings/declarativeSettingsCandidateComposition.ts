@@ -354,7 +354,6 @@ export function createDeclarativeSettingsCandidateComposition(
         visible: () => (options.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion",
       })),
   ];
-
   const supportDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     {
       id: "support-link",

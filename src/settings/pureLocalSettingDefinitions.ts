@@ -6,6 +6,7 @@ export const PURE_LOCAL_CONTROL_KEYS = [
   "deviceName",
   "analysisBaseUrl",
   "embeddingsBaseUrl",
+  "companionPublishedGenerationCutoverEnabled",
 ] as const;
 
 export type PureLocalControlKey = typeof PURE_LOCAL_CONTROL_KEYS[number];
@@ -29,6 +30,7 @@ export const PURE_LOCAL_SETTING_CLASSIFICATIONS: readonly PureLocalSettingClassi
   { key: "embeddingsTimeout", disposition: "future-side-effect" },
   { key: "embeddingStorageReadPreference", disposition: "future-side-effect" },
   { key: "maintainBinaryEmbeddingCopy", disposition: "future-side-effect" },
+  { key: "companionPublishedGenerationCutoverEnabled", disposition: "control-pure" },
 ];
 
 type PureLocalSettingDefinitionStrings = Pick<
@@ -74,6 +76,11 @@ export function createPureLocalSettingDefinitions(
         key: "embeddingsBaseUrl",
         placeholder: inputs.embeddingsBaseUrlPlaceholder,
       },
+    },
+    {
+      name: "Usar geração publicada neste dispositivo",
+      desc: "Teste associado a este deviceId. Não altera ownership nem CURRENT e não cria embeddings.",
+      control: { type: "toggle", key: "companionPublishedGenerationCutoverEnabled" },
     },
   ];
 }

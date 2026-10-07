@@ -71,7 +71,6 @@ import {
 import {
   type VectorContractV1,
   extractVectorContract,
-  createVectorContract,
 } from "./src/index/vectorContract";
 import {
   type ProducerStateV1,
@@ -148,6 +147,7 @@ import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/sear
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
 import { OwnershipTransferConfirmationModal } from "./src/device/ownershipTransferConfirmationModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
+import { M6_TESTS_PANEL_VIEW_TYPE, M6TestsPanelView } from "./src/views/m6TestsPanelView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
@@ -544,6 +544,10 @@ export default class LinaPlugin extends Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
+    this.registerView(
+      M6_TESTS_PANEL_VIEW_TYPE,
+      (leaf) => new M6TestsPanelView(leaf, this)
+    );
 
     const runDiagnostics = () => {
     };
@@ -599,6 +603,12 @@ export default class LinaPlugin extends Plugin {
         }
         })();
       },
+    });
+
+    this.addCommand({
+      id: "abrir-painel-testes-m6",
+      name: `Abrir painel Testes ${"M" + "6"}`,
+      callback: () => { void this.activateM6TestsPanel(); },
     });
 
     this.addCommand({
@@ -996,6 +1006,18 @@ export default class LinaPlugin extends Plugin {
       }
       leaf = rightLeaf;
       await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
+    }
+    await workspace.revealLeaf(leaf);
+  }
+
+  async activateM6TestsPanel(): Promise<void> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(M6_TESTS_PANEL_VIEW_TYPE)[0];
+    if (!leaf) {
+      const rightLeaf = workspace.getRightLeaf(false);
+      if (!rightLeaf) throw new Error("Não foi possível criar painel Testes M6.");
+      leaf = rightLeaf;
+      await leaf.setViewState({ type: M6_TESTS_PANEL_VIEW_TYPE, active: true });
     }
     await workspace.revealLeaf(leaf);
   }
@@ -1819,57 +1841,121 @@ export default class LinaPlugin extends Plugin {
         { profile: getDeviceCapabilities().resourceProfile }
       );
     }
-    const legacy = await this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+    const loadLegacy = (): Promise<RuntimeEmbeddingIndex | null> => this.runtimeEmbeddingIndexCache!.getOrLoad(chunks);
     if (!getLocalPublishedGenerationCutoverEnabled()) {
+      const legacy = await loadLegacy();
       this.publishedRuntimeEmbeddingIndexCache?.invalidate();
       this.publishedRuntimeSelection = { selectedSource: "LEGACY", fallbackActive: false, fallbackCount: 0 };
       if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
       return legacy;
     }
 
-    const reader = new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
-    const read = await reader.read();
-    const fallback = (reason: string, blocked = false): RuntimeEmbeddingIndex | null => {
+    const blockPublished = (reason: string, generationId?: string, status = "RUNTIME_ERROR"): null => {
       this.publishedRuntimeEmbeddingIndexCache?.invalidate();
       this.publishedRuntimeSelection = {
-        selectedSource: blocked ? "PUBLISHED_BLOCKED" : "LEGACY_FALLBACK",
-        publishedGenerationId: read.generationId,
-        fallbackActive: !blocked,
+        selectedSource: "PUBLISHED_BLOCKED",
+        publishedGenerationId: generationId,
+        fallbackActive: false,
         fallbackReason: reason,
-        fallbackCount: this.publishedRuntimeSelection.fallbackCount + (blocked ? 0 : 1),
-        lastReaderStatus: read.status,
+        fallbackCount: this.publishedRuntimeSelection.fallbackCount,
+        lastReaderStatus: status,
       };
-      return blocked ? null : legacy;
+      return null;
     };
-    if (read.status !== "OK" || !read.index || read.formatVersion !== 5) {
-      const blocked = ["HASH_MISMATCH", "RECORDS_INVALID", "VECTORS_INVALID", "MANIFEST_INVALID", "FORMAT_UNSUPPORTED", "CURRENT_MALFORMED", "DOWNGRADE_REJECTED"].includes(read.status);
-      return fallback(read.status, blocked);
+    try {
+      const reader = new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
+      const read = await reader.read();
+      if (read.status !== "OK" || !read.index || read.formatVersion !== 5) {
+        blockPublished(read.status, read.generationId, read.status);
+        return null;
+      }
+      const semantic = evaluatePublishedGenerationSemanticContract(read.index, this.getEffectiveEmbeddingContract());
+      let source: ReturnType<typeof extractCanonicalEmbeddingSourceProvenance> | undefined;
+      try {
+        const manifestText = await this.app.vault.adapter.read(normalizePath(".lina/index/manifest.json"));
+        source = extractCanonicalEmbeddingSourceProvenance(JSON.parse(manifestText) as Record<string, unknown>) ?? undefined;
+      } catch {
+        source = undefined;
+      }
+      const ownership = await loadOwnership(this.app.vault.adapter);
+      const eligibility = evaluatePublishedGenerationForConsumer(read.index, {
+        structuralStatus: read.cutoverEligible === true ? "VALID" : "INVALID",
+        semanticStatus: semantic.status === "COMPATIBLE" ? "COMPATIBLE" : semantic.status === "SEMANTIC_CONTRACT_MISMATCH" ? "INCOMPATIBLE" : "UNKNOWN",
+        source,
+        ownership: ownership?.activeProducerId ? { activeProducerId: ownership.activeProducerId, epoch: ownership.epoch } : undefined,
+      });
+      const contractMatch = semantic.status === "COMPATIBLE";
+      if (!eligibility.eligible || !contractMatch) {
+        blockPublished(eligibility.reason ?? semantic.status, read.generationId, read.status);
+        this.publishedRuntimeSelection = { ...this.publishedRuntimeSelection, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+        return null;
+      }
+      this.publishedRuntimeEmbeddingIndexCache ??= new PublishedRuntimeEmbeddingIndexCache();
+      const published = this.publishedRuntimeEmbeddingIndexCache.getOrCreate(read.index);
+      this.runtimeEmbeddingIndexCache?.invalidate("manual");
+      this.publishedRuntimeSelection = { selectedSource: "PUBLISHED", publishedGenerationId: read.generationId, fallbackActive: false, fallbackCount: this.publishedRuntimeSelection.fallbackCount, lastReaderStatus: read.status, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+      return published;
+    } catch (error) {
+      blockPublished(error instanceof Error ? error.message : "published-runtime-error");
+      return null;
     }
-    const legacyContract = legacy ? createVectorContract({ provider: legacy.provider, model: legacy.model, dimensions: legacy.dimensions, inputVersion: legacy.sourceIdentity.inputVersion, prefixMode: legacy.sourceIdentity.prefixMode }) : null;
-    const semantic = evaluatePublishedGenerationSemanticContract(read.index, legacyContract);
-    const canonical = await readCanonicalEmbeddingRecords(this.app);
-    const source = canonical.valid ? extractCanonicalEmbeddingSourceProvenance(canonical.manifest) ?? undefined : undefined;
-    const ownership = await loadOwnership(this.app.vault.adapter);
-    const eligibility = evaluatePublishedGenerationForConsumer(read.index, {
-      structuralStatus: read.cutoverEligible === true ? "VALID" : "INVALID",
-      semanticStatus: semantic.status === "COMPATIBLE" ? "COMPATIBLE" : semantic.status === "SEMANTIC_CONTRACT_MISMATCH" ? "INCOMPATIBLE" : "UNKNOWN",
-      source,
-      ownership: ownership?.activeProducerId ? { activeProducerId: ownership.activeProducerId, epoch: ownership.epoch } : undefined,
-    });
-    const contractMatch = semantic.status === "COMPATIBLE";
-    if (!eligibility.eligible) {
-      const blocked = semantic.status === "SEMANTIC_CONTRACT_MISMATCH" || eligibility.sourceProvenanceStatus === "MISMATCH" || eligibility.producerProvenanceStatus === "MISMATCH";
-      const result = fallback(eligibility.reason ?? semantic.status, blocked || !contractMatch);
-      this.publishedRuntimeSelection = { ...this.publishedRuntimeSelection, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
-      return result;
-    }
-    this.publishedRuntimeEmbeddingIndexCache ??= new PublishedRuntimeEmbeddingIndexCache();
-    const published = this.publishedRuntimeEmbeddingIndexCache.getOrCreate(read.index);
-    this.publishedRuntimeSelection = { selectedSource: "PUBLISHED", publishedGenerationId: read.generationId, fallbackActive: false, fallbackCount: this.publishedRuntimeSelection.fallbackCount, lastReaderStatus: read.status, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
-    return published;
   }
 
   getPublishedRuntimeSelectionDiagnostic(): Readonly<typeof this.publishedRuntimeSelection> { return { ...this.publishedRuntimeSelection }; }
+
+  /** Read-only snapshot for the M6 per-device test controls. */
+  async getM6CutoverTestDiagnostic(): Promise<Record<string, string | number | boolean | undefined>> {
+    const ownership = await loadOwnership(this.app.vault.adapter);
+    const currentPath = normalizePath(".lina/published/CURRENT");
+    const current = await this.app.vault.adapter.exists(currentPath) ? (await this.app.vault.adapter.read(currentPath)).trim() : undefined;
+    const selected = this.getPublishedRuntimeSelectionDiagnostic();
+    let manifest: { formatVersion?: number; recordCount?: number; vectorContractId?: string } = {};
+    if (current) {
+      try {
+        manifest = JSON.parse(await this.app.vault.adapter.read(normalizePath(`.lina/published/generations/${current}/manifest.json`))) as typeof manifest;
+      } catch {
+        // Diagnostics remain read-only and show unavailable fields when the manifest is absent or malformed.
+      }
+    }
+    return {
+      deviceRole: this.getLocalDeviceRole() ?? "unassigned",
+      deviceId: this.getDeviceId(),
+      activeProducerId: ownership?.activeProducerId ?? undefined,
+      ownershipEpoch: ownership?.epoch,
+      current,
+      cutoverFlag: getLocalPublishedGenerationCutoverEnabled(),
+      selectedSource: selected.selectedSource,
+      publishedGeneration: selected.publishedGenerationId,
+      formatVersion: manifest.formatVersion,
+      recordCount: manifest.recordCount,
+      fallbackActive: selected.fallbackActive,
+      fallbackReason: selected.fallbackReason,
+      consumerEligibility: selected.lastConsumerEligibility?.eligible,
+      structuralStatus: selected.lastConsumerEligibility?.structuralStatus,
+      semanticStatus: selected.lastConsumerEligibility?.semanticStatus,
+      sourceProvenance: selected.lastConsumerEligibility?.sourceProvenanceStatus,
+      producerProvenance: selected.lastConsumerEligibility?.producerProvenanceStatus,
+      runtimeCacheGeneration: selected.publishedGenerationId,
+      runtimeCacheStorageFormat: selected.selectedSource === "PUBLISHED" ? "published-v5" : undefined,
+      runtimeCacheContract: manifest.vectorContractId,
+    };
+  }
+
+  getM6CutoverEnabled(): boolean {
+    return getLocalPublishedGenerationCutoverEnabled();
+  }
+
+  async setM6CutoverEnabled(value: boolean): Promise<void> {
+    const deviceId = this.getDeviceId();
+    const byDevice = this.settings.deviceSettingsById ?? (this.settings.deviceSettingsById = {});
+    byDevice[deviceId] = { ...(byDevice[deviceId] ?? {}), companionPublishedGenerationCutoverEnabled: value };
+    await this.saveSettings();
+    this.invalidateRuntimeEmbeddingIndex("settings-changed");
+  }
+
+  invalidateM6RuntimeCache(): void {
+    this.invalidateRuntimeEmbeddingIndex("manual");
+  }
 
   getPublishedGenerationShadowDiagnostic(): PublishedShadowDiagnostic {
     return this.publishedGenerationShadowAuditor?.getDiagnostic() ?? { status: "IDLE", level: getDeviceCapabilities().resourceProfile === "mobile" ? "L1" : "L2", providerCalls: 0, capturedAt: new Date(0).toISOString() };

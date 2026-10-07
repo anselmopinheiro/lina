@@ -1,0 +1,80 @@
+{
+  "branch": "master",
+  "head": "e973cbb",
+  "current": "generation-000015",
+  "deviceId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+  "deviceRole": "producer",
+  "activeProducerId": "440d9ef0-9ff9-424e-ae55-7c386b885ec8",
+  "ownershipEpoch": 3,
+  "cutoverFlag": "companionPublishedGenerationCutoverEnabled",
+  "initialSelectedSource": "LEGACY",
+  "step3ProofOFF": {
+    "cutoverFlag": false,
+    "selectedSource": "LEGACY",
+    "providerCalls": 0,
+    "reembedding": 0,
+    "current": "generation-000015"
+  },
+  "step4ProofON": {
+    "cutoverFlag": true,
+    "selectedSource": "PUBLISHED",
+    "publishedGenerationId": "generation-000015",
+    "fallbackActive": false,
+    "lastReaderStatus": "OK",
+    "consumerEligibility": "eligible",
+    "sourceProvenanceStatus": "MATCH",
+    "producerProvenanceStatus": "MATCH",
+    "legacyContractMatch": true,
+    "providerCalls": 0,
+    "reembedding": 0
+  },
+  "step5Search": {
+    "semanticSearchResultsCount": 5,
+    "hybridSearchResultsCount": 10,
+    "providerCalls": 0,
+    "reembedding": 0,
+    "runtimeErrors": 0
+  },
+  "step6Cache": {
+    "storageFormat": "published-v5",
+    "generationId": "generation-000015",
+    "provider": "mistral",
+    "model": "mistral-embed",
+    "dimensions": 1024,
+    "cacheReusedOnSameGeneration": true
+  },
+  "step7Fallback": {
+    "selectedSource": "LEGACY_FALLBACK",
+    "fallbackActive": true,
+    "fallbackReason": "NO_CURRENT",
+    "fallbackCount": 1,
+    "legacyReturnedAsFallback": true
+  },
+  "step8Rollback": {
+    "transitionSequence": [
+      "OFF (LEGACY)",
+      "ON (PUBLISHED)",
+      "OFF (LEGACY)"
+    ],
+    "finalSelectedSource": "LEGACY",
+    "publishedCacheInvalidated": true,
+    "currentAfterRollback": "generation-000015",
+    "currentUnchanged": true,
+    "providerCalls": 0,
+    "reembedding": 0
+  },
+  "companionDesktop": "NÃO_EXECUTADO",
+  "android": "NÃO_EXECUTADO",
+  "ios": "NÃO_EXECUTADO",
+  "providerCalls": 0,
+  "reembedding": 0,
+  "evaluations": {
+    "m6DesktopRuntime": "PASS",
+    "cutoverDesktop": "READY_FOR_DEVICE_SCOPED_ENABLEMENT",
+    "companionDesktop": "NÃO_EXECUTADO",
+    "android": "NÃO_EXECUTADO",
+    "ios": "NÃO_EXECUTADO",
+    "globalCutover": "NOT_READY"
+  },
+  "timestamp": "2026-10-07T18:43:50.743Z"
+}

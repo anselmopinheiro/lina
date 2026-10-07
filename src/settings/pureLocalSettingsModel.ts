@@ -21,6 +21,7 @@ export const PURE_LOCAL_SETTING_KEYS = [
   "embeddingsTimeout",
   "embeddingStorageReadPreference",
   "maintainBinaryEmbeddingCopy",
+  "companionPublishedGenerationCutoverEnabled",
 ] as const;
 
 export type PureLocalSettingKey = typeof PURE_LOCAL_SETTING_KEYS[number];
@@ -46,6 +47,7 @@ export const PURE_LOCAL_SETTING_METADATA: readonly PureLocalSettingMetadata[] = 
   { key: "embeddingsTimeout", kind: "timeout", providerDomain: "embedding" },
   { key: "embeddingStorageReadPreference", kind: "storage-preference" },
   { key: "maintainBinaryEmbeddingCopy", kind: "boolean" },
+  { key: "companionPublishedGenerationCutoverEnabled", kind: "boolean" },
 ];
 
 export type PureLocalProviderId = "ollama" | "mistral" | "openrouter";

@@ -149,6 +149,7 @@ function createBinaryActionRendererDouble() {
   } = { buttons: [] };
   const setting = {
     setName(value: string) { calls.name = value; return setting; },
+    setDesc() { return setting; },
     addButton(callback: (button: ButtonDouble) => void) {
       const call: { label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void } = {};
       const button: ButtonDouble = {

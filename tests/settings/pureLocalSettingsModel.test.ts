@@ -28,7 +28,7 @@ describe("pure local settings model", () => {
     expect(PURE_LOCAL_SETTING_KEYS).toEqual([
       "deviceName", "analysisProvider", "analysisModel", "analysisBaseUrl", "analysisTimeout",
       "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl", "embeddingsBatchSize", "embeddingsTimeout",
-      "embeddingStorageReadPreference", "maintainBinaryEmbeddingCopy",
+      "embeddingStorageReadPreference", "maintainBinaryEmbeddingCopy", "companionPublishedGenerationCutoverEnabled",
     ]);
     expect(PURE_LOCAL_SETTING_METADATA.map((metadata) => metadata.key)).toEqual(PURE_LOCAL_SETTING_KEYS);
     expect(isPureLocalSettingKey("analysisApiKey")).toBe(false);

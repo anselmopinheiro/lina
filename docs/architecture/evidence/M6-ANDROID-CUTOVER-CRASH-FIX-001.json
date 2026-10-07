@@ -1,0 +1,21 @@
+{
+  "rootCause": "Published selector eagerly loaded the legacy runtime index before published generation reading, increasing mobile memory retention; reader/cache errors were not contained by the selector.",
+  "crashStack": null,
+  "failingStage": "Resolved by real Android runtime validation.",
+  "mobileApiIssue": "Unproven; reader, WebCrypto and filesystem errors are now contained.",
+  "memoryIssue": "Potential double vector materialization removed from the ON path. 2303 x 1024 x 4 = 9433088 bytes per vector buffer.",
+  "uiReentrancyIssue": "No selector call occurs during toggle or panel refresh.",
+  "fix": "Lazy published-first selection; lightweight provenance read; fatal errors become PUBLISHED_BLOCKED.",
+  "runtimeResult": "PASS",
+  "providerCalls": 0,
+  "reembedding": false,
+  "androidStatus": "PASS",
+  "androidCrashFix": "PASS",
+  "sequence": ["OFF -> LEGACY", "ON -> PUBLISHED", "OFF -> LEGACY"],
+  "semanticSearch": "PASS",
+  "hybridSearch": "PASS",
+  "consumerEligibility": "eligible",
+  "sourceProvenance": "MATCH",
+  "producerProvenance": "MATCH",
+  "fallbackActive": false
+}

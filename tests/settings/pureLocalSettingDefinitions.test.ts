@@ -16,13 +16,13 @@ function createInputs(language: "pt-PT" | "en" | undefined) {
 }
 
 describe("pure local setting definitions", () => {
-  it("creates only the three controls that do not need extra behavior", () => {
+  it("creates only the four controls that do not need extra behavior", () => {
     const definitions = createPureLocalSettingDefinitions(createInputs("pt-PT"));
 
-    expect(definitions).toHaveLength(3);
+    expect(definitions).toHaveLength(4);
     expect(definitions.map((definition) => definition.control.key)).toEqual(PURE_LOCAL_CONTROL_KEYS);
-    expect(new Set(definitions.map((definition) => definition.control.key)).size).toBe(3);
-    expect(definitions.map((definition) => definition.control.type)).toEqual(["text", "text", "text"]);
+    expect(new Set(definitions.map((definition) => definition.control.key)).size).toBe(4);
+    expect(definitions.map((definition) => definition.control.type)).toEqual(["text", "text", "text", "toggle"]);
     expect(definitions.every((definition) => Object.keys(definition).includes("control"))).toBe(true);
   });
 
@@ -46,11 +46,13 @@ describe("pure local setting definitions", () => {
       [inputs.strings.settingsDeviceName, undefined],
       [inputs.strings.settingsBaseUrl, inputs.strings.settingsBaseUrlAutoDesc],
       [inputs.strings.settingsBaseUrl, inputs.strings.settingsBaseUrlAutoDesc],
+      ["Usar geração publicada neste dispositivo", "Teste associado a este deviceId. Não altera ownership nem CURRENT e não cria embeddings."],
     ]);
     expect(definitions.map((definition) => definition.control.type === "text" ? definition.control.placeholder : undefined)).toEqual([
       inputs.strings.settingsDeviceNamePlaceholder,
       inputs.analysisBaseUrlPlaceholder,
       inputs.embeddingsBaseUrlPlaceholder,
+      undefined,
     ]);
   });
 

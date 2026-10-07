@@ -1,0 +1,18 @@
+{
+  "evidenceLevel": "OBSIDIAN_RUNTIME",
+  "deviceRole": "companion",
+  "current": "generation-000015",
+  "sequence": ["OFF -> LEGACY", "ON -> PUBLISHED", "OFF -> LEGACY"],
+  "consumerEligibility": "eligible",
+  "sourceProvenance": "MATCH",
+  "producerProvenance": "MATCH",
+  "fallbackActive": false,
+  "semanticSearch": "PASS",
+  "hybridSearch": "PASS",
+  "providerCalls": 0,
+  "reembedding": 0,
+  "crash": "resolved",
+  "androidRuntime": "PASS",
+  "cutoverAndroid": "READY_FOR_DEVICE_SCOPED_ENABLEMENT",
+  "ios": "OUT_OF_SCOPE"
+}

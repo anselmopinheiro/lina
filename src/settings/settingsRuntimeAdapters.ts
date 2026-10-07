@@ -60,7 +60,7 @@ export type SettingsRuntimeGlobalValue<K extends SettingsRuntimeGlobalKey> =
   string;
 
 export type SettingsRuntimeLocalValue<K extends PureLocalSettingKey> =
-  K extends "maintainBinaryEmbeddingCopy" ? boolean : string;
+  K extends "maintainBinaryEmbeddingCopy" | "companionPublishedGenerationCutoverEnabled" ? boolean : string;
 export type SettingsRuntimeEffect = LocalSettingEffect | PureGlobalSettingEffect;
 export type SettingsRuntimeMutationError = "invalid-value" | "save-failed" | "effect-failed";
 export type SettingsRuntimeMutationResult =
@@ -198,7 +198,7 @@ function normalizeLocalValue<K extends PureLocalSettingKey>(
   key: K,
   value: unknown,
 ): SettingsRuntimeLocalValue<K> | undefined {
-  if (key === "maintainBinaryEmbeddingCopy") {
+  if (key === "maintainBinaryEmbeddingCopy" || key === "companionPublishedGenerationCutoverEnabled") {
     return isBooleanSettingValue(value) ? value as SettingsRuntimeLocalValue<K> : undefined;
   }
   if (typeof value !== "string") return undefined;

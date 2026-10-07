@@ -249,6 +249,23 @@ describe("settings runtime adapters", () => {
     expect(runtime.effects).toEqual([{ type: "refresh-embedding-configuration-state" }]);
   });
 
+  it("persists the M6 published-generation switch only in the active device entry", async () => {
+    const runtime = createHost();
+    const adapters = createSettingsRuntimeAdapters(runtime.host);
+
+    expect(adapters.getLocalValue("companionPublishedGenerationCutoverEnabled")).toBeUndefined();
+    expect(await adapters.setLocalValue("companionPublishedGenerationCutoverEnabled", true)).toEqual({ ok: true });
+    expect(runtime.snapshot().settings.deviceSettingsById?.current?.companionPublishedGenerationCutoverEnabled).toBe(true);
+    expect(runtime.snapshot().settings.deviceSettingsById?.other?.companionPublishedGenerationCutoverEnabled).toBeUndefined();
+    expect(runtime.effects).toEqual([]);
+
+    runtime.setDeviceId("other");
+    expect(adapters.getLocalValue("companionPublishedGenerationCutoverEnabled")).toBeUndefined();
+    expect(await adapters.setLocalValue("companionPublishedGenerationCutoverEnabled", false)).toEqual({ ok: true });
+    expect(runtime.snapshot().settings.deviceSettingsById?.current?.companionPublishedGenerationCutoverEnabled).toBe(true);
+    expect(runtime.snapshot().settings.deviceSettingsById?.other?.companionPublishedGenerationCutoverEnabled).toBe(false);
+  });
+
   it.each(["openai", "gemini", "anthropic", "custom"] as const)("reads legacy %s provider settings through the safe Ollama fallback", (legacyProvider) => {
     const snapshot = createSnapshot();
     const current = snapshot.settings.deviceSettingsById?.current;
