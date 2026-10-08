@@ -107,19 +107,31 @@ export function createConnectionCredentialBindings(
     domain: ConnectionCredentialDomain,
     token: ReturnType<DeclarativeSettingsLifecycleController["beginPending"]>,
     result: PureConnectionTestResult,
+    configuration?: SafeConnectionConfiguration,
   ): boolean => {
     if (!token || !options.lifecycle.canApply(token)) return false;
-    const configuration = options.getConnectionConfiguration(domain);
     connections[domain] = {
       status: result.outcome === "success" ? "success" : "error",
-      provider: configuration.provider,
-      model: configuration.model,
-      baseUrl: configuration.baseUrl,
+      ...(configuration
+        ? { provider: configuration.provider, model: configuration.model, baseUrl: configuration.baseUrl }
+        : {}),
       messageKey: result.messageKey,
     };
     options.lifecycle.completePending(token, result.outcome === "success" ? "success" : "error");
     options.lifecycle.requestUpdate();
     return true;
+  };
+
+  const releaseCredential = (
+    domain: CredentialDomain,
+    token: NonNullable<ReturnType<DeclarativeSettingsLifecycleController["beginPending"]>>,
+    operation: "save" | "clear",
+    error: SafeCredentialError,
+  ): void => {
+    if (!options.lifecycle.canApply(token) || !options.lifecycle.isPending(credentialLifecycleDomain(domain))) return;
+    credentials[domain] = { status: "error", available: credentials[domain].available, operation, error };
+    options.lifecycle.completePending(token, "error");
+    options.lifecycle.requestUpdate();
   };
 
   synchronizeCredential("analysis");
@@ -140,18 +152,26 @@ export function createConnectionCredentialBindings(
     async runConnectionTest(domain) {
       const token = options.lifecycle.beginPending(lifecycleDomain(domain));
       if (!token) return false;
-      const configuration = options.getConnectionConfiguration(domain);
-      connections[domain] = {
-        status: "pending", provider: configuration.provider, model: configuration.model, baseUrl: configuration.baseUrl,
-      };
+      let configuration: SafeConnectionConfiguration | undefined;
       try {
+        configuration = options.getConnectionConfiguration(domain);
+        connections[domain] = {
+          status: "pending", provider: configuration.provider, model: configuration.model, baseUrl: configuration.baseUrl,
+        };
         const input: PureConnectionTestInput = { ...configuration };
         const result = domain === "analysis"
           ? await options.connectionPorts.testAnalysisConnection(input)
           : await options.connectionPorts.testEmbeddingsConnection(input);
-        return completeConnection(domain, token, result);
+        return completeConnection(domain, token, result, configuration);
       } catch {
-        return completeConnection(domain, token, { outcome: "failed", messageKey: "connection-failed" });
+        return completeConnection(domain, token, { outcome: "failed", messageKey: "connection-failed" }, configuration);
+      } finally {
+        // Any path that did not settle the operation must still release pending/disabled state.
+        if (options.lifecycle.canApply(token) && options.lifecycle.isPending(lifecycleDomain(domain))) {
+          connections[domain] = { status: "error", messageKey: "connection-failed" };
+          options.lifecycle.completePending(token, "error");
+          options.lifecycle.requestUpdate();
+        }
       }
     },
     async saveCredential(domain, draft, clearDraft) {
@@ -160,8 +180,8 @@ export function createConnectionCredentialBindings(
       if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "saving", operation: "save" };
       options.lifecycle.requestUpdate();
-      const configuration = options.getConnectionConfiguration(domain);
       try {
+        const configuration = options.getConnectionConfiguration(domain);
         const result = await options.credentialMutations.save(options.getCredentialRef(domain), draft, configuration.provider as never);
         if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
@@ -182,6 +202,8 @@ export function createConnectionCredentialBindings(
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
+      } finally {
+        releaseCredential(domain, token, "save", "save-failed");
       }
     },
     async clearCredential(domain) {
@@ -190,8 +212,8 @@ export function createConnectionCredentialBindings(
       if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "clearing", operation: "clear" };
       options.lifecycle.requestUpdate();
-      const configuration = options.getConnectionConfiguration(domain);
       try {
+        const configuration = options.getConnectionConfiguration(domain);
         const result = await options.credentialMutations.clear(options.getCredentialRef(domain), configuration.provider as never);
         if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
@@ -211,6 +233,8 @@ export function createConnectionCredentialBindings(
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
+      } finally {
+        releaseCredential(domain, token, "clear", "clear-failed");
       }
     },
     registerCleanup(cleanupOwner, id, cleanup) {

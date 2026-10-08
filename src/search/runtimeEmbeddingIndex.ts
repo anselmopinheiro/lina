@@ -7,8 +7,10 @@ import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
 import { BinaryEmbeddingDigest, BinaryEmbeddingReadOptions, BinaryEmbeddingStorageError, EmbeddingResourceProfile, getEmbeddingBinaryResourceLimits, createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
+import { traceRuntime } from "../runtimeTrace.js";
 
 export interface RuntimeEmbeddingMetadata {
+  vectorOrdinal?: number;
   chunkId: string;
   path: string;
   index: number;
@@ -76,6 +78,11 @@ export interface EmbeddingReadDiagnosticState {
   lastErrorCode?: string;
   loadDurationMs?: number;
   cacheHit?: boolean;
+  semanticAvailability?: "complete" | "partial" | "unavailable";
+  validRecordCount?: number;
+  staleRecordCount?: number;
+  missingRecordCount?: number;
+  orphanRecordCount?: number;
   /**
    * Retains why the derived binary candidate was rejected when JSONL could
    * not be used safely. This keeps the terminal runtime diagnostic precise
@@ -319,6 +326,7 @@ function buildRuntimeIndex(
       vectors[offset + dimension] = record.embedding[dimension];
     }
     metadata.push({
+      vectorOrdinal: recordIndex,
       chunkId: record.chunkId,
       path: record.path,
       index: record.index,
@@ -342,22 +350,64 @@ function buildRuntimeIndex(
 
 /** Binary vectors are only a derivative of the canonical records. Validate the
  * same enriched-input identity before accepting their metadata at runtime. */
-function binaryMetadataMatchesCurrentChunks(
+export interface SemanticEmbeddingAvailability {
+  status: "complete" | "partial" | "unavailable";
+  totalChunks: number;
+  valid: number;
+  stale: number;
+  missing: number;
+  orphan: number;
+  duplicate: number;
+  reason?: string;
+}
+
+export interface ClassifiedBinaryRecords {
+  availability: SemanticEmbeddingAvailability;
+  validOrdinals: readonly number[];
+}
+
+export function classifyBinaryRecords(
   index: RuntimeEmbeddingIndex,
-  chunks: readonly Chunk[]
-): boolean {
-  if (index.records.length !== chunks.length) return false;
+  chunks: readonly Chunk[],
+): ClassifiedBinaryRecords {
+  const unavailable = (reason: string): ClassifiedBinaryRecords => ({ availability: { status: "unavailable", totalChunks: chunks.length, valid: 0, stale: 0, missing: 0, orphan: 0, duplicate: 0, reason }, validOrdinals: [] });
+  if (index.records.length !== index.count || index.vectors.length !== index.count * index.dimensions) return unavailable("invalid-vector-mapping");
   const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk] as const));
-  if (chunksById.size !== chunks.length) return false;
+  if (chunksById.size !== chunks.length) return unavailable("ambiguous-current-chunks");
+  const seenOrdinals = new Set<number>();
+  const seenRecordIds = new Set<string>();
+  const validOrdinals: number[] = [];
+  let stale = 0; let orphan = 0; let duplicate = 0;
   for (const record of index.records) {
+    const vectorOrdinal = record.vectorOrdinal;
+    if (typeof vectorOrdinal !== "number" || !Number.isInteger(vectorOrdinal) || vectorOrdinal < 0 || vectorOrdinal >= index.count || seenOrdinals.has(vectorOrdinal) || seenRecordIds.has(record.chunkId)) return unavailable("ambiguous-vector-mapping");
+    seenOrdinals.add(vectorOrdinal); seenRecordIds.add(record.chunkId);
     const chunk = chunksById.get(record.chunkId);
-    if (!chunk || record.path !== chunk.path || record.index !== chunk.chunkIndex || record.textHash !== chunk.textHash
-      || !record.embeddingInputHash
-      || record.embeddingInputHash !== hashContent(buildEmbeddingInput(chunk, index.sourceIdentity.prefixMode))) {
-      return false;
-    }
+    if (!chunk) { orphan++; continue; }
+    if (record.path !== chunk.path || record.index !== chunk.chunkIndex || record.textHash !== chunk.textHash || !record.embeddingInputHash || record.embeddingInputHash !== hashContent(buildEmbeddingInput(chunk, index.sourceIdentity.prefixMode))) { stale++; continue; }
+    validOrdinals.push(vectorOrdinal);
   }
-  return true;
+  const missing = chunks.filter((chunk) => !seenRecordIds.has(chunk.chunkId)).length;
+  const valid = validOrdinals.length;
+  const status = valid === 0 ? "unavailable" : stale === 0 && missing === 0 ? "complete" : "partial";
+  const availability = { status, totalChunks: chunks.length, valid, stale, missing, orphan, duplicate, ...(status === "unavailable" ? { reason: "no-valid-records" } : {}) } as const;
+  traceRuntime("semantic-index-classification", "semantic-index-classification", status === "unavailable" ? "blocked" : "ok", { status, total: chunks.length, valid, stale, missing, orphan });
+  return { availability, validOrdinals };
+}
+
+export function compactBinaryRuntimeIndex(index: RuntimeEmbeddingIndex, classification: ClassifiedBinaryRecords): RuntimeEmbeddingIndex | null {
+  if (classification.availability.status === "unavailable") return null;
+  const vectors = new Float32Array(classification.validOrdinals.length * index.dimensions);
+  const records: RuntimeEmbeddingMetadata[] = [];
+  const recordsByOrdinal = new Map(index.records.map((record) => [record.vectorOrdinal, record] as const));
+  for (let compactOrdinal = 0; compactOrdinal < classification.validOrdinals.length; compactOrdinal++) {
+    const sourceOrdinal = classification.validOrdinals[compactOrdinal];
+    vectors.set(index.vectors.subarray(sourceOrdinal * index.dimensions, (sourceOrdinal + 1) * index.dimensions), compactOrdinal * index.dimensions);
+    const record = recordsByOrdinal.get(sourceOrdinal);
+    if (!record) return null;
+    records.push({ ...record, vectorOrdinal: compactOrdinal });
+  }
+  return records.length === vectors.length / index.dimensions ? { ...index, count: records.length, vectors, records } : null;
 }
 
 export class RuntimeEmbeddingIndexCache {
@@ -397,6 +447,7 @@ export class RuntimeEmbeddingIndexCache {
   }
 
   async getOrLoad(chunks: readonly Chunk[]): Promise<RuntimeEmbeddingIndex | null> {
+    traceRuntime("runtime-index", "runtime-index:start", "info", { chunkCount: chunks.length });
     if (this.disposed) return null;
     const preference = this.getStoragePreference();
     if (this.index && this.loadedPreference !== preference) this.invalidate("manual");
@@ -405,6 +456,7 @@ export class RuntimeEmbeddingIndexCache {
     const source = sourceResult.source;
     if (this.disposed || this.revision !== requestRevision) return null;
     if (!source) {
+      traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { reason: sourceResult.failureReason ?? "canonical-source-unavailable" });
       this.invalidate("external-source-changed");
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: sourceResult.failureReason ?? "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: sourceResult.errorCode ?? "canonical-source-unavailable" });
       return null;
@@ -418,17 +470,19 @@ export class RuntimeEmbeddingIndexCache {
       return null;
     }
     if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
+      traceRuntime("runtime-index", "runtime-index:cache-hit", "ok", { count: this.index.count, dimensions: this.index.dimensions });
       this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
       this.debug?.("hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
     if (this.index) this.invalidate("external-source-changed");
-    if (this.loading) return this.loading;
+    if (this.loading) { traceRuntime("runtime-index", "runtime-index:cache-hit", "info", { loading: true }); return this.loading; }
 
     const loadRevision = this.revision;
     this.actualReadRevision = -1;
     const loadStartedAt = monotonicNow();
     this.debug?.("load-started", { dimensions: source.dimensions });
+    traceRuntime("runtime-index", "runtime-index:cache-miss", "info", { dimensions: source.dimensions, publicationId: source.publicationId ?? "legacy" });
     this.loading = this.load(source, chunks, loadRevision).then((result) => {
       if (this.revision === loadRevision && !this.disposed && this.actualReadRevision === loadRevision) {
         this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
@@ -481,6 +535,7 @@ export class RuntimeEmbeddingIndexCache {
       if (source.publicationId) {
         try {
           this.actualReadRevision = revision;
+          traceRuntime("runtime-index", "runtime-index:binary-probe", "info", { publicationId: source.publicationId });
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
             ...this.binaryReadOptions,
             limits: this.binaryReadOptions.limits ?? getEmbeddingBinaryResourceLimits(profile),
@@ -503,18 +558,27 @@ export class RuntimeEmbeddingIndexCache {
               const afterValidation = await readRuntimeEmbeddingSourceIdentity(this.app);
               if (!sameSourceIdentity(source, afterValidation)) return null;
             }
-            if (!binaryMetadataMatchesCurrentChunks(binary, chunks)) {
-              this.debug?.("binary-fallback", { reason: "binary-input-hash-invalid", status: "invalid" });
+            const classification = classifyBinaryRecords(binary, chunks);
+            if (classification.availability.status === "unavailable") {
+              this.debug?.("binary-fallback", { reason: classification.availability.reason ?? "binary-input-hash-invalid", status: "invalid" });
               fallbackReason = "binary-invalid";
               binaryFailureReason = "binary-invalid";
               lastErrorCode = "binary-input-hash-invalid";
             } else {
-            binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
-            this.index = binary;
-            this.loadedPreference = preference;
-            this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
-            this.debug?.("binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
-            return binary;
+            const compact = compactBinaryRuntimeIndex(binary, classification);
+            if (!compact) {
+              fallbackReason = "binary-invalid";
+              binaryFailureReason = "binary-invalid";
+              lastErrorCode = "binary-compaction-failed";
+            } else {
+              compact.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
+              this.index = compact;
+              this.loadedPreference = preference;
+              this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: compact.count, dimensions: compact.dimensions, semanticAvailability: classification.availability.status, validRecordCount: classification.availability.valid, staleRecordCount: classification.availability.stale, missingRecordCount: classification.availability.missing, orphanRecordCount: classification.availability.orphan, lastResolvedAt: Date.now() });
+              this.debug?.("binary-load-completed", { count: compact.count, dimensions: compact.dimensions });
+              traceRuntime("runtime-index", classification.availability.status === "partial" ? "runtime-index:partial-ready" : "runtime-index:ready", "ok", { source: "binary", validCount: compact.count, dimensions: compact.dimensions });
+              return compact;
+            }
             }
           }
           this.debug?.("binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
@@ -522,6 +586,7 @@ export class RuntimeEmbeddingIndexCache {
           binaryFailureReason = "binary-outdated";
           lastErrorCode = "binary-source-publication-mismatch";
         } catch (error) {
+          traceRuntime("runtime-index", "runtime-index:binary-load", "error", undefined, error);
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
             if (error.code === "binary-read-cancelled") {

@@ -214,7 +214,7 @@ export function createDeclarativeSettingsConnectionCredentialRenderers(
     return {
       run() {
         if (disposed || currentConnection(domain).status === "pending") return;
-        void options.bindings.runConnectionTest(domain);
+        options.bindings.runConnectionTest(domain).catch(() => undefined);
       },
       isDisabled() {
         return disposed || currentConnection(domain).status === "pending";

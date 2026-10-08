@@ -1,0 +1,14 @@
+{
+  "id": "ANDROID-SEMANTIC-CAPABILITY-DIVERGENCE-001",
+  "rootCause": "readEmbeddingStatus returned validForSearchCount=0 for resource-limit-exceeded canonical JSONL (mobile ceiling) ignoring a consistent binary copy; getSemanticSearchAvailability probed the binary with an empty chunk list so a valid copy was rejected",
+  "firstDivergencePoint": "src/index/embeddingGenerator.ts readEmbeddingStatus resource-limit branch",
+  "evidence": { "static": "PASS", "unitTest": "PASS", "integrationTest": "PASS", "obsidianRuntime": "NOT_EXECUTADO" },
+  "files": ["src/index/embeddingGenerator.ts", "src/search/hybridSearch.ts", "tests/search/androidCompanionSemanticCapability.test.ts"],
+  "tests": { "suite": { "files": 188, "tests": 2424, "result": "pass" }, "new": 5 },
+  "gates": { "test": "pass", "typecheck": "pass", "lint:obsidian:strict": "pass", "build": "pass", "build:dev": "pass", "build:test": "pass", "release-check": "pass", "git diff --check": "pass" },
+  "sideEffects": { "providerCalls": 0, "reembedding": 0, "vaultWrites": 0, "ownershipChanges": 0, "currentChanges": 0, "sqliteWrites": 0 },
+  "ANDROID_RUNTIME": "NOT_EXECUTED",
+  "DESKTOP_REGRESSION": "NOT_EXECUTED",
+  "commit": false,
+  "push": false
+}

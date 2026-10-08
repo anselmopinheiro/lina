@@ -992,6 +992,39 @@ Para além do formato definido em `docs/arquivo/agents/relatorio-final.md`, o re
 
 ## Release e Validação CI
 
+### Build Profiles
+
+O Lina tem dois perfis de build: `DEV` e `TEST`. Os comandos canónicos são:
+
+```bash
+npm run build
+npm run build:dev
+npm run build:test
+```
+
+* `npm run build` gera o perfil **DEV**, usado por CI e release, e não copia artefactos para um vault local.
+* `npm run build:dev` gera o perfil **DEV** e instala-o no vault DEV.
+* `npm run build:test` gera o perfil **TEST** e instala-o no vault TEST.
+
+Neste ambiente, os destinos são fixos e nunca podem ser invertidos:
+
+```text
+DEV vault:       D:\anselmo\__obsidian__\zettel
+DEV plugin dir:  D:\anselmo\__obsidian__\zettel\.obsidian\plugins\lina
+TEST vault:      D:\anselmo\__obsidian__\anselmo
+TEST plugin dir: D:\anselmo\__obsidian__\anselmo\.obsidian\plugins\lina
+```
+
+Regra obrigatória: **DEV → zettel** e **TEST → anselmo**. `build:dev` nunca instala em `anselmo`; `build:test` nunca instala em `zettel`; destinos iguais, perfil/destino trocado e origem de perfil inválida são erros. Nunca apagar ficheiros fora de `.obsidian/plugins/lina` durante esta instalação.
+
+Só `main.js`, `manifest.json` e `styles.css` podem ser copiados para os vaults. Nunca copiar source, testes, SQLite, `.lina-local`, evidências, scripts ou outros ficheiros do repositório.
+
+A diferença entre perfis limita-se a UI técnica de testes/diagnóstico, metadata de build e destino. O core funcional é idêntico: não podem divergir algoritmos de pesquisa, ownership, contratos vetoriais, formato de geração publicada, schema SQLite, semântica de seleção de source/cache runtime ou geração de embeddings.
+
+O perfil TEST pode expor o painel **Testes M6** e o comando **Abrir painel Testes M6**, incluindo diagnóstico de CURRENT, ownership, generation, source selecionada, fallback, consumer eligibility, provenance, runtime cache, toggle local de cutover e invalidação manual da cache. O perfil DEV/release não pode registar `lina-m6-tests-panel` nem **Abrir painel Testes M6**. A release oficial usa sempre o perfil DEV; nunca publicar uma build TEST.
+
+Builds locais DEV/TEST e a cópia dos seus artefactos para vault não implicam commit. Não fazer push sem autorização explícita. `main.js` mantém a política de artefactos gerados já definida no repositório.
+
 ### Workflow CI
 O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (`ci.yml`) executa as validações principais por esta ordem:
 1. `npm ci` — instala dependências a partir do `package-lock.json` (reprodutível)
@@ -1076,7 +1109,7 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - Verificar que `manifest.json` existe, é JSON válido e tem `version`.
 - Verificar que `main.js` e `styles.css` existem.
 - **Não** verificar README.md ou LICENSE.md como assets de release.
-- **Não** inspecionar o conteúdo JavaScript compilado.
+- Não inspecionar o conteúdo JavaScript compilado, exceto para impedir que marcadores de UI exclusivamente TEST entrem no bundle DEV de release.
 - **Não** usar heurísticas frágeis como procurar por `"src/"`, `"exports"`, `"module"` ou `"Object.defineProperty"`.
 - **Não** depender de padrões específicos do bundler (esbuild, rollup, webpack, etc.).
 - **Não** exigir um nome de ficheiro `LICENSE` específico.

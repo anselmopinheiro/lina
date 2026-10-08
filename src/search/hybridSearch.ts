@@ -13,12 +13,14 @@ import {
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsModel,
 } from "../settings";
-import { IndexedNote } from "../index/indexStore";
+import { IndexedNote, readIndexedChunks } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchRuntimeSemanticIndex, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
 import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache } from "./runtimeEmbeddingIndex";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { traceRuntime } from "../runtimeTrace.js";
+import { normalizeSearchQuery } from "./queryNormalization";
 
 export interface HybridSearchConfig {
   baseUrl: string;
@@ -69,6 +71,9 @@ export interface SemanticCompatibility {
   deviceModel?: string;
   getRuntimeEmbeddingIndex?: (chunks: readonly Chunk[]) => Promise<RuntimeEmbeddingIndex | null>;
   validForSearchChunkIds?: ReadonlySet<string>;
+  availability?: "complete" | "partial";
+  validForSearchCount?: number;
+  staleForSearchCount?: number;
 }
 
 function getRuntimeUnavailableSemanticReason(diagnostic: EmbeddingReadDiagnosticState): Pick<SemanticCompatibility, "reason" | "reasonCode"> {
@@ -93,15 +98,19 @@ export async function getSemanticSearchAvailability(
   deviceModel: string,
   currentChunks?: readonly Chunk[]
 ): Promise<SemanticCompatibility> {
+  traceRuntime("semantic-capability", "semantic-capability:start", "info", { deviceProvider, deviceModel });
   try {
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
+    traceRuntime("semantic-capability", "semantic-capability:snapshot", "info", { exists: status?.exists ?? false, canonicalReadability: status?.canonicalReadability ?? "missing", canonicalPairState: status?.canonicalPairState ?? "missing" });
     if (!status || !status.exists || status.canonicalReadability === "missing") {
-      return {
+      const result: SemanticCompatibility = {
         available: false,
         reason: "Embeddings não existem ou estão vazios.",
         reasonCode: "missing",
       };
+      traceRuntime("semantic-capability", "semantic-capability:availability", "blocked", { reason: result.reasonCode ?? "missing" });
+      return result;
     }
 
     const indexProvider = status.provider;
@@ -160,9 +169,18 @@ export async function getSemanticSearchAvailability(
         {},
         { profile: getDeviceCapabilities().resourceProfile },
       );
-      const index = await runtime.getOrLoad(currentChunks ?? []);
+      // The binary copy is validated against the current chunks (same set the real search uses); an empty
+      // list would always reject a valid copy as "binary-invalid".
+      const index = await runtime.getOrLoad(currentChunks ?? await readIndexedChunks(app) ?? []);
       if (index?.sourceIdentity.storageFormat === "binary-v1" && index.count > 0) {
-        return { available: true, indexProvider, indexModel, indexDimensions, deviceProvider, deviceModel };
+        const diagnostic = runtime.getDiagnosticState();
+        return {
+          available: true, indexProvider, indexModel, indexDimensions, deviceProvider, deviceModel,
+          validForSearchChunkIds: new Set(index.records.map((record) => record.chunkId)),
+          availability: diagnostic.semanticAvailability === "partial" ? "partial" : "complete",
+          validForSearchCount: diagnostic.validRecordCount ?? index.count,
+          staleForSearchCount: diagnostic.staleRecordCount ?? 0,
+        };
       }
       return {
         available: false,
@@ -188,7 +206,7 @@ export async function getSemanticSearchAvailability(
       };
     }
 
-    return {
+    const result = {
       available: true,
       indexProvider,
       indexModel,
@@ -197,8 +215,11 @@ export async function getSemanticSearchAvailability(
       deviceModel,
       validForSearchChunkIds: status.validForSearchChunkIds,
     };
+    traceRuntime("semantic-capability", "semantic-capability:availability", "ok", { dimensions: indexDimensions });
+    return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    traceRuntime("semantic-capability", "semantic-capability:error", "error", undefined, error);
     return {
       available: false,
       reason: `Erro ao verificar compatibilidade: ${msg}`,
@@ -500,13 +521,22 @@ export async function runHybridSearch(
   query: string,
   config: HybridSearchConfig
 ): Promise<HybridSearchRunResult> {
+  const normalizedQuery = normalizeSearchQuery(query);
+  traceRuntime("search-query", "search-query-normalized", "info", {
+    rawLength: query.length,
+    normalizedLength: normalizedQuery.length,
+  });
+  if (!normalizedQuery) {
+    return { results: [], warnings: [], semanticUsed: false };
+  }
+  traceRuntime("hybrid-search", "hybrid-search:start", "info", { noteCount: notes.length, chunkCount: chunks.length });
   const warnings: string[] = [];
   const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
 
   // Preparar a query para a componente textual: remover termos curtos,
   // stopwords e termos que apenas geram ruido (ex: "ir" dentro de "diretor").
-  const hybridTextQuery = prepareHybridTextQuery(query);
-  const textFallbackQuery = hybridTextQuery || query;
+  const hybridTextQuery = prepareHybridTextQuery(normalizedQuery);
+  const textFallbackQuery = hybridTextQuery || normalizedQuery;
   const textResults = textFallbackQuery
     ? searchTextIndex(notes, chunks, textFallbackQuery, {
         maxResults: 40,
@@ -533,13 +563,14 @@ export async function runHybridSearch(
       || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion
       || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode
     ) {
+      traceRuntime("hybrid-search", "hybrid-search:textual-fallback", "blocked", { reason: "runtime-index-unavailable" });
       warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
       return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
     }
     const queryResult = await generateSingleEmbedding(
       config.baseUrl,
       config.model,
-      applyEmbeddingPrefix(query, getPrefixModeForModel(config.model), true),
+      applyEmbeddingPrefix(normalizedQuery, getPrefixModeForModel(config.model), true),
       config.timeoutMs,
       deviceProvider,
       config.apiKey ?? ""
@@ -553,9 +584,12 @@ export async function runHybridSearch(
       maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
       minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,
     });
-    return { results: combineResults(textResults, semanticResults, weights), warnings, semanticUsed: true };
+    const results = combineResults(textResults, semanticResults, weights);
+    traceRuntime("hybrid-search", "hybrid-search:results", "ok", { resultCount: results.length, semanticUsed: true });
+    return { results, warnings, semanticUsed: true };
   }
   const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel, chunks);
+  traceRuntime("hybrid-search", "hybrid-search:semantic-available", compatibility.available ? "ok" : "blocked", { available: compatibility.available, reason: compatibility.reasonCode ?? "none" });
   if (!compatibility.available) {
     warnings.push(
       `A componente semântica da pesquisa híbrida não está disponível. ` +
@@ -588,7 +622,7 @@ export async function runHybridSearch(
   }
 
   const prefixMode = getPrefixModeForModel(config.model);
-  const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
+  const prefixedQuery = applyEmbeddingPrefix(normalizedQuery, prefixMode, true);
   const queryResult = await generateSingleEmbedding(
     config.baseUrl,
     config.model,
@@ -623,7 +657,11 @@ export async function runHybridSearch(
   });
 
   return {
-    results: combineResults(textResults, semanticResults, weights),
+    results: (() => {
+      const results = combineResults(textResults, semanticResults, weights);
+      traceRuntime("hybrid-search", "hybrid-search:results", "ok", { resultCount: results.length, semanticUsed: true });
+      return results;
+    })(),
     warnings,
     semanticUsed: true,
   };

@@ -216,4 +216,19 @@ describe("binary copy maintenance", () => {
     expect(await adapter.exists(BINARY_EMBEDDING_FILES.vectorsTemporary)).toBe(false);
     expect(await adapter.read(".lina/index/embeddings.jsonl")).toContain("chunkId");
   });
+
+  it("validates binary copy when JSONL file exceeds mobile bridge read limit but publicationId matches", async () => {
+    const adapter = new Adapter(); seed(adapter);
+    const controller = new BinaryEmbeddingCopyController(adapter, digest, new IndexWriteCoordinator());
+    await controller.createOrUpdate();
+    // Simulate embeddings.jsonl being too large for bridge read by overriding its size in stat
+    const origStat = adapter.stat.bind(adapter);
+    adapter.stat = async (path) => {
+      if (path === ".lina/index/embeddings.jsonl") return { type: "file", size: 20 * 1024 * 1024, mtime: 1 };
+      return origStat(path);
+    };
+    const summary = await controller.check(true);
+    expect(summary.status).toBe("valid");
+    expect(summary.sourcePublicationId).toBe("publication-a");
+  });
 });

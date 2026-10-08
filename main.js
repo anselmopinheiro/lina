@@ -27,13 +27,13 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian31 = require("obsidian");
+var import_obsidian30 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-07T18:18:50.789Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-08T19:30:54.503Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -3721,19 +3721,22 @@ function createConnectionCredentialBindings(options) {
     };
     return availability;
   };
-  const completeConnection = (domain, token, result2) => {
+  const completeConnection = (domain, token, result2, configuration) => {
     if (!token || !options.lifecycle.canApply(token)) return false;
-    const configuration = options.getConnectionConfiguration(domain);
     connections[domain] = {
       status: result2.outcome === "success" ? "success" : "error",
-      provider: configuration.provider,
-      model: configuration.model,
-      baseUrl: configuration.baseUrl,
+      ...configuration ? { provider: configuration.provider, model: configuration.model, baseUrl: configuration.baseUrl } : {},
       messageKey: result2.messageKey
     };
     options.lifecycle.completePending(token, result2.outcome === "success" ? "success" : "error");
     options.lifecycle.requestUpdate();
     return true;
+  };
+  const releaseCredential = (domain, token, operation, error) => {
+    if (!options.lifecycle.canApply(token) || !options.lifecycle.isPending(credentialLifecycleDomain(domain))) return;
+    credentials[domain] = { status: "error", available: credentials[domain].available, operation, error };
+    options.lifecycle.completePending(token, "error");
+    options.lifecycle.requestUpdate();
   };
   synchronizeCredential("analysis");
   synchronizeCredential("embeddings");
@@ -3751,19 +3754,26 @@ function createConnectionCredentialBindings(options) {
     async runConnectionTest(domain) {
       const token = options.lifecycle.beginPending(lifecycleDomain(domain));
       if (!token) return false;
-      const configuration = options.getConnectionConfiguration(domain);
-      connections[domain] = {
-        status: "pending",
-        provider: configuration.provider,
-        model: configuration.model,
-        baseUrl: configuration.baseUrl
-      };
+      let configuration;
       try {
+        configuration = options.getConnectionConfiguration(domain);
+        connections[domain] = {
+          status: "pending",
+          provider: configuration.provider,
+          model: configuration.model,
+          baseUrl: configuration.baseUrl
+        };
         const input = { ...configuration };
         const result2 = domain === "analysis" ? await options.connectionPorts.testAnalysisConnection(input) : await options.connectionPorts.testEmbeddingsConnection(input);
-        return completeConnection(domain, token, result2);
+        return completeConnection(domain, token, result2, configuration);
       } catch (e) {
-        return completeConnection(domain, token, { outcome: "failed", messageKey: "connection-failed" });
+        return completeConnection(domain, token, { outcome: "failed", messageKey: "connection-failed" }, configuration);
+      } finally {
+        if (options.lifecycle.canApply(token) && options.lifecycle.isPending(lifecycleDomain(domain))) {
+          connections[domain] = { status: "error", messageKey: "connection-failed" };
+          options.lifecycle.completePending(token, "error");
+          options.lifecycle.requestUpdate();
+        }
       }
     },
     async saveCredential(domain, draft, clearDraft) {
@@ -3772,8 +3782,8 @@ function createConnectionCredentialBindings(options) {
       if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "saving", operation: "save" };
       options.lifecycle.requestUpdate();
-      const configuration = options.getConnectionConfiguration(domain);
       try {
+        const configuration = options.getConnectionConfiguration(domain);
         const result2 = await options.credentialMutations.save(options.getCredentialRef(domain), draft, configuration.provider);
         if (!options.lifecycle.canApply(token)) return false;
         if (result2.ok) {
@@ -3794,6 +3804,8 @@ function createConnectionCredentialBindings(options) {
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
+      } finally {
+        releaseCredential(domain, token, "save", "save-failed");
       }
     },
     async clearCredential(domain) {
@@ -3802,8 +3814,8 @@ function createConnectionCredentialBindings(options) {
       if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "clearing", operation: "clear" };
       options.lifecycle.requestUpdate();
-      const configuration = options.getConnectionConfiguration(domain);
       try {
+        const configuration = options.getConnectionConfiguration(domain);
         const result2 = await options.credentialMutations.clear(options.getCredentialRef(domain), configuration.provider);
         if (!options.lifecycle.canApply(token)) return false;
         if (result2.ok) {
@@ -3823,6 +3835,8 @@ function createConnectionCredentialBindings(options) {
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
+      } finally {
+        releaseCredential(domain, token, "clear", "clear-failed");
       }
     },
     registerCleanup(cleanupOwner, id, cleanup) {
@@ -3976,7 +3990,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
     return {
       run() {
         if (disposed || currentConnection(domain).status === "pending") return;
-        void options.bindings.runConnectionTest(domain);
+        options.bindings.runConnectionTest(domain).catch(() => void 0);
       },
       isDisabled() {
         return disposed || currentConnection(domain).status === "pending";
@@ -5362,20 +5376,20 @@ function isDeclarativeGlobalSettingValue(key, value) {
       return isEmbeddingUpdateMode(value);
   }
 }
-function getEmbeddingDefaultLanguageOptions(labels2) {
+function getEmbeddingDefaultLanguageOptions(labels) {
   return [
-    { value: "pt-PT", label: labels2.ptPT },
-    { value: "en", label: labels2.en },
-    { value: "es", label: labels2.es },
-    { value: "fr", label: labels2.fr },
-    { value: "multi", label: labels2.multi },
-    { value: "auto", label: labels2.auto }
+    { value: "pt-PT", label: labels.ptPT },
+    { value: "en", label: labels.en },
+    { value: "es", label: labels.es },
+    { value: "fr", label: labels.fr },
+    { value: "multi", label: labels.multi },
+    { value: "auto", label: labels.auto }
   ];
 }
-function getEmbeddingUpdateModeOptions(labels2) {
+function getEmbeddingUpdateModeOptions(labels) {
   return [
-    { value: "manual", label: labels2.manual },
-    { value: "automatic-local-only", label: labels2.automaticLocalOnly }
+    { value: "manual", label: labels.manual },
+    { value: "automatic-local-only", label: labels.automaticLocalOnly }
   ];
 }
 
@@ -11771,6 +11785,15 @@ async function reprojectLegacyFromSqlite(app, store, info, options = {}) {
 // src/index/embeddingGenerator.ts
 var import_obsidian13 = require("obsidian");
 
+// src/runtimeTrace.dev.ts
+var service = { list: () => [], clear: () => {
+}, exportText: () => "" };
+function getRuntimeTraceService() {
+  return service;
+}
+function traceRuntime(_category, _event, _status, _metadata, _error) {
+}
+
 // src/index/embeddingState.ts
 function isRecord9(value) {
   return typeof value === "object" && value !== null;
@@ -13249,13 +13272,34 @@ function parsePublishedEmbeddingIdentity(manifest) {
 async function readPublishedEmbeddingIdentity(app) {
   return parsePublishedEmbeddingIdentity(await readEmbeddingManifest(app));
 }
+async function readBinaryCopyCountForCurrentPublication(app) {
+  var _a;
+  try {
+    const canonical = await readEmbeddingManifest(app);
+    const embeddings = isObject(canonical) && isObject(canonical.embeddings) ? canonical.embeddings : void 0;
+    if (!embeddings || typeof embeddings.publicationId !== "string") return 0;
+    const adapter = app.vault.adapter;
+    const binaryPath = (0, import_obsidian13.normalizePath)(".lina/index/embeddings.binary.manifest.json");
+    if (((_a = await adapter.stat(binaryPath)) == null ? void 0 : _a.type) !== "file") return 0;
+    const binary = JSON.parse(await adapter.read(binaryPath));
+    if (!isObject(binary)) return 0;
+    const count = binary.recordCount;
+    const matches = binary.format === "lina-embeddings-binary" && binary.sourcePublicationId === embeddings.publicationId && binary.provider === embeddings.provider && binary.model === embeddings.model && binary.dimensions === embeddings.dimensions && typeof count === "number" && Number.isInteger(count) && count > 0 && count === embeddings.totalEmbeddings;
+    return matches ? count : 0;
+  } catch (e) {
+    return 0;
+  }
+}
 async function readEmbeddingStatus(app, options = {}) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  traceRuntime("embedding-status", "embedding-status:start", "info", { resourceProfile: (_a = options.resourceProfile) != null ? _a : "default" });
   try {
     const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
-    const resourceProfile = (_a = options.resourceProfile) != null ? _a : defaultEmbeddingResourceProfile();
+    const resourceProfile = (_b = options.resourceProfile) != null ? _b : defaultEmbeddingResourceProfile();
     const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
     if (canonicalFile.readability === "unreadable" || canonicalFile.readability === "resource-limit-exceeded") {
+      const binaryCount = canonicalFile.readability === "resource-limit-exceeded" ? await readBinaryCopyCountForCurrentPublication(app) : 0;
+      traceRuntime("embedding-status", canonicalFile.readability === "resource-limit-exceeded" ? "embedding-status:resource-limit" : "embedding-status:end", canonicalFile.readability === "resource-limit-exceeded" ? "blocked" : "ok", { canonicalPairState: canonicalFile.canonicalPairState, binaryCount });
       return {
         exists: true,
         totalEmbeddings: 0,
@@ -13265,19 +13309,19 @@ async function readEmbeddingStatus(app, options = {}) {
         missingCount: 0,
         staleCount: 0,
         obsoleteCount: 0,
-        validForSearchCount: 0,
+        validForSearchCount: binaryCount,
         reusableForNextGenerationCount: 0,
         recoverableCheckpointCount: 0,
-        operationActive: (_b = options.operationActive) != null ? _b : false,
+        operationActive: (_c = options.operationActive) != null ? _c : false,
         duplicateRecordCount: 0,
         invalidRecordCount: 0,
-        model: (_c = publishedIdentity.model) != null ? _c : "",
-        provider: (_d = publishedIdentity.provider) != null ? _d : "",
-        dimensions: (_e = publishedIdentity.dimensions) != null ? _e : 0,
+        model: (_d = publishedIdentity.model) != null ? _d : "",
+        provider: (_e = publishedIdentity.provider) != null ? _e : "",
+        dimensions: (_f = publishedIdentity.dimensions) != null ? _f : 0,
         updatedAt,
         publishedIdentity,
         validForSearchChunkIds: /* @__PURE__ */ new Set(),
-        expectedPrefixMode: (_f = options.nextGenerationIdentity) == null ? void 0 : _f.prefixMode,
+        expectedPrefixMode: (_g = options.nextGenerationIdentity) == null ? void 0 : _g.prefixMode,
         manifestPrefixMode: publishedIdentity.prefixMode,
         isPrefixModeMismatch: false,
         canonicalReadability: canonicalFile.readability,
@@ -13287,7 +13331,7 @@ async function readEmbeddingStatus(app, options = {}) {
         error: canonicalFile.error
       };
     }
-    const chunks = options.currentChunks ? [...options.currentChunks] : (_g = await readIndexedChunks(app)) != null ? _g : [];
+    const chunks = options.currentChunks ? [...options.currentChunks] : (_h = await readIndexedChunks(app)) != null ? _h : [];
     const canonicalRecords = canonicalFile.records;
     const nextGenerationIdentity = options.nextGenerationIdentity;
     const checkpointRecords = nextGenerationIdentity ? await readRecoverableEmbeddingCheckpointRecords(app, {
@@ -13316,15 +13360,16 @@ async function readEmbeddingStatus(app, options = {}) {
     });
     const expectedPrefixMode = nextGenerationIdentity == null ? void 0 : nextGenerationIdentity.prefixMode;
     const manifestPrefixMode = publishedIdentity.prefixMode;
+    traceRuntime("embedding-status", "embedding-status:end", "ok", { canonicalPairState: canonicalFile.canonicalPairState, validForSearchCount: state.summary.validForSearchCount, dimensions: (_i = publishedIdentity.dimensions) != null ? _i : 0 });
     return {
       ...state.summary,
       canonicalPairState: canonicalFile.canonicalPairState,
       ...canonicalFile.canonicalPairState === "inconsistent" ? { validForSearchCount: 0, validCount: 0 } : {},
       exists: canonicalFile.readability !== "missing",
       totalEmbeddings: state.summary.totalCanonicalRecords,
-      model: (_h = publishedIdentity.model) != null ? _h : "",
-      provider: (_i = publishedIdentity.provider) != null ? _i : "",
-      dimensions: (_j = publishedIdentity.dimensions) != null ? _j : 0,
+      model: (_j = publishedIdentity.model) != null ? _j : "",
+      provider: (_k = publishedIdentity.provider) != null ? _k : "",
+      dimensions: (_l = publishedIdentity.dimensions) != null ? _l : 0,
       updatedAt,
       publishedIdentity,
       validForSearchChunkIds: canonicalFile.canonicalPairState === "inconsistent" ? /* @__PURE__ */ new Set() : state.validForSearchChunkIds,
@@ -13336,6 +13381,7 @@ async function readEmbeddingStatus(app, options = {}) {
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    traceRuntime("embedding-status", "embedding-status:error", "error", void 0, error);
     return {
       exists: false,
       totalEmbeddings: 0,
@@ -13348,7 +13394,7 @@ async function readEmbeddingStatus(app, options = {}) {
       validForSearchCount: 0,
       reusableForNextGenerationCount: 0,
       recoverableCheckpointCount: 0,
-      operationActive: (_k = options.operationActive) != null ? _k : false,
+      operationActive: (_m = options.operationActive) != null ? _m : false,
       duplicateRecordCount: 0,
       invalidRecordCount: 0,
       model: "",
@@ -13435,6 +13481,16 @@ function applyEmbeddingInputHashBackfill(store, space, records, plan) {
   });
   store.replaceAllRecords(space, updated);
   return { ...plan, applied: true };
+}
+
+// src/views/m6TestProfileFeatures.dev.ts
+function registerM6TestProfileFeatures(_plugin) {
+}
+async function activateM6TestProfilePanel(_plugin) {
+}
+
+// src/views/m6TestProfileCommands.dev.ts
+function registerM6TestProfileCommands(_plugin) {
 }
 
 // src/device/deviceRole.ts
@@ -13791,37 +13847,46 @@ var temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metad
 var backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
 var canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
 async function readBinaryEmbeddingStorage(adapter, digest2, options = {}) {
-  var _a, _b;
-  const candidate = await validateSet(adapter, digest2, canonicalPaths, options);
-  const records = candidate.records;
-  const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
-  const data = new DataView(candidate.vectors);
-  for (let index = 0; index < vectors.length; index += 1) {
-    if (index > 0 && index % 262144 === 0) await cooperate(options);
-    vectors[index] = data.getFloat32(index * 4, true);
-  }
-  const manifestStat = await adapter.stat(canonicalPaths.manifest);
-  return {
-    dimensions: candidate.manifest.dimensions,
-    count: candidate.manifest.recordCount,
-    vectors,
-    records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record),
-    provider: candidate.manifest.provider,
-    model: candidate.manifest.model,
-    sourceIdentity: {
+  var _a, _b, _c;
+  traceRuntime("binary-storage", "binary-storage:manifest-read");
+  try {
+    const candidate = await validateSet(adapter, digest2, canonicalPaths, options);
+    traceRuntime("binary-storage", "binary-storage:vectors-read", "info", { recordCount: candidate.manifest.recordCount, dimensions: candidate.manifest.dimensions });
+    const records = candidate.records;
+    const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
+    const data = new DataView(candidate.vectors);
+    for (let index = 0; index < vectors.length; index += 1) {
+      if (index > 0 && index % 262144 === 0) await cooperate(options);
+      vectors[index] = data.getFloat32(index * 4, true);
+    }
+    const manifestStat = await adapter.stat(canonicalPaths.manifest);
+    const result2 = {
+      dimensions: candidate.manifest.dimensions,
+      count: candidate.manifest.recordCount,
+      vectors,
+      records,
       provider: candidate.manifest.provider,
       model: candidate.manifest.model,
-      dimensions: candidate.manifest.dimensions,
-      inputVersion: Number(candidate.manifest.inputFormatVersion),
-      prefixMode: candidate.manifest.prefixMode,
-      updatedAt: candidate.manifest.createdAt,
-      canonicalMtime: (_a = manifestStat == null ? void 0 : manifestStat.mtime) != null ? _a : 0,
-      canonicalSize: (_b = manifestStat == null ? void 0 : manifestStat.size) != null ? _b : 0,
-      storageFormat: "binary-v1",
-      publicationId: candidate.manifest.sourcePublicationId,
-      binaryGenerationId: candidate.manifest.generationId
-    }
-  };
+      sourceIdentity: {
+        provider: candidate.manifest.provider,
+        model: candidate.manifest.model,
+        dimensions: candidate.manifest.dimensions,
+        inputVersion: Number(candidate.manifest.inputFormatVersion),
+        prefixMode: candidate.manifest.prefixMode,
+        updatedAt: candidate.manifest.createdAt,
+        canonicalMtime: (_a = manifestStat == null ? void 0 : manifestStat.mtime) != null ? _a : 0,
+        canonicalSize: (_b = manifestStat == null ? void 0 : manifestStat.size) != null ? _b : 0,
+        storageFormat: "binary-v1",
+        publicationId: candidate.manifest.sourcePublicationId,
+        binaryGenerationId: candidate.manifest.generationId
+      }
+    };
+    traceRuntime("binary-storage", "binary-storage:ready", "ok", { recordCount: result2.count, dimensions: result2.dimensions, publicationId: (_c = result2.sourceIdentity.publicationId) != null ? _c : "legacy" });
+    return result2;
+  } catch (error) {
+    traceRuntime("binary-storage", "binary-storage:error", "error", void 0, error);
+    throw error;
+  }
 }
 var BinaryEmbeddingPublisher = class {
   constructor(adapter, digest2, options = {}) {
@@ -14553,13 +14618,18 @@ async function readCompanionConsumptionState(adapter, deviceId, role, activePoli
   });
 }
 
+// src/search/queryNormalization.ts
+function normalizeSearchQuery(input) {
+  return input.normalize("NFC").trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
 // src/search/textSearch.ts
 var DEFAULT_OPTIONS = {
   maxResults: 30,
   maxChunksPerNote: 3
 };
 function normaliseSearchText(value) {
-  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
+  return normalizeSearchQuery(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC");
 }
 function createSnippet(text2, query, maxContext = 120) {
   const lowerText = normaliseSearchText(text2);
@@ -16360,6 +16430,7 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
       vectors[offset + dimension] = record.embedding[dimension];
     }
     metadata.push({
+      vectorOrdinal: recordIndex,
       chunkId: record.chunkId,
       path: record.path,
       index: record.index,
@@ -16380,17 +16451,53 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
     sourceIdentity
   };
 }
-function binaryMetadataMatchesCurrentChunks(index, chunks) {
-  if (index.records.length !== chunks.length) return false;
+function classifyBinaryRecords(index, chunks) {
+  const unavailable = (reason) => ({ availability: { status: "unavailable", totalChunks: chunks.length, valid: 0, stale: 0, missing: 0, orphan: 0, duplicate: 0, reason }, validOrdinals: [] });
+  if (index.records.length !== index.count || index.vectors.length !== index.count * index.dimensions) return unavailable("invalid-vector-mapping");
   const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
-  if (chunksById.size !== chunks.length) return false;
+  if (chunksById.size !== chunks.length) return unavailable("ambiguous-current-chunks");
+  const seenOrdinals = /* @__PURE__ */ new Set();
+  const seenRecordIds = /* @__PURE__ */ new Set();
+  const validOrdinals = [];
+  let stale = 0;
+  let orphan = 0;
+  let duplicate = 0;
   for (const record of index.records) {
+    const vectorOrdinal = record.vectorOrdinal;
+    if (typeof vectorOrdinal !== "number" || !Number.isInteger(vectorOrdinal) || vectorOrdinal < 0 || vectorOrdinal >= index.count || seenOrdinals.has(vectorOrdinal) || seenRecordIds.has(record.chunkId)) return unavailable("ambiguous-vector-mapping");
+    seenOrdinals.add(vectorOrdinal);
+    seenRecordIds.add(record.chunkId);
     const chunk = chunksById.get(record.chunkId);
-    if (!chunk || record.path !== chunk.path || record.index !== chunk.chunkIndex || record.textHash !== chunk.textHash || !record.embeddingInputHash || record.embeddingInputHash !== hashContent(buildEmbeddingInput(chunk, index.sourceIdentity.prefixMode))) {
-      return false;
+    if (!chunk) {
+      orphan++;
+      continue;
     }
+    if (record.path !== chunk.path || record.index !== chunk.chunkIndex || record.textHash !== chunk.textHash || !record.embeddingInputHash || record.embeddingInputHash !== hashContent(buildEmbeddingInput(chunk, index.sourceIdentity.prefixMode))) {
+      stale++;
+      continue;
+    }
+    validOrdinals.push(vectorOrdinal);
   }
-  return true;
+  const missing = chunks.filter((chunk) => !seenRecordIds.has(chunk.chunkId)).length;
+  const valid = validOrdinals.length;
+  const status = valid === 0 ? "unavailable" : stale === 0 && missing === 0 ? "complete" : "partial";
+  const availability = { status, totalChunks: chunks.length, valid, stale, missing, orphan, duplicate, ...status === "unavailable" ? { reason: "no-valid-records" } : {} };
+  traceRuntime("semantic-index-classification", "semantic-index-classification", status === "unavailable" ? "blocked" : "ok", { status, total: chunks.length, valid, stale, missing, orphan });
+  return { availability, validOrdinals };
+}
+function compactBinaryRuntimeIndex(index, classification) {
+  if (classification.availability.status === "unavailable") return null;
+  const vectors = new Float32Array(classification.validOrdinals.length * index.dimensions);
+  const records = [];
+  const recordsByOrdinal = new Map(index.records.map((record) => [record.vectorOrdinal, record]));
+  for (let compactOrdinal = 0; compactOrdinal < classification.validOrdinals.length; compactOrdinal++) {
+    const sourceOrdinal = classification.validOrdinals[compactOrdinal];
+    vectors.set(index.vectors.subarray(sourceOrdinal * index.dimensions, (sourceOrdinal + 1) * index.dimensions), compactOrdinal * index.dimensions);
+    const record = recordsByOrdinal.get(sourceOrdinal);
+    if (!record) return null;
+    records.push({ ...record, vectorOrdinal: compactOrdinal });
+  }
+  return records.length === vectors.length / index.dimensions ? { ...index, count: records.length, vectors, records } : null;
 }
 var RuntimeEmbeddingIndexCache = class {
   constructor(app, debug, getStoragePreference = () => "jsonl", createDigest = createWebCryptoEmbeddingDigest, binaryReadOptions = {}, resourceOptions = {}) {
@@ -16423,7 +16530,8 @@ var RuntimeEmbeddingIndexCache = class {
     return this.index ? "ready" : "empty";
   }
   async getOrLoad(chunks) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
+    traceRuntime("runtime-index", "runtime-index:start", "info", { chunkCount: chunks.length });
     if (this.disposed) return null;
     const preference = this.getStoragePreference();
     if (this.index && this.loadedPreference !== preference) this.invalidate("manual");
@@ -16432,8 +16540,9 @@ var RuntimeEmbeddingIndexCache = class {
     const source = sourceResult.source;
     if (this.disposed || this.revision !== requestRevision) return null;
     if (!source) {
+      traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { reason: (_a = sourceResult.failureReason) != null ? _a : "canonical-source-unavailable" });
       this.invalidate("external-source-changed");
-      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: (_a = sourceResult.failureReason) != null ? _a : "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: (_b = sourceResult.errorCode) != null ? _b : "canonical-source-unavailable" });
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: (_b = sourceResult.failureReason) != null ? _b : "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: (_c = sourceResult.errorCode) != null ? _c : "canonical-source-unavailable" });
       return null;
     }
     if (source.canonicalSize === 0) {
@@ -16442,16 +16551,21 @@ var RuntimeEmbeddingIndexCache = class {
       return null;
     }
     if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
+      traceRuntime("runtime-index", "runtime-index:cache-hit", "ok", { count: this.index.count, dimensions: this.index.dimensions });
       this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
-      (_c = this.debug) == null ? void 0 : _c.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
+      (_d = this.debug) == null ? void 0 : _d.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
     if (this.index) this.invalidate("external-source-changed");
-    if (this.loading) return this.loading;
+    if (this.loading) {
+      traceRuntime("runtime-index", "runtime-index:cache-hit", "info", { loading: true });
+      return this.loading;
+    }
     const loadRevision = this.revision;
     this.actualReadRevision = -1;
     const loadStartedAt = monotonicNow();
-    (_d = this.debug) == null ? void 0 : _d.call(this, "load-started", { dimensions: source.dimensions });
+    (_e = this.debug) == null ? void 0 : _e.call(this, "load-started", { dimensions: source.dimensions });
+    traceRuntime("runtime-index", "runtime-index:cache-miss", "info", { dimensions: source.dimensions, publicationId: (_f = source.publicationId) != null ? _f : "legacy" });
     this.loading = this.load(source, chunks, loadRevision).then((result2) => {
       if (this.revision === loadRevision && !this.disposed && this.actualReadRevision === loadRevision) {
         this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
@@ -16485,7 +16599,7 @@ var RuntimeEmbeddingIndexCache = class {
     (_a = this.debug) == null ? void 0 : _a.call(this, "disposed", {});
   }
   async load(source, chunks, revision) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const preference = this.getStoragePreference();
     let fallbackReason = source.publicationId ? "none" : "legacy-manifest";
     let binaryFailureReason;
@@ -16497,6 +16611,7 @@ var RuntimeEmbeddingIndexCache = class {
       if (source.publicationId) {
         try {
           this.actualReadRevision = revision;
+          traceRuntime("runtime-index", "runtime-index:binary-probe", "info", { publicationId: source.publicationId });
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
             ...this.binaryReadOptions,
             limits: (_c = this.binaryReadOptions.limits) != null ? _c : getEmbeddingBinaryResourceLimits(profile),
@@ -16519,25 +16634,35 @@ var RuntimeEmbeddingIndexCache = class {
               const afterValidation = await readRuntimeEmbeddingSourceIdentity(this.app);
               if (!sameSourceIdentity(source, afterValidation)) return null;
             }
-            if (!binaryMetadataMatchesCurrentChunks(binary, chunks)) {
-              (_e = this.debug) == null ? void 0 : _e.call(this, "binary-fallback", { reason: "binary-input-hash-invalid", status: "invalid" });
+            const classification = classifyBinaryRecords(binary, chunks);
+            if (classification.availability.status === "unavailable") {
+              (_f = this.debug) == null ? void 0 : _f.call(this, "binary-fallback", { reason: (_e = classification.availability.reason) != null ? _e : "binary-input-hash-invalid", status: "invalid" });
               fallbackReason = "binary-invalid";
               binaryFailureReason = "binary-invalid";
               lastErrorCode = "binary-input-hash-invalid";
             } else {
-              binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
-              this.index = binary;
-              this.loadedPreference = preference;
-              this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
-              (_f = this.debug) == null ? void 0 : _f.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
-              return binary;
+              const compact = compactBinaryRuntimeIndex(binary, classification);
+              if (!compact) {
+                fallbackReason = "binary-invalid";
+                binaryFailureReason = "binary-invalid";
+                lastErrorCode = "binary-compaction-failed";
+              } else {
+                compact.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
+                this.index = compact;
+                this.loadedPreference = preference;
+                this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: compact.count, dimensions: compact.dimensions, semanticAvailability: classification.availability.status, validRecordCount: classification.availability.valid, staleRecordCount: classification.availability.stale, missingRecordCount: classification.availability.missing, orphanRecordCount: classification.availability.orphan, lastResolvedAt: Date.now() });
+                (_g = this.debug) == null ? void 0 : _g.call(this, "binary-load-completed", { count: compact.count, dimensions: compact.dimensions });
+                traceRuntime("runtime-index", classification.availability.status === "partial" ? "runtime-index:partial-ready" : "runtime-index:ready", "ok", { source: "binary", validCount: compact.count, dimensions: compact.dimensions });
+                return compact;
+              }
             }
           }
-          (_g = this.debug) == null ? void 0 : _g.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
+          (_h = this.debug) == null ? void 0 : _h.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
           fallbackReason = "binary-outdated";
           binaryFailureReason = "binary-outdated";
           lastErrorCode = "binary-source-publication-mismatch";
         } catch (error) {
+          traceRuntime("runtime-index", "runtime-index:binary-load", "error", void 0, error);
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
             if (error.code === "binary-read-cancelled") {
@@ -16551,7 +16676,7 @@ var RuntimeEmbeddingIndexCache = class {
             binaryFailureReason = "binary-read-failed";
             lastErrorCode = "binary-read-failed";
           }
-          (_h = this.debug) == null ? void 0 : _h.call(this, "binary-fallback", { reason: "candidate-unavailable" });
+          (_i = this.debug) == null ? void 0 : _i.call(this, "binary-fallback", { reason: "candidate-unavailable" });
         }
       }
       let predictedJsonlPeak;
@@ -16613,28 +16738,28 @@ var RuntimeEmbeddingIndexCache = class {
       const pairState = inspectCanonicalPair(content, manifest);
       if (!records || pairState === "inconsistent") {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
-        (_i = this.debug) == null ? void 0 : _i.call(this, "load-failed", { reason: "invalid-jsonl" });
+        (_j = this.debug) == null ? void 0 : _j.call(this, "load-failed", { reason: "invalid-jsonl" });
         return null;
       }
       const index = buildRuntimeIndex(records, chunks, source);
       const sourceAfterLoad = await readRuntimeEmbeddingSourceIdentity(this.app);
       if (this.disposed || this.revision !== revision || !sameSourceIdentity(source, sourceAfterLoad)) {
-        (_j = this.debug) == null ? void 0 : _j.call(this, "stale-load-discarded", {});
+        (_k = this.debug) == null ? void 0 : _k.call(this, "stale-load-discarded", {});
         return null;
       }
       if (!index) {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-runtime-index" });
-        (_k = this.debug) == null ? void 0 : _k.call(this, "load-failed", { reason: "invalid-runtime-index" });
+        (_l = this.debug) == null ? void 0 : _l.call(this, "load-failed", { reason: "invalid-runtime-index" });
         return null;
       }
       this.index = index;
       this.loadedPreference = preference;
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "jsonl", fallbackReason, canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: index.count, dimensions: index.dimensions, lastResolvedAt: Date.now(), lastErrorCode });
-      (_l = this.debug) == null ? void 0 : _l.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
+      (_m = this.debug) == null ? void 0 : _m.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch (e) {
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-read-failed" });
-      (_m = this.debug) == null ? void 0 : _m.call(this, "load-failed", { reason: "read-error" });
+      (_n = this.debug) == null ? void 0 : _n.call(this, "load-failed", { reason: "read-error" });
       return null;
     }
   }
@@ -16707,8 +16832,8 @@ var BinaryEmbeddingCopyController = class {
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       if (runtime.sourceIdentity.publicationId !== canonical.publicationId) return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
       const pairState = await this.readCanonicalPairState(canonical);
-      if (pairState === "resource-limit-exceeded") return { status: "unsupported", reason: "N\xE3o foi poss\xEDvel validar o par can\xF3nico dentro do limite de recursos." };
-      if (pairState !== "consistent" || runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A c\xF3pia bin\xE1ria n\xE3o corresponde \xE0 publica\xE7\xE3o can\xF3nica." };
+      if (pairState === "inconsistent") return { status: "invalid", reason: "A c\xF3pia bin\xE1ria n\xE3o corresponde \xE0 publica\xE7\xE3o can\xF3nica." };
+      if (runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A c\xF3pia bin\xE1ria n\xE3o corresponde \xE0 publica\xE7\xE3o can\xF3nica." };
       return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
     } catch (error) {
       return { status: "invalid", reason: sanitize(error) };
@@ -18921,8 +19046,17 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
     contentEl.empty();
   }
   async doSearch() {
+    traceRuntime("semantic-search", "semantic-search:start", "info");
+    try {
+      await this.doSearchInternal();
+    } catch (error) {
+      traceRuntime("semantic-search", "semantic-search:error", "error", void 0, error);
+      throw error;
+    }
+  }
+  async doSearchInternal() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i;
-    const query = this.queryInput.value.trim();
+    const query = normalizeSearchQuery(this.queryInput.value);
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
     this.diagnosticContainer.addClass("lina-hidden");
@@ -18949,6 +19083,7 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
         statusEl.textContent = this.getRuntimeLoadMessage();
         return;
       }
+      traceRuntime("semantic-search", "semantic-search:index-ready", "ok", { source: runtimeIndex.sourceIdentity.storageFormat, count: runtimeIndex.count, dimensions: runtimeIndex.dimensions });
       if (runtimeIndex.provider.toLowerCase() !== settingsProvider || runtimeIndex.model !== settingsModel || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode) {
         statusEl.textContent = this.L.semanticPrefixMismatch;
         return;
@@ -18976,6 +19111,7 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
         return;
       }
       const results2 = searchRuntimeSemanticIndex(queryResult2.embedding, runtimeIndex, safeChunks2);
+      traceRuntime("semantic-search", "semantic-search:results", "ok", { resultCount: results2.length });
       statusEl.remove();
       if (results2.length === 0) this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
       else for (const result2 of results2) this.renderResult(result2);
@@ -19054,6 +19190,7 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
     const queryEmbedding = queryResult.embedding;
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, searchableEmbeddings, safeChunks);
     const results = diagnosticResults.finalResults;
+    traceRuntime("semantic-search", "semantic-search:results", "ok", { resultCount: results.length });
     statusEl.remove();
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
@@ -20475,15 +20612,20 @@ function getRuntimeUnavailableSemanticReason(diagnostic) {
   return { reasonCode: "corpus-load-failed", reason: "N\xE3o foi poss\xEDvel carregar os embeddings publicados com seguran\xE7a." };
 }
 async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, currentChunks) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  traceRuntime("semantic-capability", "semantic-capability:start", "info", { deviceProvider, deviceModel });
   try {
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
+    traceRuntime("semantic-capability", "semantic-capability:snapshot", "info", { exists: (_a = status == null ? void 0 : status.exists) != null ? _a : false, canonicalReadability: (_b = status == null ? void 0 : status.canonicalReadability) != null ? _b : "missing", canonicalPairState: (_c = status == null ? void 0 : status.canonicalPairState) != null ? _c : "missing" });
     if (!status || !status.exists || status.canonicalReadability === "missing") {
-      return {
+      const result3 = {
         available: false,
         reason: "Embeddings n\xE3o existem ou est\xE3o vazios.",
         reasonCode: "missing"
       };
+      traceRuntime("semantic-capability", "semantic-capability:availability", "blocked", { reason: (_d = result3.reasonCode) != null ? _d : "missing" });
+      return result3;
     }
     const indexProvider = status.provider;
     const indexModel = status.model;
@@ -20532,9 +20674,21 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
         {},
         { profile: getDeviceCapabilities().resourceProfile }
       );
-      const index = await runtime.getOrLoad(currentChunks != null ? currentChunks : []);
+      const index = await runtime.getOrLoad((_e = currentChunks != null ? currentChunks : await readIndexedChunks(app)) != null ? _e : []);
       if ((index == null ? void 0 : index.sourceIdentity.storageFormat) === "binary-v1" && index.count > 0) {
-        return { available: true, indexProvider, indexModel, indexDimensions, deviceProvider, deviceModel };
+        const diagnostic = runtime.getDiagnosticState();
+        return {
+          available: true,
+          indexProvider,
+          indexModel,
+          indexDimensions,
+          deviceProvider,
+          deviceModel,
+          validForSearchChunkIds: new Set(index.records.map((record) => record.chunkId)),
+          availability: diagnostic.semanticAvailability === "partial" ? "partial" : "complete",
+          validForSearchCount: (_f = diagnostic.validRecordCount) != null ? _f : index.count,
+          staleForSearchCount: (_g = diagnostic.staleRecordCount) != null ? _g : 0
+        };
       }
       return {
         available: false,
@@ -20558,7 +20712,7 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
         deviceModel
       };
     }
-    return {
+    const result2 = {
       available: true,
       indexProvider,
       indexModel,
@@ -20567,8 +20721,11 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
       deviceModel,
       validForSearchChunkIds: status.validForSearchChunkIds
     };
+    traceRuntime("semantic-capability", "semantic-capability:availability", "ok", { dimensions: indexDimensions });
+    return result2;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    traceRuntime("semantic-capability", "semantic-capability:error", "error", void 0, error);
     return {
       available: false,
       reason: `Erro ao verificar compatibilidade: ${msg}`,
@@ -20902,11 +21059,20 @@ function combineResults(textResults, semanticResults, weights) {
   return limited;
 }
 async function runHybridSearch(app, notes, chunks, query, config) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e;
+  const normalizedQuery = normalizeSearchQuery(query);
+  traceRuntime("search-query", "search-query-normalized", "info", {
+    rawLength: query.length,
+    normalizedLength: normalizedQuery.length
+  });
+  if (!normalizedQuery) {
+    return { results: [], warnings: [], semanticUsed: false };
+  }
+  traceRuntime("hybrid-search", "hybrid-search:start", "info", { noteCount: notes.length, chunkCount: chunks.length });
   const warnings = [];
   const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
-  const hybridTextQuery = prepareHybridTextQuery(query);
-  const textFallbackQuery = hybridTextQuery || query;
+  const hybridTextQuery = prepareHybridTextQuery(normalizedQuery);
+  const textFallbackQuery = hybridTextQuery || normalizedQuery;
   const textResults = textFallbackQuery ? searchTextIndex(notes, chunks, textFallbackQuery, {
     maxResults: 40,
     maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
@@ -20917,13 +21083,14 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     const runtimeIndex = await config.getRuntimeEmbeddingIndex(chunks);
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     if (!runtimeIndex || !deviceProvider || !deviceModel || runtimeIndex.provider !== deviceProvider || runtimeIndex.model !== deviceModel || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode) {
+      traceRuntime("hybrid-search", "hybrid-search:textual-fallback", "blocked", { reason: "runtime-index-unavailable" });
       warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
       return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
     }
     const queryResult2 = await generateSingleEmbedding(
       config.baseUrl,
       config.model,
-      applyEmbeddingPrefix(query, getPrefixModeForModel(config.model), true),
+      applyEmbeddingPrefix(normalizedQuery, getPrefixModeForModel(config.model), true),
       config.timeoutMs,
       deviceProvider,
       (_a = config.apiKey) != null ? _a : ""
@@ -20937,9 +21104,12 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
       minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
     });
-    return { results: combineResults(textResults, semanticResults2, weights), warnings, semanticUsed: true };
+    const results = combineResults(textResults, semanticResults2, weights);
+    traceRuntime("hybrid-search", "hybrid-search:results", "ok", { resultCount: results.length, semanticUsed: true });
+    return { results, warnings, semanticUsed: true };
   }
   const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel, chunks);
+  traceRuntime("hybrid-search", "hybrid-search:semantic-available", compatibility.available ? "ok" : "blocked", { available: compatibility.available, reason: (_b = compatibility.reasonCode) != null ? _b : "none" });
   if (!compatibility.available) {
     warnings.push(
       `A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais. Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
@@ -20960,21 +21130,21 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     };
   }
   const searchableEmbeddings = filterSearchableEmbeddingRecords(loaded.embeddings, {
-    validForSearchChunkIds: (_b = compatibility.validForSearchChunkIds) != null ? _b : /* @__PURE__ */ new Set()
+    validForSearchChunkIds: (_c = compatibility.validForSearchChunkIds) != null ? _c : /* @__PURE__ */ new Set()
   });
   if (searchableEmbeddings.length === 0) {
     warnings.push("A componente sem\xC3\xA2ntica da pesquisa h\xC3\xADbrida n\xC3\xA3o est\xC3\xA1 dispon\xC3\xADvel. Foram usados apenas resultados textuais.");
     return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
   }
   const prefixMode = getPrefixModeForModel(config.model);
-  const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
+  const prefixedQuery = applyEmbeddingPrefix(normalizedQuery, prefixMode, true);
   const queryResult = await generateSingleEmbedding(
     config.baseUrl,
     config.model,
     prefixedQuery,
     config.timeoutMs,
     deviceProvider,
-    (_c = config.apiKey) != null ? _c : ""
+    (_d = config.apiKey) != null ? _d : ""
   );
   if (!queryResult.embedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
@@ -20984,7 +21154,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
-  const expectedDim = (_d = compatibility.indexDimensions) != null ? _d : 0;
+  const expectedDim = (_e = compatibility.indexDimensions) != null ? _e : 0;
   if (expectedDim > 0 && queryResult.embedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
@@ -20999,7 +21169,11 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
   });
   return {
-    results: combineResults(textResults, semanticResults, weights),
+    results: (() => {
+      const results = combineResults(textResults, semanticResults, weights);
+      traceRuntime("hybrid-search", "hybrid-search:results", "ok", { resultCount: results.length, semanticUsed: true });
+      return results;
+    })(),
     warnings,
     semanticUsed: true
   };
@@ -24037,7 +24211,11 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       return;
     }
     const prefixMode = getPrefixModeForModel(settingsModel);
-    const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
+    const normalizedQuery = normalizeSearchQuery(query);
+    if (!normalizedQuery) {
+      return;
+    }
+    const queryWithPrefix = applyEmbeddingPrefix(normalizedQuery, prefixMode, true);
     const queryResult = await generateSingleEmbedding(
       embeddingConfig.baseUrl,
       settingsModel,
@@ -27472,95 +27650,8 @@ _LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 _LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 var LinaSearchView = _LinaSearchView;
 
-// src/views/m6TestsPanelView.ts
-var import_obsidian29 = require("obsidian");
-var M6_TESTS_PANEL_VIEW_TYPE = "lina-m6-tests-panel";
-var M6_PANEL_TITLE = `Testes ${"M6"}`;
-var sections = [
-  ["Dispositivo", ["deviceRole", "deviceId", "activeProducerId", "ownershipEpoch"]],
-  ["Published generation", ["current", "publishedGeneration", "formatVersion", "recordCount"]],
-  ["Runtime source", ["selectedSource", "fallbackActive", "fallbackReason", "consumerEligibility", "structuralStatus", "semanticStatus", "sourceProvenance", "producerProvenance"]],
-  ["Cache", ["runtimeCacheStorageFormat", "runtimeCacheGeneration", "runtimeCacheContract"]]
-];
-var labels = {
-  deviceRole: "Device role",
-  deviceId: "Device ID",
-  activeProducerId: "Active Producer ID",
-  ownershipEpoch: "Ownership epoch",
-  current: "CURRENT",
-  publishedGeneration: "Published generation",
-  formatVersion: "Format version",
-  recordCount: "Record count",
-  selectedSource: "Selected source",
-  fallbackActive: "Fallback active",
-  fallbackReason: "Fallback reason",
-  consumerEligibility: "Consumer eligibility",
-  structuralStatus: "Structural status",
-  semanticStatus: "Semantic status",
-  sourceProvenance: "Source provenance",
-  producerProvenance: "Producer provenance",
-  runtimeCacheStorageFormat: "Runtime cache storage format",
-  runtimeCacheGeneration: "Runtime cache generation",
-  runtimeCacheContract: "Runtime cache contract"
-};
-var M6TestsPanelView = class extends import_obsidian29.ItemView {
-  constructor(leaf, host) {
-    super(leaf);
-    this.host = host;
-    this.generation = 0;
-  }
-  getViewType() {
-    return M6_TESTS_PANEL_VIEW_TYPE;
-  }
-  getDisplayText() {
-    return M6_PANEL_TITLE;
-  }
-  getIcon() {
-    return "flask-conical";
-  }
-  async onOpen() {
-    await this.refresh();
-  }
-  async refresh() {
-    var _a, _b;
-    const generation = ++this.generation;
-    const diagnostic = await this.host.getM6CutoverTestDiagnostic();
-    if (generation !== this.generation) return;
-    const content = this.contentEl;
-    content.empty();
-    content.addClass("lina-m6-tests-panel");
-    content.createEl("h2", { text: M6_PANEL_TITLE });
-    const cutover = content.createDiv({ cls: "lina-m6-tests-section" });
-    cutover.createEl("h3", { text: "Cutover local" });
-    cutover.createEl("p", { text: `Configura\xE7\xE3o associada a este ${"deviceId"}. N\xE3o altera ownership, ${"CURRENT".toLowerCase()} nem o Producer.` });
-    const toggleLabel = cutover.createEl("label", { cls: "lina-m6-tests-toggle" });
-    const toggle = toggleLabel.createEl("input", { type: "checkbox" });
-    toggle.checked = this.host.getM6CutoverEnabled();
-    toggleLabel.appendText(" Usar gera\xE7\xE3o publicada neste dispositivo");
-    toggle.addEventListener("change", () => {
-      void this.host.setM6CutoverEnabled(toggle.checked).then(() => this.refresh()).catch(() => this.refresh());
-    });
-    for (const [heading, keys] of sections) {
-      const section = content.createDiv({ cls: "lina-m6-tests-section" });
-      section.createEl("h3", { text: heading });
-      for (const key of keys) {
-        const row = section.createDiv({ cls: "lina-m6-tests-row" });
-        row.createSpan({ text: (_a = labels[key]) != null ? _a : key, cls: "lina-m6-tests-label" });
-        row.createSpan({ text: String((_b = diagnostic[key]) != null ? _b : "\u2014"), cls: "lina-m6-tests-value" });
-      }
-    }
-    const actions = content.createDiv({ cls: "lina-m6-tests-actions" });
-    const refresh = actions.createEl("button", { text: "Atualizar estado" });
-    refresh.addEventListener("click", () => {
-      void this.refresh();
-    });
-    const invalidate = actions.createEl("button", { text: "Invalidar cache de pesquisa" });
-    invalidate.addEventListener("click", () => {
-      this.host.invalidateM6RuntimeCache();
-      void this.refresh();
-    });
-  }
-};
+// src/buildProfile.ts
+var BUILD_PROFILE = true ? "dev" : "dev";
 
 // src/maintenance/maintenanceEngine.ts
 var MaintenanceEngine = class {
@@ -29256,8 +29347,8 @@ function prepareEmbeddingUpdateConfirmation(options) {
 }
 
 // src/maintenance/embeddingUpdateConfirmationModal.ts
-var import_obsidian30 = require("obsidian");
-var EmbeddingUpdateConfirmationModal = class extends import_obsidian30.Modal {
+var import_obsidian29 = require("obsidian");
+var EmbeddingUpdateConfirmationModal = class extends import_obsidian29.Modal {
   constructor(app, request, strings) {
     super(app);
     this.request = request;
@@ -29582,6 +29673,7 @@ var OwnershipGate = class {
 };
 
 // main.ts
+var IS_TEST_BUILD = false;
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
 var PRODUCER_OPERATION_UNAVAILABLE_MESSAGE = "Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.";
@@ -29634,7 +29726,7 @@ function isLinaStoredData(value) {
   const index = value.index;
   return (settings === void 0 || isRecord16(settings)) && (index === void 0 || isRecord16(index));
 }
-var LinaPlugin = class extends import_obsidian31.Plugin {
+var LinaPlugin = class extends import_obsidian30.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -29801,10 +29893,9 @@ var LinaPlugin = class extends import_obsidian31.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    this.registerView(
-      M6_TESTS_PANEL_VIEW_TYPE,
-      (leaf) => new M6TestsPanelView(leaf, this)
-    );
+    if (IS_TEST_BUILD) {
+      registerM6TestProfileFeatures(this);
+    }
     const runDiagnostics = () => {
     };
     if (this.app.workspace.layoutReady) {
@@ -29830,10 +29921,10 @@ var LinaPlugin = class extends import_obsidian31.Plugin {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian31.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian30.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian31.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian30.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -29844,31 +29935,27 @@ var LinaPlugin = class extends import_obsidian31.Plugin {
           } catch (error) {
             console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
     });
-    this.addCommand({
-      id: "abrir-painel-testes-m6",
-      name: `Abrir painel Testes ${"M6"}`,
-      callback: () => {
-        void this.activateM6TestsPanel();
-      }
-    });
+    if (IS_TEST_BUILD) {
+      registerM6TestProfileCommands(this);
+    }
     this.addCommand({
       id: "reconstruir-indice-textual",
       name: this.L.mainCommandRebuildTextIndex,
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian31.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian30.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result2 = await this.rebuildTextIndex();
-            new import_obsidian31.Notice(result2.message);
+            new import_obsidian30.Notice(result2.message);
           } catch (error) {
             console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -29884,7 +29971,7 @@ var LinaPlugin = class extends import_obsidian31.Plugin {
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -29897,13 +29984,13 @@ var LinaPlugin = class extends import_obsidian31.Plugin {
           try {
             const report = await this.diagnoseRuntimeSqlite();
             const statusText2 = report.nodeSqliteAvailable && report.databaseSyncAvailable ? "AVAILABLE (PASS)" : "UNAVAILABLE (BLOCKED)";
-            new import_obsidian31.Notice(`Lina SQLite Diagnostic:
+            new import_obsidian30.Notice(`Lina SQLite Diagnostic:
 node:sqlite: ${statusText2}
 Node: ${report.node}
 Electron: ${report.electron}`);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`Lina SQLite Diagnostic error: ${message}`);
+            new import_obsidian30.Notice(`Lina SQLite Diagnostic error: ${message}`);
           }
         })();
       }
@@ -29916,13 +30003,13 @@ Electron: ${report.electron}`);
           try {
             const report = await this.diagnoseShadowWriteRuntime();
             const statusText2 = report.shadowWritePassed && report.reopenPassed && report.controlledFailurePassed ? "PASS" : "FAIL";
-            new import_obsidian31.Notice(`Lina Shadow Write Diagnostic:
+            new import_obsidian30.Notice(`Lina Shadow Write Diagnostic:
 Status: ${statusText2}
 DB Outside Vault: ${report.dbOutsideVault}
 Records: ${report.recordCount}`);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`Lina Shadow Write Diagnostic error: ${message}`);
+            new import_obsidian30.Notice(`Lina Shadow Write Diagnostic error: ${message}`);
           }
         })();
       }
@@ -29935,13 +30022,13 @@ Records: ${report.recordCount}`);
           try {
             const report = await this.diagnoseM2Equivalence();
             const statusText2 = report.afterAudit.isEquivalent ? "PASS" : "FAIL";
-            new import_obsidian31.Notice(`Lina M2 Equivalence Diagnostic:
+            new import_obsidian30.Notice(`Lina M2 Equivalence Diagnostic:
 Status: ${statusText2}
 Matched: ${report.afterAudit.matchedCount}/${report.afterAudit.legacyCount}
 Divergences: ${report.afterAudit.divergenceCount}`);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`Lina M2 Equivalence error: ${message}`);
+            new import_obsidian30.Notice(`Lina M2 Equivalence error: ${message}`);
           }
         })();
       }
@@ -29955,13 +30042,13 @@ Divergences: ${report.afterAudit.divergenceCount}`);
           try {
             const report = await this.diagnoseM3Canonical();
             const statusText2 = ((_a = report.canonicalWriteResult) == null ? void 0 : _a.success) ? "PASS" : "FAIL";
-            new import_obsidian31.Notice(`Lina M3 Canonical Diagnostic:
+            new import_obsidian30.Notice(`Lina M3 Canonical Diagnostic:
 Status: ${statusText2}
 Mode: ${(_c = (_b = report.eligibility) == null ? void 0 : _b.mode) != null ? _c : "UNKNOWN"}
 Records: ${(_e = (_d = report.canonicalWriteResult) == null ? void 0 : _d.recordsCount) != null ? _e : 0}`);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`Lina M3 Canonical error: ${message}`);
+            new import_obsidian30.Notice(`Lina M3 Canonical error: ${message}`);
           }
         })();
       }
@@ -29972,7 +30059,7 @@ Records: ${(_e = (_d = report.canonicalWriteResult) == null ? void 0 : _d.record
       callback: () => {
         void this.diagnoseG6EmbeddingInputHashBackfill().then((report) => {
           var _a, _b, _c, _d;
-          return new import_obsidian31.Notice(`Lina G6 Backfill
+          return new import_obsidian30.Notice(`Lina G6 Backfill
 Status: ${report.status}
 Backfilled: ${(_b = (_a = report.backfill) == null ? void 0 : _a.counts.BACKFILLED_VERIFIED) != null ? _b : 0}
 Already present: ${(_d = (_c = report.backfill) == null ? void 0 : _c.counts.ALREADY_PRESENT) != null ? _d : 0}
@@ -29987,7 +30074,7 @@ Evidence saved.`);
       callback: () => {
         void this.diagnoseM4ImmutablePublication().then((report) => {
           var _a, _b;
-          return new import_obsidian31.Notice(`Lina M4 Diagnostic
+          return new import_obsidian30.Notice(`Lina M4 Diagnostic
 Status: ${report.status}
 Generation: ${(_a = report.generationId) != null ? _a : "none"}
 CURRENT: ${(_b = report.currentAfter) != null ? _b : "none"}
@@ -30002,7 +30089,7 @@ Evidence saved.`);
       callback: () => {
         void this.diagnoseM5Shadow().then((report) => {
           var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-          return new import_obsidian31.Notice(`Lina M5 Shadow
+          return new import_obsidian30.Notice(`Lina M5 Shadow
 Status: ${report.status}
 Generation: ${(_a = report.generationId) != null ? _a : "none"}
 Level: ${report.level}
@@ -30022,7 +30109,7 @@ Provider calls: 0`);
           try {
             const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian31.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian30.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
@@ -30031,7 +30118,7 @@ Provider calls: 0`);
           } catch (error) {
             console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -30046,7 +30133,7 @@ Provider calls: 0`);
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -30057,18 +30144,18 @@ Provider calls: 0`);
       callback: () => {
         const result2 = this.cancelActiveEmbeddingOperation();
         if (result2 === "cancel-requested") {
-          new import_obsidian31.Notice(this.L.toastEmbeddingGenerationCancelling);
+          new import_obsidian30.Notice(this.L.toastEmbeddingGenerationCancelling);
           return;
         }
         if (result2 === "already-cancelling") {
-          new import_obsidian31.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          new import_obsidian30.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
         if (result2 === "non-cancellable") {
-          new import_obsidian31.Notice(this.L.statusEmbeddingGenerationPersisting);
+          new import_obsidian30.Notice(this.L.statusEmbeddingGenerationPersisting);
           return;
         }
-        new import_obsidian31.Notice(this.L.toastNoActiveEmbeddingGeneration);
+        new import_obsidian30.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
     this.addCommand({
@@ -30084,16 +30171,16 @@ Provider calls: 0`);
               operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
-              new import_obsidian31.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian30.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian31.Notice(
+            new import_obsidian30.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
             console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -30106,18 +30193,18 @@ Provider calls: 0`);
           const isCompanion = this.getLocalDeviceRole() === "companion";
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
           if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
-            new import_obsidian31.Notice(this.L.semanticEmbeddingsUnavailableNoContract);
+            new import_obsidian30.Notice(this.L.semanticEmbeddingsUnavailableNoContract);
             return;
           }
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian31.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian30.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian31.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian30.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -30130,7 +30217,7 @@ Provider calls: 0`);
         } catch (error) {
           console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian31.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian30.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -30159,9 +30246,9 @@ Provider calls: 0`);
               {
                 canExecuteMaintenance: isAuthorizedProducer,
                 onRebuildTextIndex: async () => {
-                  new import_obsidian31.Notice(this.L.mainNoticeRebuildingTextIndex);
+                  new import_obsidian30.Notice(this.L.mainNoticeRebuildingTextIndex);
                   const result2 = await this.rebuildTextIndex();
-                  new import_obsidian31.Notice(result2.message);
+                  new import_obsidian30.Notice(result2.message);
                 },
                 onUpdateEmbeddings: async () => {
                   await this.confirmAndRequestEmbeddingGeneration("command");
@@ -30172,7 +30259,7 @@ Provider calls: 0`);
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -30196,7 +30283,7 @@ Provider calls: 0`);
             const previewResult = await prepareOwnershipTransferPreview(this.app.vault.adapter, deviceId);
             if (!previewResult.success) {
               const msg = previewResult.reason === "already-active-producer" ? this.L.ownershipTransferErrorAlreadyActive : previewResult.reason === "missing-ownership" ? this.L.ownershipTransferErrorMissingOwnership : previewResult.reason;
-              new import_obsidian31.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+              new import_obsidian30.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
               return;
             }
             new OwnershipTransferConfirmationModal(
@@ -30212,7 +30299,7 @@ Provider calls: 0`);
           } catch (error) {
             console.error("Lina: failed to open ownership transfer modal:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian31.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+            new import_obsidian30.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
           }
         })();
         return true;
@@ -30257,15 +30344,11 @@ Provider calls: 0`);
     await workspace.revealLeaf(leaf);
   }
   async activateM6TestsPanel() {
-    const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(M6_TESTS_PANEL_VIEW_TYPE)[0];
-    if (!leaf) {
-      const rightLeaf = workspace.getRightLeaf(false);
-      if (!rightLeaf) throw new Error("N\xE3o foi poss\xEDvel criar painel Testes M6.");
-      leaf = rightLeaf;
-      await leaf.setViewState({ type: M6_TESTS_PANEL_VIEW_TYPE, active: true });
-    }
-    await workspace.revealLeaf(leaf);
+    if (!IS_TEST_BUILD) return;
+    await activateM6TestProfilePanel(this);
+  }
+  getBuildProfile() {
+    return BUILD_PROFILE;
   }
   getTextIndexRebuildProgress() {
     return { ...this.textIndexRebuildProgress };
@@ -30431,7 +30514,7 @@ Provider calls: 0`);
     const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
-      isMobile: import_obsidian31.Platform.isMobile,
+      isMobile: import_obsidian30.Platform.isMobile,
       semanticAvailability,
       lifecycleSnapshot
     });
@@ -30452,7 +30535,7 @@ Provider calls: 0`);
       deviceId: this.getDeviceId(),
       deviceState: this.localDeviceState,
       roleResolution: resolution,
-      isMobile: import_obsidian31.Platform.isMobile,
+      isMobile: import_obsidian30.Platform.isMobile,
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       ownership: gateDecision && gateDecision.activeProducerId !== void 0 ? {
         schemaVersion: 1,
@@ -30516,7 +30599,7 @@ Provider calls: 0`);
       deviceState: this.localDeviceState,
       ownership,
       roleResolution: this.getDeviceRoleResolution(),
-      isMobile: import_obsidian31.Platform.isMobile,
+      isMobile: import_obsidian30.Platform.isMobile,
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       textManifestRaw,
       binaryManifestRaw,
@@ -30534,7 +30617,7 @@ Provider calls: 0`);
     return this.legacyRoleFallbackAllowed;
   }
   getDeviceRoleResolution(context) {
-    const platform = { isMobile: import_obsidian31.Platform.isMobile };
+    const platform = { isMobile: import_obsidian30.Platform.isMobile };
     const effectiveContext = context != null ? context : { allowLegacyFallback: this.legacyRoleFallbackAllowed };
     return resolveDeviceRole(this.localDeviceState, platform, effectiveContext);
   }
@@ -30582,7 +30665,7 @@ Provider calls: 0`);
     if (currentResolution.assignmentState === "assigned" && currentEffectiveRole === targetRole) {
       return this.localDeviceState;
     }
-    if (import_obsidian31.Platform.isMobile && targetRole === "producer") {
+    if (import_obsidian30.Platform.isMobile && targetRole === "producer") {
       throw new Error(this.L.deviceRoleChangeMobileProducerNotSupported);
     }
     const deviceId = this.getDeviceId();
@@ -30673,8 +30756,8 @@ Provider calls: 0`);
       return;
     }
     await this.getOwnershipGate().evaluate();
-    const service = this.getExclusionPolicyService();
-    const loadResult = await service.load();
+    const service2 = this.getExclusionPolicyService();
+    const loadResult = await service2.load();
     if (loadResult.status === "loaded") {
       this.currentExclusionPolicy = loadResult.policy;
       this.canonicalPolicyStatus = "loaded";
@@ -30701,7 +30784,7 @@ Provider calls: 0`);
         return;
       }
       const initialPolicy = createInitialExclusionPolicy(legacyRules, provenance);
-      const saveResult = await service.save(initialPolicy);
+      const saveResult = await service2.save(initialPolicy);
       if (saveResult.success) {
         this.currentExclusionPolicy = saveResult.policy;
         this.canonicalPolicyStatus = "loaded";
@@ -30727,8 +30810,8 @@ Provider calls: 0`);
       return;
     }
     await this.getOwnershipGate().evaluate();
-    const service = this.getExclusionPolicyService();
-    const loadResult = await service.load();
+    const service2 = this.getExclusionPolicyService();
+    const loadResult = await service2.load();
     if (loadResult.status === "loaded") {
       this.currentExclusionPolicy = loadResult.policy;
       this.canonicalPolicyStatus = "loaded";
@@ -30767,8 +30850,8 @@ Provider calls: 0`);
     let policyHashChanged = true;
     const adapter = (_c = (_b = this.app) == null ? void 0 : _b.vault) == null ? void 0 : _c.adapter;
     if (adapter) {
-      const service = this.getExclusionPolicyService();
-      const saveResult = await service.updateRules(rulesInput);
+      const service2 = this.getExclusionPolicyService();
+      const saveResult = await service2.updateRules(rulesInput);
       if (!saveResult.success) {
         return {
           success: false,
@@ -30900,7 +30983,7 @@ Provider calls: 0`);
           console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
             status: summary.status
           });
-          new import_obsidian31.Notice(this.L.settingsBinaryAutomaticWarning);
+          new import_obsidian30.Notice(this.L.settingsBinaryAutomaticWarning);
         }
       }),
       reconciliationWorker: new ReconciliationWorker({
@@ -30976,7 +31059,8 @@ Provider calls: 0`);
     }
   }
   async getRuntimeEmbeddingIndex(chunks) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
+    traceRuntime("runtime-index", "runtime-index:source-selection", "info", { cutoverEnabled: getLocalPublishedGenerationCutoverEnabled(), chunkCount: chunks.length });
     if (!this.runtimeEmbeddingIndexCache) {
       this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
         this.app,
@@ -30993,6 +31077,7 @@ Provider calls: 0`);
       (_a = this.publishedRuntimeEmbeddingIndexCache) == null ? void 0 : _a.invalidate();
       this.publishedRuntimeSelection = { selectedSource: "LEGACY", fallbackActive: false, fallbackCount: 0 };
       if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
+      traceRuntime("runtime-index", legacy ? "runtime-index:ready" : "runtime-index:blocked", legacy ? "ok" : "blocked", { source: "legacy" });
       return legacy;
     }
     const blockPublished = (reason, generationId, status = "RUNTIME_ERROR") => {
@@ -31012,13 +31097,14 @@ Provider calls: 0`);
       const reader = new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
       const read = await reader.read();
       if (read.status !== "OK" || !read.index || read.formatVersion !== 5) {
+        traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { source: "published", readerStatus: read.status });
         blockPublished(read.status, read.generationId, read.status);
         return null;
       }
       const semantic = evaluatePublishedGenerationSemanticContract(read.index, this.getEffectiveEmbeddingContract());
       let source;
       try {
-        const manifestText = await this.app.vault.adapter.read((0, import_obsidian31.normalizePath)(".lina/index/manifest.json"));
+        const manifestText = await this.app.vault.adapter.read((0, import_obsidian30.normalizePath)(".lina/index/manifest.json"));
         source = (_b = extractCanonicalEmbeddingSourceProvenance(JSON.parse(manifestText))) != null ? _b : void 0;
       } catch (e) {
         source = void 0;
@@ -31032,16 +31118,19 @@ Provider calls: 0`);
       });
       const contractMatch = semantic.status === "COMPATIBLE";
       if (!eligibility.eligible || !contractMatch) {
-        blockPublished((_c = eligibility.reason) != null ? _c : semantic.status, read.generationId, read.status);
+        traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { source: "published", reason: (_c = eligibility.reason) != null ? _c : semantic.status });
+        blockPublished((_d = eligibility.reason) != null ? _d : semantic.status, read.generationId, read.status);
         this.publishedRuntimeSelection = { ...this.publishedRuntimeSelection, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
         return null;
       }
-      (_d = this.publishedRuntimeEmbeddingIndexCache) != null ? _d : this.publishedRuntimeEmbeddingIndexCache = new PublishedRuntimeEmbeddingIndexCache();
+      (_e = this.publishedRuntimeEmbeddingIndexCache) != null ? _e : this.publishedRuntimeEmbeddingIndexCache = new PublishedRuntimeEmbeddingIndexCache();
       const published = this.publishedRuntimeEmbeddingIndexCache.getOrCreate(read.index);
-      (_e = this.runtimeEmbeddingIndexCache) == null ? void 0 : _e.invalidate("manual");
+      (_f = this.runtimeEmbeddingIndexCache) == null ? void 0 : _f.invalidate("manual");
       this.publishedRuntimeSelection = { selectedSource: "PUBLISHED", publishedGenerationId: read.generationId, fallbackActive: false, fallbackCount: this.publishedRuntimeSelection.fallbackCount, lastReaderStatus: read.status, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+      traceRuntime("runtime-index", "runtime-index:ready", "ok", { source: "published", generationId: (_g = read.generationId) != null ? _g : "unknown", count: published.count });
       return published;
     } catch (error) {
+      traceRuntime("runtime-index", "runtime-index:error", "error", void 0, error);
       blockPublished(error instanceof Error ? error.message : "published-runtime-error");
       return null;
     }
@@ -31053,13 +31142,13 @@ Provider calls: 0`);
   async getM6CutoverTestDiagnostic() {
     var _a, _b, _c, _d, _e, _f, _g;
     const ownership = await loadOwnership(this.app.vault.adapter);
-    const currentPath2 = (0, import_obsidian31.normalizePath)(".lina/published/CURRENT");
+    const currentPath2 = (0, import_obsidian30.normalizePath)(".lina/published/CURRENT");
     const current = await this.app.vault.adapter.exists(currentPath2) ? (await this.app.vault.adapter.read(currentPath2)).trim() : void 0;
     const selected = this.getPublishedRuntimeSelectionDiagnostic();
     let manifest = {};
     if (current) {
       try {
-        manifest = JSON.parse(await this.app.vault.adapter.read((0, import_obsidian31.normalizePath)(`.lina/published/generations/${current}/manifest.json`)));
+        manifest = JSON.parse(await this.app.vault.adapter.read((0, import_obsidian30.normalizePath)(`.lina/published/generations/${current}/manifest.json`)));
       } catch (e) {
       }
     }
@@ -31099,6 +31188,21 @@ Provider calls: 0`);
   }
   invalidateM6RuntimeCache() {
     this.invalidateRuntimeEmbeddingIndex("manual");
+  }
+  getM6RuntimeTrace() {
+    return getRuntimeTraceService().list();
+  }
+  clearM6RuntimeTrace() {
+    getRuntimeTraceService().clear();
+  }
+  exportM6RuntimeTrace() {
+    var _a;
+    return getRuntimeTraceService().exportText({
+      version: this.manifest.version,
+      build: BUILD_PROFILE.toUpperCase(),
+      role: (_a = this.getLocalDeviceRole()) != null ? _a : "unassigned",
+      resourceProfile: getDeviceCapabilities().resourceProfile
+    });
   }
   getPublishedGenerationShadowDiagnostic() {
     var _a, _b;
@@ -31182,14 +31286,14 @@ Provider calls: 0`);
   async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
     var _a, _b, _c, _d, _e;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
-      new import_obsidian31.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = this.getEffectiveEmbeddingEndpointCapability(config);
     const deviceRole = this.getEffectiveDeviceRole();
     if (deviceRole !== "producer") {
-      new import_obsidian31.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const summary = await readEmbeddingStatus(this.app, {
@@ -31238,10 +31342,10 @@ Provider calls: 0`);
     });
     if (!confirmationRequest) {
       if (!isFullRebuild && (updatePlan.toGenerateCount === 0 || policyDecision.reason === "no-update-required")) {
-        new import_obsidian31.Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
+        new import_obsidian30.Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
         return { success: true, message: this.L.confirmEmbeddingUpdateNoWorkNotice };
       }
-      new import_obsidian31.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     if (origin !== "automatic" && confirmationRequest.requiresConfirmation) {
@@ -31261,23 +31365,23 @@ Provider calls: 0`);
     const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
     if (request.status !== "accepted") {
       if (request.status === "already-running") {
-        new import_obsidian31.Notice(this.L.toastEmbeddingsAlreadyRunning);
+        new import_obsidian30.Notice(this.L.toastEmbeddingsAlreadyRunning);
         return { success: false, message: this.L.toastEmbeddingsAlreadyRunning };
       }
       if (request.status === "text-index-busy") {
-        new import_obsidian31.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+        new import_obsidian30.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
         return { success: false, message: this.L.mainNoticeTextIndexBusyForEmbeddings };
       }
       if (request.status === "not-capable") {
-        new import_obsidian31.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+        new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
         return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
       }
-      new import_obsidian31.Notice(this.L.toastEmbeddingsError);
+      new import_obsidian30.Notice(this.L.toastEmbeddingsError);
       return { success: false, message: this.L.toastEmbeddingsError };
     }
-    new import_obsidian31.Notice(this.L.toastGeneratingEmbeddings);
+    new import_obsidian30.Notice(this.L.toastGeneratingEmbeddings);
     const completion = await request.completion;
-    new import_obsidian31.Notice(completion.result.message);
+    new import_obsidian30.Notice(completion.result.message);
     return completion.result;
   }
   async ensureTextIndexLoaded(reason) {
@@ -31347,7 +31451,7 @@ Provider calls: 0`);
       }
     } catch (error) {
       console.error("Lina: failed to read text index status at startup:", error);
-      new import_obsidian31.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian30.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   logStartupReconciliation(message, details) {
@@ -31785,7 +31889,7 @@ Provider calls: 0`);
           for (const note of batch) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (!(file instanceof import_obsidian31.TFile)) {
+              if (!(file instanceof import_obsidian30.TFile)) {
                 this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
                 continue;
               }
@@ -31971,7 +32075,7 @@ Provider calls: 0`);
     }
     let contract = null;
     try {
-      const textManifestPath = (0, import_obsidian31.normalizePath)(".lina/index/manifest.json");
+      const textManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/manifest.json");
       if (await adapter.exists(textManifestPath)) {
         const text2 = await adapter.read(textManifestPath);
         const parsed = JSON.parse(text2);
@@ -31981,7 +32085,7 @@ Provider calls: 0`);
     }
     if (!contract) {
       try {
-        const binaryManifestPath = (0, import_obsidian31.normalizePath)(".lina/index/embeddings.binary.manifest.json");
+        const binaryManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/embeddings.binary.manifest.json");
         if (await adapter.exists(binaryManifestPath)) {
           const text2 = await adapter.read(binaryManifestPath);
           const parsed = JSON.parse(text2);
@@ -32503,7 +32607,7 @@ Provider calls: 0`);
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
       return;
     }
-    if (!(file instanceof import_obsidian31.TFile)) {
+    if (!(file instanceof import_obsidian30.TFile)) {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
       return;
     }
@@ -32973,7 +33077,7 @@ Provider calls: 0`);
       this.setLegacyRoleFallbackAllowed(legacyFallbackEligible2);
       if (preExistingDeviceState2) {
         this.localDeviceState = preExistingDeviceState2;
-      } else if (import_obsidian31.Platform.isMobile) {
+      } else if (import_obsidian30.Platform.isMobile) {
         this.localDeviceState = void 0;
       } else {
         this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
@@ -33046,7 +33150,7 @@ Provider calls: 0`);
     this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
     if (preExistingDeviceState) {
       this.localDeviceState = preExistingDeviceState;
-    } else if (import_obsidian31.Platform.isMobile) {
+    } else if (import_obsidian30.Platform.isMobile) {
       this.localDeviceState = void 0;
     } else {
       this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
@@ -33078,7 +33182,7 @@ Provider calls: 0`);
     if (this.settings.updateIndexOnStartup && this.getEffectiveDeviceRole() === "producer" && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
-          new import_obsidian31.Notice("Lina: \xEDndice textual desatualizado.");
+          new import_obsidian30.Notice("Lina: \xEDndice textual desatualizado.");
         }
         return;
       }
@@ -33090,26 +33194,26 @@ Provider calls: 0`);
       this.indexData = result2.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian31.Notice(`Lina criou o \xEDndice com ${result2.indexData.entries.length} notas.`);
+        new import_obsidian30.Notice(`Lina criou o \xEDndice com ${result2.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges) {
         await this.saveDataToDisk();
-        new import_obsidian31.Notice(`Lina atualizou o \xEDndice: ${result2.addedCount} novas, ${result2.updatedCount} alteradas, ${result2.removedCount} removidas.`);
+        new import_obsidian30.Notice(`Lina atualizou o \xEDndice: ${result2.addedCount} novas, ${result2.updatedCount} alteradas, ${result2.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
-      new import_obsidian31.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian30.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     if (textIndexStatus.usability === "invalid") {
-      new import_obsidian31.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      new import_obsidian30.Notice("Lina: \xEDndice textual indispon\xEDvel.");
       return;
     }
     if (textIndexStatus.usability === "stale") {
-      new import_obsidian31.Notice("Lina: \xEDndice textual desatualizado.");
+      new import_obsidian30.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {
@@ -33159,7 +33263,7 @@ Provider calls: 0`);
   }
   async diagnoseRuntimeSqlite() {
     var _a, _b, _c, _d, _e, _f, _g;
-    const isDesktop = import_obsidian31.Platform.isDesktop;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
     const winProcess = typeof window !== "undefined" ? window.process : void 0;
     const nodeVer = (_b = (_a = winProcess == null ? void 0 : winProcess.versions) == null ? void 0 : _a.node) != null ? _b : "unknown";
     const electronVer = (_d = (_c = winProcess == null ? void 0 : winProcess.versions) == null ? void 0 : _c.electron) != null ? _d : "unknown";
@@ -33209,8 +33313,8 @@ Provider calls: 0`);
     };
     try {
       const adapter = this.app.vault.adapter;
-      const dirPath = (0, import_obsidian31.normalizePath)(".lina/producer");
-      const filePath = (0, import_obsidian31.normalizePath)(".lina/producer/sqlite-runtime-diagnostic.json");
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/sqlite-runtime-diagnostic.json");
       const canWriteProducerDiagnostic = getDeviceRole() === "producer" && await this.getOwnershipGate().canPublish();
       if (canWriteProducerDiagnostic && await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
@@ -33221,7 +33325,7 @@ Provider calls: 0`);
   }
   async diagnoseShadowWriteRuntime() {
     var _a;
-    const isDesktop = import_obsidian31.Platform.isDesktop;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
     const role = getDeviceRole();
     const vaultBasePath = (_a = this.app.vault.adapter.basePath) != null ? _a : "";
     const resolver = new DefaultProducerLocalStorePathResolver(vaultBasePath);
@@ -33312,8 +33416,8 @@ Provider calls: 0`);
     };
     try {
       const adapter = this.app.vault.adapter;
-      const dirPath = (0, import_obsidian31.normalizePath)(".lina/producer");
-      const filePath = (0, import_obsidian31.normalizePath)(".lina/producer/m1b-shadow-write-diagnostic.json");
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/m1b-shadow-write-diagnostic.json");
       if (await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
       }
@@ -33323,7 +33427,7 @@ Provider calls: 0`);
   }
   async diagnoseM2Equivalence() {
     var _a, _b, _c, _d;
-    const isDesktop = import_obsidian31.Platform.isDesktop;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
     const role = getDeviceRole();
     const vaultBasePath = (_a = this.app.vault.adapter.basePath) != null ? _a : "";
     const resolver = new DefaultProducerLocalStorePathResolver(vaultBasePath);
@@ -33392,8 +33496,8 @@ Provider calls: 0`);
     };
     try {
       const adapter = this.app.vault.adapter;
-      const dirPath = (0, import_obsidian31.normalizePath)(".lina/producer");
-      const filePath = (0, import_obsidian31.normalizePath)(".lina/producer/m2-equivalence-diagnostic.json");
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/m2-equivalence-diagnostic.json");
       if (await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
       }
@@ -33403,8 +33507,8 @@ Provider calls: 0`);
   }
   async diagnoseG6EmbeddingInputHashBackfill() {
     var _a, _b, _c, _d, _e, _f;
-    if (!import_obsidian31.Platform.isDesktop || getDeviceRole() !== "producer") {
-      return { status: "BLOCKED", recordsTotal: 0, providerCalls: 0, reason: !import_obsidian31.Platform.isDesktop ? "desktop-runtime-required" : "active-producer-required" };
+    if (!import_obsidian30.Platform.isDesktop || getDeviceRole() !== "producer") {
+      return { status: "BLOCKED", recordsTotal: 0, providerCalls: 0, reason: !import_obsidian30.Platform.isDesktop ? "desktop-runtime-required" : "active-producer-required" };
     }
     try {
       const legacy = await readCanonicalEmbeddingRecords(this.app);
@@ -33455,8 +33559,8 @@ Provider calls: 0`);
         providerCalls: 0,
         ...status === "FAIL" ? { reason: (_f = (_e = (_d = publication.error) != null ? _d : published.error) != null ? _e : binary.reason) != null ? _f : "post-backfill-validation-failed" } : {}
       };
-      if (await this.app.vault.adapter.exists((0, import_obsidian31.normalizePath)(".lina/producer"))) {
-        await this.app.vault.adapter.write((0, import_obsidian31.normalizePath)(".lina/producer/g6-embedding-input-hash-backfill.json"), JSON.stringify(report, null, 2));
+      if (await this.app.vault.adapter.exists((0, import_obsidian30.normalizePath)(".lina/producer"))) {
+        await this.app.vault.adapter.write((0, import_obsidian30.normalizePath)(".lina/producer/g6-embedding-input-hash-backfill.json"), JSON.stringify(report, null, 2));
       }
       return report;
     } catch (error) {
@@ -33465,7 +33569,7 @@ Provider calls: 0`);
   }
   async diagnoseM3Canonical() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
-    const isDesktop = import_obsidian31.Platform.isDesktop;
+    const isDesktop = import_obsidian30.Platform.isDesktop;
     const role = getDeviceRole();
     const pathResolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
     const pathResolution = pathResolver.resolveStorePath();
@@ -33582,8 +33686,8 @@ Provider calls: 0`);
     };
     try {
       const adapter = this.app.vault.adapter;
-      const dirPath = (0, import_obsidian31.normalizePath)(".lina/producer");
-      const filePath = (0, import_obsidian31.normalizePath)(".lina/producer/m3-canonical-diagnostic.json");
+      const dirPath = (0, import_obsidian30.normalizePath)(".lina/producer");
+      const filePath = (0, import_obsidian30.normalizePath)(".lina/producer/m3-canonical-diagnostic.json");
       if (status !== "BLOCKED" && await adapter.exists(dirPath)) {
         await adapter.write(filePath, JSON.stringify(report, null, 2));
       }
@@ -33597,11 +33701,11 @@ Provider calls: 0`);
     const canonicalEnabled = this.settings.producerSqliteCanonicalEnabled === true;
     const immutableEnabled = this.settings.producerImmutableGenerationPublicationEnabled === true;
     const adapter = this.app.vault.adapter;
-    const currentPath2 = (0, import_obsidian31.normalizePath)(".lina/published/CURRENT");
+    const currentPath2 = (0, import_obsidian30.normalizePath)(".lina/published/CURRENT");
     const currentBefore = await adapter.exists(currentPath2) ? (await adapter.read(currentPath2)).trim() : void 0;
     let report;
-    if (!import_obsidian31.Platform.isDesktop || role !== "producer" || !canonicalEnabled || !immutableEnabled) {
-      report = { status: "BLOCKED", currentBefore, providerCalls: 0, reason: !import_obsidian31.Platform.isDesktop ? "desktop-runtime-required" : role !== "producer" ? "active-producer-required" : !canonicalEnabled ? "canonical-mode-disabled" : "immutable-publication-disabled" };
+    if (!import_obsidian30.Platform.isDesktop || role !== "producer" || !canonicalEnabled || !immutableEnabled) {
+      report = { status: "BLOCKED", currentBefore, providerCalls: 0, reason: !import_obsidian30.Platform.isDesktop ? "desktop-runtime-required" : role !== "producer" ? "active-producer-required" : !canonicalEnabled ? "canonical-mode-disabled" : "immutable-publication-disabled" };
     } else {
       try {
         const resolver = new DefaultProducerLocalStorePathResolver(this.app.vault.adapter);
@@ -33619,8 +33723,8 @@ Provider calls: 0`);
         report = { status: "FAIL", currentBefore, providerCalls: 0, reason: error instanceof Error ? error.message : String(error) };
       }
     }
-    const dir = (0, import_obsidian31.normalizePath)(".lina/producer");
-    if (await this.app.vault.adapter.exists(dir)) await this.app.vault.adapter.write((0, import_obsidian31.normalizePath)(`${dir}/m4-immutable-publication-diagnostic.json`), JSON.stringify({
+    const dir = (0, import_obsidian30.normalizePath)(".lina/producer");
+    if (await this.app.vault.adapter.exists(dir)) await this.app.vault.adapter.write((0, import_obsidian30.normalizePath)(`${dir}/m4-immutable-publication-diagnostic.json`), JSON.stringify({
       executionContext: "obsidian-plugin",
       role,
       canonicalModeEnabled: canonicalEnabled,

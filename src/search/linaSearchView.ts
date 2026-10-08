@@ -32,6 +32,7 @@ import {
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
+import { normalizeSearchQuery } from "./queryNormalization";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -3719,7 +3720,11 @@ export class LinaSearchView extends ItemView {
 
     // Aplicar prefixo search_query: para modelos Nomic, tal como os embeddings foram indexados com search_document:
     const prefixMode = getPrefixModeForModel(settingsModel);
-    const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
+    const normalizedQuery = normalizeSearchQuery(query);
+    if (!normalizedQuery) {
+      return;
+    }
+    const queryWithPrefix = applyEmbeddingPrefix(normalizedQuery, prefixMode, true);
 
     // Gerar embedding da query com o provider configurado.
     const queryResult = await generateSingleEmbedding(

@@ -1,3 +1,5 @@
+/* global __LINA_BUILD_PROFILE__ -- injected by esbuild for profile-specific dead-code elimination */
+
 import { Notice, Platform, Plugin, TFile, normalizePath } from "obsidian";
 import {
   DEFAULT_SETTINGS,
@@ -33,6 +35,10 @@ import { publishSqliteCanonicalGeneration, type ImmutablePublicationResult } fro
 import type { PublishedGenerationFileAdapter } from "./src/index/publishedGenerationWriter";
 import { resolveEffectiveEmbeddingsConfig } from "./src/settings/effectiveAiConfig";
 import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
+import { activateM6TestProfilePanel, registerM6TestProfileFeatures } from "./src/views/m6TestProfileFeatures.js";
+import { registerM6TestProfileCommands } from "./src/views/m6TestProfileCommands.js";
+
+const IS_TEST_BUILD = typeof __LINA_BUILD_PROFILE__ !== "undefined" && __LINA_BUILD_PROFILE__ === "test";
 import {
   type DeviceRuntimeState,
   resolveDeviceRuntimeState,
@@ -147,7 +153,8 @@ import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/sear
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
 import { OwnershipTransferConfirmationModal } from "./src/device/ownershipTransferConfirmationModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
-import { M6_TESTS_PANEL_VIEW_TYPE, M6TestsPanelView } from "./src/views/m6TestsPanelView";
+import { BUILD_PROFILE } from "./src/buildProfile";
+import { getRuntimeTraceService, traceRuntime, type RuntimeTraceEvent } from "./src/runtimeTrace.js";
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
@@ -544,10 +551,9 @@ export default class LinaPlugin extends Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    this.registerView(
-      M6_TESTS_PANEL_VIEW_TYPE,
-      (leaf) => new M6TestsPanelView(leaf, this)
-    );
+    if (IS_TEST_BUILD) {
+      registerM6TestProfileFeatures(this);
+    }
 
     const runDiagnostics = () => {
     };
@@ -605,11 +611,9 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: "abrir-painel-testes-m6",
-      name: `Abrir painel Testes ${"M" + "6"}`,
-      callback: () => { void this.activateM6TestsPanel(); },
-    });
+    if (IS_TEST_BUILD) {
+      registerM6TestProfileCommands(this);
+    }
 
     this.addCommand({
       id: "reconstruir-indice-textual",
@@ -1011,15 +1015,12 @@ export default class LinaPlugin extends Plugin {
   }
 
   async activateM6TestsPanel(): Promise<void> {
-    const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(M6_TESTS_PANEL_VIEW_TYPE)[0];
-    if (!leaf) {
-      const rightLeaf = workspace.getRightLeaf(false);
-      if (!rightLeaf) throw new Error("Não foi possível criar painel Testes M6.");
-      leaf = rightLeaf;
-      await leaf.setViewState({ type: M6_TESTS_PANEL_VIEW_TYPE, active: true });
-    }
-    await workspace.revealLeaf(leaf);
+    if (!IS_TEST_BUILD) return;
+    await activateM6TestProfilePanel(this);
+  }
+
+  getBuildProfile(): "dev" | "test" {
+    return BUILD_PROFILE;
   }
 
   getTextIndexRebuildProgress(): TextIndexRebuildProgress {
@@ -1829,6 +1830,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   async getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {
+    traceRuntime("runtime-index", "runtime-index:source-selection", "info", { cutoverEnabled: getLocalPublishedGenerationCutoverEnabled(), chunkCount: chunks.length });
     if (!this.runtimeEmbeddingIndexCache) {
       this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
         this.app,
@@ -1847,6 +1849,7 @@ export default class LinaPlugin extends Plugin {
       this.publishedRuntimeEmbeddingIndexCache?.invalidate();
       this.publishedRuntimeSelection = { selectedSource: "LEGACY", fallbackActive: false, fallbackCount: 0 };
       if (legacy && getLocalPublishedGenerationShadowEnabled()) void this.getPublishedGenerationShadowAuditor().schedule(legacy);
+      traceRuntime("runtime-index", legacy ? "runtime-index:ready" : "runtime-index:blocked", legacy ? "ok" : "blocked", { source: "legacy" });
       return legacy;
     }
 
@@ -1866,6 +1869,7 @@ export default class LinaPlugin extends Plugin {
       const reader = new PublishedGenerationReader({ adapter: this.app.vault.adapter, digest: createWebCryptoEmbeddingDigest(), limits: getEmbeddingBinaryResourceLimits(getDeviceCapabilities().resourceProfile) });
       const read = await reader.read();
       if (read.status !== "OK" || !read.index || read.formatVersion !== 5) {
+        traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { source: "published", readerStatus: read.status });
         blockPublished(read.status, read.generationId, read.status);
         return null;
       }
@@ -1886,6 +1890,7 @@ export default class LinaPlugin extends Plugin {
       });
       const contractMatch = semantic.status === "COMPATIBLE";
       if (!eligibility.eligible || !contractMatch) {
+        traceRuntime("runtime-index", "runtime-index:blocked", "blocked", { source: "published", reason: eligibility.reason ?? semantic.status });
         blockPublished(eligibility.reason ?? semantic.status, read.generationId, read.status);
         this.publishedRuntimeSelection = { ...this.publishedRuntimeSelection, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
         return null;
@@ -1894,8 +1899,10 @@ export default class LinaPlugin extends Plugin {
       const published = this.publishedRuntimeEmbeddingIndexCache.getOrCreate(read.index);
       this.runtimeEmbeddingIndexCache?.invalidate("manual");
       this.publishedRuntimeSelection = { selectedSource: "PUBLISHED", publishedGenerationId: read.generationId, fallbackActive: false, fallbackCount: this.publishedRuntimeSelection.fallbackCount, lastReaderStatus: read.status, lastConsumerEligibility: eligibility, legacyContractMatch: contractMatch };
+      traceRuntime("runtime-index", "runtime-index:ready", "ok", { source: "published", generationId: read.generationId ?? "unknown", count: published.count });
       return published;
     } catch (error) {
+      traceRuntime("runtime-index", "runtime-index:error", "error", undefined, error);
       blockPublished(error instanceof Error ? error.message : "published-runtime-error");
       return null;
     }
@@ -1955,6 +1962,23 @@ export default class LinaPlugin extends Plugin {
 
   invalidateM6RuntimeCache(): void {
     this.invalidateRuntimeEmbeddingIndex("manual");
+  }
+
+  getM6RuntimeTrace(): readonly RuntimeTraceEvent[] {
+    return getRuntimeTraceService().list();
+  }
+
+  clearM6RuntimeTrace(): void {
+    getRuntimeTraceService().clear();
+  }
+
+  exportM6RuntimeTrace(): string {
+    return getRuntimeTraceService().exportText({
+      version: this.manifest.version,
+      build: BUILD_PROFILE.toUpperCase(),
+      role: this.getLocalDeviceRole() ?? "unassigned",
+      resourceProfile: getDeviceCapabilities().resourceProfile,
+    });
   }
 
   getPublishedGenerationShadowDiagnostic(): PublishedShadowDiagnostic {

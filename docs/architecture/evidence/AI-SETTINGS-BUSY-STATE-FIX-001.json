@@ -1,0 +1,32 @@
+{
+  "id": "AI-SETTINGS-BUSY-STATE-FIX-001",
+  "rootCause": "runConnectionTest/saveCredential/clearCredential called getConnectionConfiguration outside try (and completeConnection re-called it inside catch); a throwing resolver left lifecycle pending and connection.status='pending' unreleased",
+  "embeddingFailureCause": {
+    "status": "undetermined",
+    "reason": "not reproduced in real Obsidian; no error log available in the DEV vault; no speculative fix applied"
+  },
+  "stuckState": ["lifecycle.pending[analysis|embeddings|credentials-*]", "bindings.connections[domain].status === 'pending'"],
+  "uiDisabledCondition": "action.isDisabled() => disposed || connection.status === 'pending' (setDisabled on Obsidian button); no CSS disabling found",
+  "cleanupFix": "configuration captured once inside try; finally releases unsettled pending when token is still current; run() handles rejection",
+  "persistenceImpact": "none; no transient busy state in data.json or settings; no schema change",
+  "tests": {
+    "newFile": "tests/settings/aiSettingsBusyStateRelease.test.ts",
+    "newTests": 9,
+    "suite": { "files": 187, "tests": 2418, "result": "pass" }
+  },
+  "gates": {
+    "test": "pass",
+    "typecheck": "pass",
+    "lint:obsidian:strict": "pass",
+    "build": "pass",
+    "build:dev": "pass (installed to zettel)",
+    "release-check": "pass",
+    "git diff --check": "pass"
+  },
+  "runtimeValidation": {
+    "classification": "NOT_EXECUTED",
+    "note": "OBSIDIAN_RUNTIME requires manual run in vault zettel: test connection -> generate embeddings -> Settings -> test connection"
+  },
+  "commit": false,
+  "push": false
+}

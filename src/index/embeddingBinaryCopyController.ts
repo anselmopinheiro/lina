@@ -65,8 +65,8 @@ export class BinaryEmbeddingCopyController {
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       if (runtime.sourceIdentity.publicationId !== canonical.publicationId) return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
       const pairState = await this.readCanonicalPairState(canonical);
-      if (pairState === "resource-limit-exceeded") return { status: "unsupported", reason: "Não foi possível validar o par canónico dentro do limite de recursos." };
-      if (pairState !== "consistent" || runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A cópia binária não corresponde à publicação canónica." };
+      if (pairState === "inconsistent") return { status: "invalid", reason: "A cópia binária não corresponde à publicação canónica." };
+      if (runtime.count !== canonical.totalEmbeddings || runtime.dimensions !== canonical.dimensions || runtime.provider !== canonical.provider || runtime.model !== canonical.model || runtime.sourceIdentity.inputVersion !== canonical.inputVersion || runtime.sourceIdentity.prefixMode !== canonical.prefixMode) return { status: "invalid", reason: "A cópia binária não corresponde à publicação canónica." };
       return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
     } catch (error) { return { status: "invalid", reason: sanitize(error) }; }
   }

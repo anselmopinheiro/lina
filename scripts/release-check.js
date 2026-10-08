@@ -44,7 +44,17 @@ if (missing.length > 0) {
 
 ok("all required release files exist");
 
-// 4. Check that release artifact attestations are configured in GitHub Actions.
+// 4. A release is always the DEV profile. TEST-only diagnostics must be absent.
+const releaseBundle = fs.readFileSync(path.join(root, "main.js"), "utf8");
+const testOnlyMarkers = ["lina-m6-tests-panel", "abrir-painel-testes-m6"];
+const leakedMarker = testOnlyMarkers.find((marker) => releaseBundle.includes(marker));
+if (leakedMarker) {
+  fail(`TEST-only M6 diagnostics leaked into the DEV release bundle: ${leakedMarker}`);
+}
+
+ok("DEV release bundle excludes TEST-only M6 diagnostics");
+
+// 5. Check that release artifact attestations are configured in GitHub Actions.
 const workflowPath = path.join(root, ".github", "workflows", "ci.yml");
 if (!fs.existsSync(workflowPath)) {
   fail(".github/workflows/ci.yml missing");
@@ -57,5 +67,5 @@ if (!workflow.includes("actions/attest-build-provenance@v2")) {
 
 ok("artifact attestations configured in GitHub Actions workflow");
 
-// 5. Final OK
+// 6. Final OK
 console.log("\nREADY FOR OBSIDIAN RELEASE");

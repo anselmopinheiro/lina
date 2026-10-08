@@ -12,6 +12,7 @@ import {
 import { Chunk } from "./chunker";
 import { hashContent } from "./noteHasher";
 import { readIndexedChunks } from "./indexStore";
+import { traceRuntime } from "../runtimeTrace.js";
 import {
   calculateEmbeddingState,
   EmbeddingStateSummary,
@@ -1677,15 +1678,50 @@ export async function readPublishedEmbeddingIdentity(app: App): Promise<{ identi
   return parsePublishedEmbeddingIdentity(await readEmbeddingManifest(app));
 }
 
+/**
+ * Structural (manifest-level, no vectors loaded) evidence that the derived binary copy belongs to the
+ * current canonical publication. Used only when the canonical JSONL exceeds the device read ceiling,
+ * so the status does not claim "no searchable vectors" for a valid binary copy. The real search still
+ * validates the binary fully in `RuntimeEmbeddingIndexCache` (no silent fallback).
+ */
+async function readBinaryCopyCountForCurrentPublication(app: App): Promise<number> {
+  try {
+    const canonical = await readEmbeddingManifest(app);
+    const embeddings = isObject(canonical) && isObject(canonical.embeddings) ? canonical.embeddings : undefined;
+    if (!embeddings || typeof embeddings.publicationId !== "string") return 0;
+    const adapter = app.vault.adapter;
+    const binaryPath = normalizePath(".lina/index/embeddings.binary.manifest.json");
+    if ((await adapter.stat(binaryPath))?.type !== "file") return 0;
+    const binary: unknown = JSON.parse(await adapter.read(binaryPath));
+    if (!isObject(binary)) return 0;
+    const count = binary.recordCount;
+    const matches = binary.format === "lina-embeddings-binary"
+      && binary.sourcePublicationId === embeddings.publicationId
+      && binary.provider === embeddings.provider
+      && binary.model === embeddings.model
+      && binary.dimensions === embeddings.dimensions
+      && typeof count === "number" && Number.isInteger(count) && count > 0
+      && count === embeddings.totalEmbeddings;
+    return matches ? count : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function readEmbeddingStatus(
   app: App,
   options: ReadEmbeddingStatusOptions = {}
 ): Promise<EmbeddingIndexStatus | null> {
+  traceRuntime("embedding-status", "embedding-status:start", "info", { resourceProfile: options.resourceProfile ?? "default" });
   try {
     const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
     const resourceProfile = options.resourceProfile ?? defaultEmbeddingResourceProfile();
     const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
     if (canonicalFile.readability === "unreadable" || canonicalFile.readability === "resource-limit-exceeded") {
+        const binaryCount = canonicalFile.readability === "resource-limit-exceeded"
+          ? await readBinaryCopyCountForCurrentPublication(app)
+          : 0;
+        traceRuntime("embedding-status", canonicalFile.readability === "resource-limit-exceeded" ? "embedding-status:resource-limit" : "embedding-status:end", canonicalFile.readability === "resource-limit-exceeded" ? "blocked" : "ok", { canonicalPairState: canonicalFile.canonicalPairState, binaryCount });
         return {
           exists: true,
           totalEmbeddings: 0,
@@ -1695,7 +1731,7 @@ export async function readEmbeddingStatus(
           missingCount: 0,
           staleCount: 0,
           obsoleteCount: 0,
-          validForSearchCount: 0,
+          validForSearchCount: binaryCount,
           reusableForNextGenerationCount: 0,
           recoverableCheckpointCount: 0,
           operationActive: options.operationActive ?? false,
@@ -1751,6 +1787,7 @@ export async function readEmbeddingStatus(
     const expectedPrefixMode = nextGenerationIdentity?.prefixMode;
     const manifestPrefixMode = publishedIdentity.prefixMode;
 
+    traceRuntime("embedding-status", "embedding-status:end", "ok", { canonicalPairState: canonicalFile.canonicalPairState, validForSearchCount: state.summary.validForSearchCount, dimensions: publishedIdentity.dimensions ?? 0 });
     return {
       ...state.summary,
       canonicalPairState: canonicalFile.canonicalPairState,
@@ -1771,6 +1808,7 @@ export async function readEmbeddingStatus(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    traceRuntime("embedding-status", "embedding-status:error", "error", undefined, error);
     return {
       exists: false,
       totalEmbeddings: 0,

@@ -5,8 +5,9 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "npm run typecheck && node esbuild.config.mjs production && npm run copy:test-vault",
-    "copy:test-vault": "node scripts/copy-test-vault.mjs",
+    "build": "npm run typecheck && node esbuild.config.mjs production dev",
+    "build:dev": "npm run typecheck && node esbuild.config.mjs production dev && node scripts/copy-build-to-vault.mjs dev",
+    "build:test": "npm run typecheck && node esbuild.config.mjs production test && node scripts/copy-build-to-vault.mjs test",
     "lint": "npm run lint:obsidian:strict",
     "lint:obsidian": "eslint main.ts \"src/**/*.ts\"",
     "lint:obsidian:strict": "eslint main.ts \"src/**/*.ts\" --max-warnings=0",

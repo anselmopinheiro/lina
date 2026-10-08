@@ -18,6 +18,8 @@ import {
   normalizeSupportedProvider,
 } from "../settings";
 import { shouldExcludeContent } from "../index/indexExclusions";
+import { traceRuntime } from "../runtimeTrace.js";
+import { normalizeSearchQuery } from "./queryNormalization";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
@@ -138,7 +140,17 @@ export class SemanticSearchModal extends Modal {
   }
 
   private async doSearch() {
-    const query = this.queryInput.value.trim();
+    traceRuntime("semantic-search", "semantic-search:start", "info");
+    try {
+      await this.doSearchInternal();
+    } catch (error) {
+      traceRuntime("semantic-search", "semantic-search:error", "error", undefined, error);
+      throw error;
+    }
+  }
+
+  private async doSearchInternal() {
+    const query = normalizeSearchQuery(this.queryInput.value);
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
     this.diagnosticContainer.addClass("lina-hidden");
@@ -177,6 +189,7 @@ export class SemanticSearchModal extends Modal {
         statusEl.textContent = this.getRuntimeLoadMessage();
         return;
       }
+      traceRuntime("semantic-search", "semantic-search:index-ready", "ok", { source: runtimeIndex.sourceIdentity.storageFormat, count: runtimeIndex.count, dimensions: runtimeIndex.dimensions });
       if (
         runtimeIndex.provider.toLowerCase() !== settingsProvider
         || runtimeIndex.model !== settingsModel
@@ -209,6 +222,7 @@ export class SemanticSearchModal extends Modal {
         return;
       }
       const results = searchRuntimeSemanticIndex(queryResult.embedding, runtimeIndex, safeChunks);
+      traceRuntime("semantic-search", "semantic-search:results", "ok", { resultCount: results.length });
       statusEl.remove();
       if (results.length === 0) this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
       else for (const result of results) this.renderResult(result);
@@ -317,6 +331,7 @@ export class SemanticSearchModal extends Modal {
     const queryEmbedding = queryResult.embedding;
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, searchableEmbeddings, safeChunks);
     const results = diagnosticResults.finalResults;
+    traceRuntime("semantic-search", "semantic-search:results", "ok", { resultCount: results.length });
 
     statusEl.remove();
 

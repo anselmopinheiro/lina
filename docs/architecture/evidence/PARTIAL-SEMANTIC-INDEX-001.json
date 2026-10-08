@@ -1,0 +1,17 @@
+{
+  "phase": "PARTIAL-SEMANTIC-INDEX-IMPLEMENTATION-001",
+  "evidence": {
+    "static": "PASS",
+    "unit_test": "PASS",
+    "integration_test": "PASS",
+    "obsidian_runtime_android": "NOT_EXECUTED",
+    "desktop_regression": "NOT_EXECUTED"
+  },
+  "contract": {
+    "partialSearch": "valid binary records are compacted and searchable",
+    "unavailable": "ambiguous mapping or zero valid records remains blocked",
+    "persistenceChanges": false,
+    "providerCalls": 0
+  },
+  "knownDebt": ["hashContent remains a 32-bit non-cryptographic hash"]
+}

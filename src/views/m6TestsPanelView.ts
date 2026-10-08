@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
+import type { RuntimeTraceEvent } from "../runtimeTrace";
 
 export const M6_TESTS_PANEL_VIEW_TYPE = "lina-m6-tests-panel";
 const M6_PANEL_TITLE = `Testes ${"M" + "6"}`;
@@ -8,6 +9,9 @@ export interface M6TestsPanelHost {
   getM6CutoverEnabled(): boolean;
   setM6CutoverEnabled(value: boolean): Promise<void>;
   invalidateM6RuntimeCache(): void;
+  getM6RuntimeTrace(): readonly RuntimeTraceEvent[];
+  clearM6RuntimeTrace(): void;
+  exportM6RuntimeTrace(): string;
 }
 
 const sections: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -51,6 +55,7 @@ export class M6TestsPanelView extends ItemView {
     content.empty();
     content.addClass("lina-m6-tests-panel");
     content.createEl("h2", { text: M6_PANEL_TITLE });
+    content.createEl("p", { text: "Build profile: TEST", cls: "lina-m6-tests-profile" });
 
     const cutover = content.createDiv({ cls: "lina-m6-tests-section" });
     cutover.createEl("h3", { text: "Cutover local" });
@@ -63,6 +68,20 @@ export class M6TestsPanelView extends ItemView {
       void this.host.setM6CutoverEnabled(toggle.checked)
         .then(() => this.refresh())
         .catch(() => this.refresh());
+    });
+
+    const trace = this.host.getM6RuntimeTrace();
+    const traceSection = content.createDiv({ cls: "lina-m6-tests-section" });
+    traceSection.createEl("h3", { text: "Runtime trace" });
+    traceSection.createEl("p", { text: `Eventos: ${trace.length}. Último: ${trace.at(-1)?.event ?? "—"}` });
+    const traceActions = traceSection.createDiv({ cls: "lina-m6-tests-actions" });
+    const traceRefresh = traceActions.createEl("button", { text: "Atualizar" });
+    traceRefresh.addEventListener("click", () => { void this.refresh(); });
+    const clearTrace = traceActions.createEl("button", { text: "Limpar trace" });
+    clearTrace.addEventListener("click", () => { this.host.clearM6RuntimeTrace(); void this.refresh(); });
+    const copyTrace = traceActions.createEl("button", { text: "Copiar log" });
+    copyTrace.addEventListener("click", () => {
+      void navigator.clipboard.writeText(this.host.exportM6RuntimeTrace()).then(() => this.refresh()).catch(() => this.refresh());
     });
 
     for (const [heading, keys] of sections) {

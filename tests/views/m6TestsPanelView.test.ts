@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const panelSource = readFileSync(resolve(process.cwd(), "src/views/m6TestsPanelView.ts"), "utf8");
+const testFeatureSource = readFileSync(resolve(process.cwd(), "src/views/m6TestProfileFeatures.ts"), "utf8");
+const testCommandSource = readFileSync(resolve(process.cwd(), "src/views/m6TestProfileCommands.ts"), "utf8");
 const mainSource = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
 const settingsSource = readFileSync(resolve(process.cwd(), "src/settings/pureDeclarativeSettingsBlueprint.ts"), "utf8");
 
@@ -16,10 +18,12 @@ describe("M6 tests sidebar panel", () => {
   });
 
   it("registers one dedicated view and opens or reveals a single existing leaf", () => {
-    expect(mainSource).toContain("this.registerView(\n      M6_TESTS_PANEL_VIEW_TYPE");
-    expect(mainSource).toContain('id: "abrir-painel-testes-m6"');
-    expect(mainSource).toContain("workspace.getLeavesOfType(M6_TESTS_PANEL_VIEW_TYPE)[0]");
-    expect(mainSource).toContain("await workspace.revealLeaf(leaf)");
+    expect(mainSource).toContain("registerM6TestProfileFeatures(this)");
+    expect(mainSource).toContain("registerM6TestProfileCommands(this)");
+    expect(testFeatureSource).toContain("plugin.registerView(M6_TESTS_PANEL_VIEW_TYPE");
+    expect(testCommandSource).toContain('id: "abrir-painel-testes-m6"');
+    expect(testFeatureSource).toContain("workspace.getLeavesOfType(M6_TESTS_PANEL_VIEW_TYPE)[0]");
+    expect(testFeatureSource).toContain("await workspace.revealLeaf(leaf)");
   });
 
   it("keeps diagnostics read-only and delegates only the canonical cache invalidation", () => {

@@ -1,5 +1,6 @@
 import { IndexedNote } from "../index/indexStore";
 import { Chunk } from "../index/chunker";
+import { normalizeSearchQuery } from "./queryNormalization";
 
 export interface SearchResult {
   path: string;
@@ -39,12 +40,10 @@ const DEFAULT_OPTIONS: SearchOptions = {
 };
 
 export function normaliseSearchText(value: string): string {
-  return value
-    .toLowerCase()
+  return normalizeSearchQuery(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .replace(/\s+/g, " ");
+    .normalize("NFC");
 }
 
 export function createSnippet(text: string, query: string, maxContext: number = 120): string {

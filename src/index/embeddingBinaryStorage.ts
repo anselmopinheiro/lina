@@ -1,6 +1,7 @@
 import type { EmbeddingSpaceIdentity } from "./embeddingUpdatePlan";
 import type { EmbeddingRecord } from "./embeddingPersistence";
 import type { RuntimeEmbeddingIndex, RuntimeEmbeddingMetadata } from "../search/runtimeEmbeddingIndex";
+import { traceRuntime } from "../runtimeTrace.js";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 import {
   createVectorContract,
@@ -423,7 +424,10 @@ const backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata:
 const canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
 
 export async function readBinaryEmbeddingStorage(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, options: BinaryEmbeddingReadOptions = {}): Promise<RuntimeEmbeddingIndex> {
+  traceRuntime("binary-storage", "binary-storage:manifest-read");
+  try {
   const candidate = await validateSet(adapter, digest, canonicalPaths, options);
+  traceRuntime("binary-storage", "binary-storage:vectors-read", "info", { recordCount: candidate.manifest.recordCount, dimensions: candidate.manifest.dimensions });
   const records = candidate.records;
   const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
   const data = new DataView(candidate.vectors);
@@ -432,14 +436,20 @@ export async function readBinaryEmbeddingStorage(adapter: BinaryEmbeddingDataAda
     vectors[index] = data.getFloat32(index * 4, true);
   }
   const manifestStat = await adapter.stat(canonicalPaths.manifest);
-  return {
+  const result: RuntimeEmbeddingIndex = {
     dimensions: candidate.manifest.dimensions, count: candidate.manifest.recordCount, vectors,
-    records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record), provider: candidate.manifest.provider, model: candidate.manifest.model,
+    records: records, provider: candidate.manifest.provider, model: candidate.manifest.model,
     sourceIdentity: { provider: candidate.manifest.provider, model: candidate.manifest.model, dimensions: candidate.manifest.dimensions,
       inputVersion: Number(candidate.manifest.inputFormatVersion), prefixMode: candidate.manifest.prefixMode as "none" | "nomic-search-query-document",
       updatedAt: candidate.manifest.createdAt, canonicalMtime: manifestStat?.mtime ?? 0, canonicalSize: manifestStat?.size ?? 0,
       storageFormat: "binary-v1", publicationId: candidate.manifest.sourcePublicationId, binaryGenerationId: candidate.manifest.generationId },
   };
+  traceRuntime("binary-storage", "binary-storage:ready", "ok", { recordCount: result.count, dimensions: result.dimensions, publicationId: result.sourceIdentity.publicationId ?? "legacy" });
+  return result;
+  } catch (error) {
+    traceRuntime("binary-storage", "binary-storage:error", "error", undefined, error);
+    throw error;
+  }
 }
 
 export interface ResolvedEmbeddingStorage { format: EmbeddingStorageFormat | null; reason: "default-jsonl" | "binary-opt-in" | "binary-fallback-jsonl" | "missing" | "binary-rejected"; index?: RuntimeEmbeddingIndex; }
