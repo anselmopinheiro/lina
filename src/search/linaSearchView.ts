@@ -44,6 +44,15 @@ import {
   type ContextualTagCandidate,
   type ExistingVaultTag,
 } from "./tagRecommendation";
+import {
+  buildYamlProposals,
+  buildContextualYamlCandidates,
+  findYamlExistingProperty,
+  filterAllowedYamlProperties,
+  mergeYamlRecommendations,
+  parseFrontmatterProperties,
+  type ContextualYamlCandidate,
+} from "./yamlRecommendation";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -924,30 +933,6 @@ function filtrarLinksInternos(
   return valid;
 }
 
-/**
- * Remove propriedades YAML que não estão na lista permitida.
- * Remove sempre 'tags' do YAML, pois as tags são tratadas separadamente na secção "Tags sugeridas".
- */
-function filtrarYamlValido(
-  yaml: Record<string, string | string[]>,
-  allowedProperties: string
-): Record<string, string | string[]> {
-  const allowed = allowedProperties.split(",").map(p => p.trim().toLowerCase());
-  const filtered: Record<string, string | string[]> = {};
-
-  for (const [key, value] of Object.entries(yaml)) {
-    if (allowed.includes(key.toLowerCase())) {
-      // Remover sempre 'tags' do YAML - as tags são mostradas na secção "Tags sugeridas"
-      if (key.toLowerCase() === "tags") {
-        continue;
-      }
-      filtered[key] = value;
-    }
-  }
-
-  return filtered;
-}
-
 // ---------------------------------------------------------------------------
 // Funções de frontmatter/YAML (Fase 5B)
 // ---------------------------------------------------------------------------
@@ -975,24 +960,6 @@ function extrairFrontmatter(content: string): { frontmatter: string; body: strin
  * Analisa linhas de frontmatter YAML e devolve um mapa de propriedades.
  * Não usa parser YAML completo para evitar dependências.
  */
-function parseFrontmatterLines(frontmatter: string): Map<string, string> {
-  const map = new Map<string, string>();
-  const lines = frontmatter.split("\n");
-  let currentKey = "";
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Ignorar linhas de lista (ex: "- tag")
-    if (trimmed.startsWith("- ")) continue;
-    const colonIndex = trimmed.indexOf(":");
-    if (colonIndex > 0) {
-      currentKey = trimmed.substring(0, colonIndex).trim();
-      const value = trimmed.substring(colonIndex + 1).trim();
-      map.set(currentKey, value);
-    }
-  }
-  return map;
-}
-
 /**
  * Verifica se uma secção já existe no corpo da nota.
  */
@@ -3504,7 +3471,7 @@ export class LinaSearchView extends ItemView {
       return {};
     }
 
-    return filtrarYamlValido(json.yaml, this.plugin.settings.yamlAllowedProperties);
+    return filterAllowedYamlProperties(json.yaml, this.plugin.settings.yamlAllowedProperties);
   }
 
   private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
@@ -4798,6 +4765,31 @@ ${truncatedContent}${truncationNote}
     );
   }
 
+  private async getContextualYamlCandidates(relatedNotes: RelatedNote[]): Promise<ContextualYamlCandidate[]> {
+    if (relatedNotes.length === 0) return [];
+
+    const relatedSources = await Promise.all(relatedNotes.map(async (note) => {
+      const relatedFile = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(relatedFile instanceof TFile)) return null;
+
+      try {
+        const content = await this.app.vault.read(relatedFile);
+        const { frontmatter } = extrairFrontmatter(content);
+        return {
+          yaml: Object.fromEntries(parseFrontmatterProperties(frontmatter)),
+          score: note.score,
+        };
+      } catch {
+        return null;
+      }
+    }));
+
+    return buildContextualYamlCandidates(
+      relatedSources.filter((source): source is NonNullable<typeof source> => source !== null),
+      this.plugin.settings.yamlAllowedProperties,
+    );
+  }
+
   private async renderYamlCommandSuggestions(container: HTMLElement, suggestedYaml: SuggestedYaml, applyTarget: AskApplyTarget): Promise<void> {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter: Map<string, string> = new Map();
@@ -4806,42 +4798,40 @@ ${truncatedContent}${truncationNote}
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
-        existingFrontmatter = parseFrontmatterLines(frontmatter);
+        existingFrontmatter = parseFrontmatterProperties(frontmatter);
       }
     }
 
     const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
 
-    for (const [key, value] of Object.entries(suggestedYaml)) {
-      const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-      const existingEntry = this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, key);
-
-      if (existingEntry) {
-        if (existingEntry.value === valueStr || existingEntry.value.length === 0) {
+    for (const proposal of buildYamlProposals(suggestedYaml, existingFrontmatter, {
+      keyMatching: "case-insensitive",
+      emptyExistingValue: "already_exists",
+    })) {
+      if (proposal.status === "already_exists") {
           yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} — ${this.L.previewYamlAlreadyExists}`,
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlAlreadyExists}`,
             kind: "yaml",
-            value: key,
+            value: proposal.property,
             disabled: true,
             reason: "already_exists"
           });
-        } else {
+      } else if (proposal.status === "conflict") {
           yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} — ${this.L.previewYamlConflict}: ${existingEntry.value}`,
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlConflict}: ${proposal.existingValue}`,
             kind: "yaml",
-            value: key,
+            value: proposal.property,
             disabled: true,
             reason: "conflict"
           });
-        }
       } else {
         yamlItems.push({
-          id: `yaml_${key}`,
-          label: `${key}: ${valueStr} — ${this.L.previewYamlNew}`,
+          id: `yaml_${proposal.property}`,
+          label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlNew}`,
           kind: "yaml",
-          value: key,
+          value: proposal.property,
           disabled: false,
           reason: "new"
         });
@@ -4866,16 +4856,6 @@ ${truncatedContent}${truncationNote}
     applyBtn.addEventListener("click", () => {
       void this.applySelectedYamlFromCommand(applyTarget, suggestedYaml);
     });
-  }
-
-  private getFrontmatterEntryCaseInsensitive(frontmatter: Map<string, string>, key: string): { value: string } | undefined {
-    for (const [existingKey, existingValue] of frontmatter.entries()) {
-      if (existingKey.toLowerCase() === key.toLowerCase()) {
-        return { value: existingValue };
-      }
-    }
-
-    return undefined;
   }
 
   private getSelectedYamlKeysFromStructuredSelections(): string[] {
@@ -4935,10 +4915,10 @@ ${truncatedContent}${truncationNote}
       }
 
       const { frontmatter } = extrairFrontmatter(originalContent);
-      const existingFrontmatter = parseFrontmatterLines(frontmatter);
+      const existingFrontmatter = parseFrontmatterProperties(frontmatter);
       const newSelectedYamlKeys = selectedYamlKeys.filter(key => {
         const originalKey = Object.keys(suggestedYaml).find(suggestedKey => suggestedKey.toLowerCase() === key.toLowerCase());
-        return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === undefined;
+        return !!originalKey && findYamlExistingProperty(existingFrontmatter, originalKey, "case-insensitive") === undefined;
       });
 
       if (newSelectedYamlKeys.length === 0) {
@@ -5562,47 +5542,41 @@ ${truncatedContent}${truncationNote}
           const content = await this.app.vault.read(analysisFile);
           const { frontmatter } = extrairFrontmatter(content);
           if (frontmatter) {
-            existingFrontmatter = parseFrontmatterLines(frontmatter);
+            existingFrontmatter = parseFrontmatterProperties(frontmatter);
           }
         } catch (error) {
           console.warn("Não foi possível ler frontmatter existente:", error);
         }
       }
 
-      // Comparar cada propriedade sugerida com o frontmatter existente
-      for (const [key, value] of Object.entries(result.yaml)) {
-        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        const existingValue = existingFrontmatter.get(key);
-
-        if (existingValue) {
-          if (existingValue === valueStr) {
-            // Já existe com o mesmo valor
-            yamlItems.push({
-              id: `yaml_${key}`,
-              label: `${key}: ${valueStr} — ${this.L.previewYamlAlreadyExists}`,
-              kind: "yaml",
-              value: key,
-              disabled: true,
-              reason: "already_exists"
-            });
-          } else {
-            // Conflito: valor diferente
-            yamlItems.push({
-              id: `yaml_${key}`,
-              label: `${key}: ${valueStr} — ${this.L.previewYamlConflict}: ${existingValue}`,
-              kind: "yaml",
-              value: key,
-              disabled: true,
-              reason: "conflict"
-            });
-          }
-        } else {
-          // Novo campo
+      for (const proposal of buildYamlProposals(result.yaml, existingFrontmatter, {
+        keyMatching: "exact",
+        emptyExistingValue: "new",
+      })) {
+        if (proposal.status === "already_exists") {
           yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} — ${this.L.previewYamlNew}`,
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlAlreadyExists}`,
             kind: "yaml",
-            value: key,
+            value: proposal.property,
+            disabled: true,
+            reason: "already_exists"
+          });
+        } else if (proposal.status === "conflict") {
+          yamlItems.push({
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlConflict}: ${proposal.existingValue}`,
+            kind: "yaml",
+            value: proposal.property,
+            disabled: true,
+            reason: "conflict"
+          });
+        } else {
+          yamlItems.push({
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlNew}`,
+            kind: "yaml",
+            value: proposal.property,
             disabled: false,
             reason: "new"
           });
@@ -5777,7 +5751,8 @@ ${truncatedContent}${truncationNote}
 
     if (json && !error) {
       const contextualTagCandidates = await this.getContextualTagCandidates(relatedNotes);
-      this.prepareStructuredAnalysisResult(json, contextualTagCandidates);
+      const contextualYamlCandidates = await this.getContextualYamlCandidates(relatedNotes);
+      this.prepareStructuredAnalysisResult(json, contextualTagCandidates, contextualYamlCandidates);
 
       // Filtrar links internos
       if (json.internalLinks && allowedPaths.length > 0) {
@@ -6089,7 +6064,7 @@ ${truncatedContent}${truncationNote}
         const content = await this.app.vault.read(targetFile);
         const { frontmatter } = extrairFrontmatter(content);
         if (frontmatter) {
-          existingFrontmatter = parseFrontmatterLines(frontmatter);
+          existingFrontmatter = parseFrontmatterProperties(frontmatter);
         }
       } catch (error) {
         console.warn("Não foi possível ler frontmatter existente para contagem:", error);
@@ -6101,7 +6076,7 @@ ${truncatedContent}${truncationNote}
 
         const value = result.yaml[originalKey];
         const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        const existingValue = existingFrontmatter.get(originalKey);
+        const existingValue = findYamlExistingProperty(existingFrontmatter, originalKey, "exact");
 
         if (existingValue === valueStr) {
           existingYamlCount++;
@@ -6310,7 +6285,7 @@ ${truncatedContent}${truncationNote}
     selectedTags: string[]
   ): string {
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
-    const existingProps = parseFrontmatterLines(frontmatter);
+    const existingProps = parseFrontmatterProperties(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
     const normalizedSelectedTags = normalizeTags(selectedTags);
 
@@ -7186,6 +7161,7 @@ ${limitedContent}
   private prepareStructuredAnalysisResult(
     result: StructuredAnalysisResult,
     contextualTagCandidates: ContextualTagCandidate[] = [],
+    contextualYamlCandidates: ContextualYamlCandidate[] = [],
   ): void {
     const yamlTags = result.yaml?.tags;
     if (yamlTags && (!result.tags || result.tags.length === 0)) {
@@ -7196,7 +7172,11 @@ ${limitedContent}
     }
 
     if (result.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
-      result.yaml = filtrarYamlValido(result.yaml, this.plugin.settings.yamlAllowedProperties);
+      result.yaml = mergeYamlRecommendations(
+        result.yaml,
+        contextualYamlCandidates,
+        this.plugin.settings.yamlAllowedProperties,
+      );
     }
 
     if (!this.plugin.settings.yamlSuggestionsEnabled) {
