@@ -33,6 +33,14 @@ import {
 import { getStrings, UiStrings } from "../i18n/strings";
 import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 import { normalizeSearchQuery } from "./queryNormalization";
+import {
+  buildTagInventory,
+  formatTagUsageLabel,
+  normalizeTag,
+  normalizeTags,
+  prepareTagProposals,
+  type ExistingVaultTag,
+} from "./tagRecommendation";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -204,12 +212,6 @@ interface SelectedAnalysisLink {
   path: string;
   title: string;
   reason?: string;
-}
-
-interface ExistingVaultTag {
-  original: string;
-  normalized: string;
-  count: number;
 }
 
 interface FolderMoveResolution {
@@ -585,31 +587,9 @@ function getSearchSnippetDisplay(card: GroupedNoteCard): SearchSnippetDisplay | 
 // Funções auxiliares para normalização (Fase 5A)
 // ---------------------------------------------------------------------------
 
-/**
- * Normaliza uma tag: minúsculas, sem acentos, espaços convertidos para underscore.
- */
-function normalizarTag(tag: string): string {
-  let t = tag.trim().toLowerCase();
-  // Remover acentos
-  t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  // Converter espaços para underscore
-  t = t.replace(/\s+/g, "_");
-  // Remover caracteres não alfanuméricos exceto hífen e underscore
-  t = t.replace(/[^a-z0-9_-]/g, "");
-  return t;
-}
-
-/**
- * Normaliza uma lista de tags.
- */
-function normalizarTags(tags: string[]): string[] {
-  const normalized = tags.map(normalizarTag).filter(t => t.length > 0);
-  return [...new Set(normalized)];
-}
-
 function extrairTagsDeValorYaml(value: string | string[]): string[] {
   if (Array.isArray(value)) {
-    return normalizarTags(value);
+    return normalizeTags(value);
   }
 
   const trimmed = value.trim();
@@ -620,14 +600,10 @@ function extrairTagsDeValorYaml(value: string | string[]): string[] {
       .substring(1, trimmed.length - 1)
       .split(",")
       .map(tag => tag.trim().replace(/^["']|["']$/g, ""));
-    return normalizarTags(inlineItems);
+    return normalizeTags(inlineItems);
   }
 
-  return normalizarTags(trimmed.split(",").map(tag => tag.trim()));
-}
-
-function formatTagUsageLabel(count: number, alreadyUsedLabel: string): string {
-  return `${alreadyUsedLabel}: ${count}`;
+  return normalizeTags(trimmed.split(",").map(tag => tag.trim()));
 }
 
 function normalizeComparableText(text: string): string {
@@ -1047,7 +1023,7 @@ function extrairTagsDoFrontmatter(frontmatter: string): string[] {
     }
     if (inTags) {
       if (trimmed.startsWith("- ")) {
-        tags.push(normalizarTag(trimmed.substring(2).trim()));
+        tags.push(normalizeTag(trimmed.substring(2).trim()));
       } else if (trimmed.includes(":")) {
         inTags = false;
       } else if (trimmed.length === 0) {
@@ -1399,29 +1375,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private getExistingVaultTags(): Map<string, ExistingVaultTag> {
-    const existingTags = new Map<string, ExistingVaultTag>();
     const metaCache = this.app.metadataCache as unknown as Record<string, unknown> & { getTags?: () => Record<string, number> };
-    const rawTags = metaCache.getTags?.() ?? {};
-    const tags = rawTags;
-
-    for (const [original, rawCount] of Object.entries(tags)) {
-      const count = typeof rawCount === 'number' ? rawCount : 0;
-      const normalized = normalizarTag(original);
-      if (!normalized) continue;
-
-      const existing = existingTags.get(normalized);
-      if (existing) {
-        existing.count += count;
-      } else {
-        existingTags.set(normalized, {
-          original,
-          normalized,
-          count
-        });
-      }
-    }
-
-    return existingTags;
+    return buildTagInventory(metaCache.getTags?.() ?? {});
   }
 
   private getExistingVaultFolders(): string[] {
@@ -2274,7 +2229,7 @@ export class LinaSearchView extends ItemView {
     const uniqueTags: string[] = [];
     const seen = new Set<string>();
 
-    for (const tag of normalizarTags(tags)) {
+    for (const tag of normalizeTags(tags)) {
       if (seen.has(tag)) continue;
       seen.add(tag);
       uniqueTags.push(tag);
@@ -2342,7 +2297,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private formatTagsForClipboard(tags: string[]): string {
-    return normalizarTags(tags).join(", ");
+    return normalizeTags(tags).join(", ");
   }
 
   private formatSuggestedMetadataForClipboard(): string {
@@ -2461,8 +2416,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private renderPreservedSuggestedTags(container: HTMLElement, tags: string[]): void {
-    const validTags = normalizarTags(tags);
-    if (validTags.length === 0) return;
+    const tagProposals = prepareTagProposals(tags, this.getExistingVaultTags());
+    if (tagProposals.length === 0) return;
 
     const section = container.createDiv();
     section.addClass("lina-mt-12");
@@ -2473,11 +2428,11 @@ export class LinaSearchView extends ItemView {
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
 
-    const existingVaultTags = this.getExistingVaultTags();
-    for (const tag of validTags) {
-      const existingTag = existingVaultTags.get(tag);
-      const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
-      this.createPreservedMetadataItem(section, `tag::${tag}`, `${tag} - ${statusLabel}`, "tag", tag);
+    for (const proposal of tagProposals) {
+      const statusLabel = proposal.existsInVault
+        ? formatTagUsageLabel(proposal.usageCount ?? 0, this.L.previewTagExisting)
+        : this.L.previewTagNew;
+      this.createPreservedMetadataItem(section, `tag::${proposal.tag}`, `${proposal.tag} - ${statusLabel}`, "tag", proposal.tag);
     }
   }
 
@@ -3501,7 +3456,7 @@ export class LinaSearchView extends ItemView {
     const { json } = extrairJsonDaResposta(aiText);
     const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
     const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
-    return normalizarTags(rawTags).slice(0, maxTags);
+    return normalizeTags(rawTags).slice(0, maxTags);
   }
 
   private buildYamlCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
@@ -4674,23 +4629,20 @@ ${truncatedContent}${truncationNote}
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
 
-    const existingVaultTags = this.getExistingVaultTags();
-    const tagItems = suggestedTags.map(tag => {
-      const existingTag = existingVaultTags.get(tag);
-      const isAlreadyInNote = existingNoteTags.has(tag);
-      const statusLabel = isAlreadyInNote
+    const tagItems = prepareTagProposals(suggestedTags, this.getExistingVaultTags(), undefined, existingNoteTags).map(proposal => {
+      const statusLabel = proposal.existsInNote
         ? this.L.tagsAlreadyInNote
-        : existingTag
-        ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting)
+        : proposal.existsInVault
+        ? formatTagUsageLabel(proposal.usageCount ?? 0, this.L.previewTagExisting)
         : this.L.previewTagNew;
 
       return {
-        id: `tag_${tag}`,
-        label: `${tag} — ${statusLabel}`,
+        id: `tag_${proposal.tag}`,
+        label: `${proposal.tag} — ${statusLabel}`,
         kind: "tag" as const,
-        value: tag,
-        disabled: isAlreadyInNote,
-        reason: isAlreadyInNote ? "already_exists" : existingTag ? "existing-tag" : "new-tag"
+        value: proposal.tag,
+        disabled: proposal.existsInNote === true,
+        reason: proposal.existsInNote ? "already_exists" : proposal.existsInVault ? "existing-tag" : "new-tag"
       };
     });
 
@@ -4726,7 +4678,7 @@ ${truncatedContent}${truncationNote}
       }
     }
 
-    return normalizarTags(selectedTags);
+    return normalizeTags(selectedTags);
   }
 
   private async applySelectedTagsFromCommand(applyTarget: AskApplyTarget): Promise<void> {
@@ -4810,7 +4762,7 @@ ${truncatedContent}${truncationNote}
     const cache = this.app.metadataCache.getFileCache(file);
 
     for (const tagCache of cache?.tags ?? []) {
-      const normalizedTag = normalizarTag(tagCache.tag.replace(/^#/, ""));
+      const normalizedTag = normalizeTag(tagCache.tag.replace(/^#/, ""));
       if (normalizedTag) {
         tags.add(normalizedTag);
       }
@@ -5568,7 +5520,9 @@ ${truncatedContent}${truncationNote}
       }
     }
 
-    const validTags = result.tags ? normalizarTags(result.tags) : [];
+    const tagProposals = result.tags
+      ? prepareTagProposals(result.tags, this.getExistingVaultTags())
+      : [];
 
     // YAML sugerido - comparar com frontmatter existente
     if (result.yaml && Object.keys(result.yaml).length > 0) {
@@ -5638,19 +5592,18 @@ ${truncatedContent}${truncationNote}
     }
 
     // Tags sugeridas
-    if (validTags.length > 0) {
-      const existingVaultTags = this.getExistingVaultTags();
-      const tagItems = validTags.map(tag => {
-        const existingTag = existingVaultTags.get(tag);
-        const value = existingTag?.normalized ?? tag;
-        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
+    if (tagProposals.length > 0) {
+      const tagItems = tagProposals.map(proposal => {
+        const statusLabel = proposal.existsInVault
+          ? formatTagUsageLabel(proposal.usageCount ?? 0, this.L.previewTagExisting)
+          : this.L.previewTagNew;
 
         return {
-          id: `tag_${value}`,
-          label: `${value} — ${statusLabel}`,
+          id: `tag_${proposal.tag}`,
+          label: `${proposal.tag} — ${statusLabel}`,
           kind: "tag" as const,
-          value,
-          reason: existingTag ? "existing-tag" : "new-tag"
+          value: proposal.tag,
+          reason: proposal.existsInVault ? "existing-tag" : "new-tag"
         };
       });
       this.createStructuredSection(
@@ -6331,7 +6284,7 @@ ${truncatedContent}${truncationNote}
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
     const existingProps = parseFrontmatterLines(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
-    const normalizedSelectedTags = normalizarTags(selectedTags);
+    const normalizedSelectedTags = normalizeTags(selectedTags);
 
     // Construir novas linhas YAML
     const newLines: string[] = [];
@@ -7220,7 +7173,7 @@ ${limitedContent}
     }
 
     if (result.tags) {
-      result.tags = normalizarTags(result.tags).slice(0, this.plugin.settings.maxSuggestedTags ?? 8);
+      result.tags = normalizeTags(result.tags).slice(0, this.plugin.settings.maxSuggestedTags ?? 8);
     }
   }
 
@@ -7477,7 +7430,7 @@ ${limitedContent}
       if (!item.result) continue;
 
       const yaml = item.result.yaml ? { ...item.result.yaml } : {};
-      const tags = normalizarTags(item.result.tags ?? []);
+      const tags = normalizeTags(item.result.tags ?? []);
       if (Object.keys(yaml).length === 0 && tags.length === 0) continue;
 
       this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item.file.path), {
