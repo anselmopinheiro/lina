@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTagInventory,
+  buildContextualTagCandidates,
+  mergeTagRecommendations,
   normalizeTag,
   normalizeTags,
   prepareTagProposals,
@@ -51,5 +53,54 @@ describe("tag recommendation", () => {
 
   it("returns no proposals when the LLM provides no usable tags", () => {
     expect(prepareTagProposals(["", "###"], buildTagInventory({}), 8)).toEqual([]);
+  });
+
+  it("falls back to the current LLM order when there are no related notes", () => {
+    expect(mergeTagRecommendations(["LLM nova", "outra"], [], 8)).toEqual(["llm_nova", "outra"]);
+  });
+
+  it("ignores related notes that have no usable tags", () => {
+    expect(buildContextualTagCandidates([
+      { tags: [], score: 90 },
+      { tags: ["###"], score: 80 },
+    ], buildTagInventory({}))).toEqual([]);
+  });
+
+  it("aggregates one contextual tag across multiple related notes", () => {
+    expect(buildContextualTagCandidates([
+      { tags: ["Projeto"], score: 70 },
+      { tags: ["projeto", "outra"], score: 50 },
+    ], buildTagInventory({ projeto: 4 }))).toEqual([
+      { tag: "projeto", relatedNoteCount: 2, relatedScore: 120, globalUsageCount: 4 },
+      { tag: "outra", relatedNoteCount: 1, relatedScore: 50 },
+    ]);
+  });
+
+  it("ranks contextual tags by related-note frequency before lower-frequency tags", () => {
+    const candidates = buildContextualTagCandidates([
+      { tags: ["frequente", "rara"], score: 20 },
+      { tags: ["frequente"], score: 10 },
+    ], buildTagInventory({ rara: 99 }));
+
+    expect(candidates.map(candidate => candidate.tag)).toEqual(["frequente", "rara"]);
+  });
+
+  it("deduplicates contextual and LLM candidates while retaining LLM-only tags", () => {
+    const contextual = buildContextualTagCandidates([
+      { tags: ["contexto", "partilhada"], score: 40 },
+    ], buildTagInventory({}));
+
+    expect(mergeTagRecommendations(["Partilhada", "llm nova"], contextual, 8)).toEqual([
+      "contexto", "partilhada", "llm_nova",
+    ]);
+  });
+
+  it("preserves contextual ranking and respects the configured maximum", () => {
+    const contextual = buildContextualTagCandidates([
+      { tags: ["primeira", "segunda"], score: 20 },
+      { tags: ["primeira", "terceira"], score: 10 },
+    ], buildTagInventory({}));
+
+    expect(mergeTagRecommendations(["llm"], contextual, 2)).toEqual(["primeira", "segunda"]);
   });
 });

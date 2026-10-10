@@ -17,6 +17,20 @@ export interface TagProposal {
   readonly existsInNote?: boolean;
 }
 
+/** Tag evidence collected from one already-selected related note. */
+export interface RelatedTagSource {
+  readonly tags: readonly string[];
+  readonly score?: number;
+}
+
+/** A deterministic contextual candidate and the signals that produced it. */
+export interface ContextualTagCandidate {
+  readonly tag: string;
+  readonly relatedNoteCount: number;
+  readonly relatedScore: number;
+  readonly globalUsageCount?: number;
+}
+
 export type VaultTagCounts = Readonly<Record<string, unknown>>;
 
 /** Preserves the established normalization contract for Lina tag suggestions. */
@@ -73,6 +87,57 @@ export function prepareTagProposals(
       ...(existsInNote === undefined ? {} : { existsInNote }),
     };
   });
+}
+
+/**
+ * Aggregates tags already present in related notes. Frequency is the primary
+ * signal because it is the least speculative evidence; existing related-note
+ * scores and vault usage only provide deterministic tie-breaks.
+ */
+export function buildContextualTagCandidates(
+  relatedSources: readonly RelatedTagSource[],
+  inventory: ReadonlyMap<string, ExistingVaultTag>,
+): ContextualTagCandidate[] {
+  const candidates = new Map<string, { relatedNoteCount: number; relatedScore: number }>();
+
+  for (const source of relatedSources) {
+    const score = Number.isFinite(source.score) ? source.score ?? 0 : 0;
+    for (const tag of normalizeTags(source.tags)) {
+      const existing = candidates.get(tag) ?? { relatedNoteCount: 0, relatedScore: 0 };
+      candidates.set(tag, {
+        relatedNoteCount: existing.relatedNoteCount + 1,
+        relatedScore: existing.relatedScore + score,
+      });
+    }
+  }
+
+  return Array.from(candidates, ([tag, evidence]) => {
+    const globalUsageCount = inventory.get(tag)?.count;
+    return {
+      tag,
+      relatedNoteCount: evidence.relatedNoteCount,
+      relatedScore: evidence.relatedScore,
+      ...(globalUsageCount === undefined ? {} : { globalUsageCount }),
+    };
+  }).sort((left, right) =>
+    right.relatedNoteCount - left.relatedNoteCount ||
+    right.relatedScore - left.relatedScore ||
+    (right.globalUsageCount ?? 0) - (left.globalUsageCount ?? 0) ||
+    left.tag.localeCompare(right.tag),
+  );
+}
+
+/**
+ * Contextual tags lead the fixed-size list, followed by LLM-only candidates.
+ * With no contextual candidate this is exactly the historical LLM pipeline.
+ */
+export function mergeTagRecommendations(
+  llmTags: readonly string[],
+  contextualCandidates: readonly ContextualTagCandidate[],
+  maximum: number,
+): string[] {
+  const merged = [...contextualCandidates.map(candidate => candidate.tag), ...llmTags];
+  return normalizeTags(merged).slice(0, maximum);
 }
 
 /** Formats the existing usage label without coupling proposals to UI strings. */

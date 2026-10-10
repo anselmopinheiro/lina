@@ -35,10 +35,13 @@ import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusion
 import { normalizeSearchQuery } from "./queryNormalization";
 import {
   buildTagInventory,
+  buildContextualTagCandidates,
   formatTagUsageLabel,
+  mergeTagRecommendations,
   normalizeTag,
   normalizeTags,
   prepareTagProposals,
+  type ContextualTagCandidate,
   type ExistingVaultTag,
 } from "./tagRecommendation";
 
@@ -4771,6 +4774,30 @@ ${truncatedContent}${truncationNote}
     return tags;
   }
 
+  private async getContextualTagCandidates(relatedNotes: RelatedNote[]): Promise<ContextualTagCandidate[]> {
+    if (relatedNotes.length === 0) return [];
+
+    const relatedSources = await Promise.all(relatedNotes.map(async (note) => {
+      const relatedFile = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(relatedFile instanceof TFile)) return null;
+
+      try {
+        const content = await this.app.vault.read(relatedFile);
+        return {
+          tags: [...this.getExistingTagsForNote(relatedFile, content)],
+          score: note.score,
+        };
+      } catch {
+        return null;
+      }
+    }));
+
+    return buildContextualTagCandidates(
+      relatedSources.filter((source): source is NonNullable<typeof source> => source !== null),
+      this.getExistingVaultTags(),
+    );
+  }
+
   private async renderYamlCommandSuggestions(container: HTMLElement, suggestedYaml: SuggestedYaml, applyTarget: AskApplyTarget): Promise<void> {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter: Map<string, string> = new Map();
@@ -5749,7 +5776,8 @@ ${truncatedContent}${truncationNote}
     const { json, error } = extrairJsonDaResposta(aiText);
 
     if (json && !error) {
-      this.prepareStructuredAnalysisResult(json);
+      const contextualTagCandidates = await this.getContextualTagCandidates(relatedNotes);
+      this.prepareStructuredAnalysisResult(json, contextualTagCandidates);
 
       // Filtrar links internos
       if (json.internalLinks && allowedPaths.length > 0) {
@@ -7155,7 +7183,10 @@ ${limitedContent}
 <<<FIM_NOTA>>>`;
   }
 
-  private prepareStructuredAnalysisResult(result: StructuredAnalysisResult): void {
+  private prepareStructuredAnalysisResult(
+    result: StructuredAnalysisResult,
+    contextualTagCandidates: ContextualTagCandidate[] = [],
+  ): void {
     const yamlTags = result.yaml?.tags;
     if (yamlTags && (!result.tags || result.tags.length === 0)) {
       const recoveredTags = extrairTagsDeValorYaml(yamlTags);
@@ -7172,8 +7203,12 @@ ${limitedContent}
       delete result.yaml;
     }
 
-    if (result.tags) {
-      result.tags = normalizeTags(result.tags).slice(0, this.plugin.settings.maxSuggestedTags ?? 8);
+    if (result.tags || contextualTagCandidates.length > 0) {
+      result.tags = mergeTagRecommendations(
+        result.tags ?? [],
+        contextualTagCandidates,
+        this.plugin.settings.maxSuggestedTags ?? 8,
+      );
     }
   }
 
