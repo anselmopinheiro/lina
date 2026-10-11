@@ -590,13 +590,27 @@ Lina — Assistente para Obsidian
   margin-bottom: 12px;
 }
 
+.lina-search-composer {
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  box-sizing: border-box;
+}
+
+.lina-search-composer:focus-within {
+  border-color: var(--interactive-accent);
+}
+
 .lina-search-input-container {
   display: flex;
   align-items: center;
   width: 100%;
-  background-color: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  background-color: var(--background-primary);
+  border: 0;
+  border-radius: 4px;
   padding: 0 4px;
   box-sizing: border-box;
 }
@@ -606,31 +620,30 @@ Lina — Assistente para Obsidian
   box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.lina-search-input-icon {
-  margin-left: 8px;
-  margin-right: 6px;
-  color: var(--text-muted);
-  font-size: 0.95em;
-  flex-shrink: 0;
-  user-select: none;
-}
-
 .lina-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
   background: transparent !important;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
   width: 100%;
-  padding: 8px 8px 8px 0 !important;
+  padding: 8px 4px 8px 0 !important;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
 }
 
 .lina-search-mode-row {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.lina-search-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
   width: 100%;
+  margin-top: 6px;
 }
 
 .lina-search-mode-wrapper {
@@ -638,32 +651,36 @@ Lina — Assistente para Obsidian
   min-width: 0;
   display: flex;
   align-items: center;
-  background-color: var(--background-secondary);
+  background-color: var(--background-primary-alt);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   padding: 0 4px;
+  min-height: 44px;
   box-sizing: border-box;
 }
 
 .lina-search-mode-wrapper:focus-within {
   border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.lina-search-mode-icon {
+.lina-search-control-label {
   margin-left: 8px;
-  margin-right: 6px;
+  margin-right: 4px;
   color: var(--text-muted);
-  font-size: 0.95em;
+  font-size: var(--font-ui-smaller);
   flex-shrink: 0;
-  user-select: none;
 }
 
 .lina-search-mode-select {
+  flex: 1 1 auto;
+  min-width: 0;
   background: transparent !important;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  width: 100%;
+  width: auto;
+  min-height: 42px;
   padding: 6px 20px 6px 0 !important;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
@@ -671,23 +688,55 @@ Lina — Assistente para Obsidian
 }
 
 .lina-search-submit-btn {
-  flex: 0 0 38px;
-  height: 34px;
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent, #ffffff) !important;
-  border: none !important;
+  border-radius: 4px;
+  background: transparent !important;
+  color: var(--interactive-accent) !important;
+  border: 0 !important;
   cursor: pointer;
   padding: 0 !important;
   font-size: 1.1em;
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
+.lina-search-clear-btn {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.35em;
+}
+
+.lina-search-clear-btn:hover {
+  background: var(--background-modifier-hover) !important;
+}
+
+.lina-search-clear-btn:focus-visible {
+  outline: 1px solid var(--interactive-accent);
+  outline-offset: -3px;
+  background: var(--background-modifier-hover) !important;
+}
+
+.lina-search-clear-btn:active {
+  opacity: 0.8;
+}
+
+.lina-search-submit-btn:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
 .lina-search-submit-btn:hover {
-  opacity: 0.9;
+  background: var(--background-modifier-hover) !important;
 }
 
 .lina-search-submit-btn:active {
@@ -695,39 +744,36 @@ Lina — Assistente para Obsidian
 }
 
 .lina-actions-row {
-  width: 100%;
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .lina-actions-wrapper {
   display: flex;
   align-items: center;
   width: 100%;
-  background-color: var(--background-secondary);
+  background-color: var(--background-primary-alt);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   padding: 0 4px;
+  min-height: 44px;
   box-sizing: border-box;
 }
 
 .lina-actions-wrapper:focus-within {
   border-color: var(--interactive-accent);
-}
-
-.lina-actions-icon {
-  margin-left: 8px;
-  margin-right: 6px;
-  color: var(--text-muted);
-  font-size: 0.95em;
-  flex-shrink: 0;
-  user-select: none;
+  box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
 .lina-actions-select {
+  flex: 1 1 auto;
+  min-width: 0;
   background: transparent !important;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  width: 100%;
+  width: auto;
+  min-height: 42px;
   padding: 6px 20px 6px 0 !important;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
@@ -811,6 +857,25 @@ Lina — Assistente para Obsidian
   margin-top: 6px;
   position: relative;
 }
+
+/* Compact, mode-independent search result list for narrow desktop and mobile sidebars. */
+.lina-search-result {
+  cursor: pointer;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.lina-search-result-title-row { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.lina-search-result-score { flex: 0 0 auto; font-size: 0.65rem; line-height: 1.2; color: var(--text-accent); background: var(--background-modifier-hover); border: 1px solid var(--interactive-accent); border-radius: 3px; padding: 1px 4px; opacity: 0.85; }
+.lina-search-result-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.lina-search-result-path { color: var(--text-muted); font-size: var(--font-ui-smaller); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.lina-search-result-snippet, .lina-search-result-metadata { color: var(--text-muted); font-size: var(--font-ui-smaller); line-height: 1.35; margin-top: 3px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.lina-search-result-metadata { font-style: italic; }
+.lina-search-result-image { display: inline-block; margin-top: 3px; padding: 1px 4px; border: 1px solid var(--background-modifier-border); border-radius: 3px; color: var(--text-muted); background: var(--background-modifier-hover); font-size: 0.65rem; font-weight: 600; }
+.lina-suggestion-status { display: inline-block; flex: 0 0 auto; white-space: nowrap; margin-top: 2px; margin-right: 4px; padding: 1px 4px; border: 1px solid var(--background-modifier-border); border-radius: 3px; color: var(--text-muted); background: var(--background-modifier-hover); font-size: 0.65rem; line-height: 1.2; }
+.lina-folder-preview-value-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; min-width: 0; }
+.lina-folder-preview-value-row > div { min-width: 0; overflow-wrap: anywhere; }
+.lina-analysis-summary-text { margin-top: 3px; line-height: 1.4; }
+.lina-analysis-apply-button { width: 100%; min-height: 2.25rem; }
 
 .lina-sidebar-role-box {
   display: flex;

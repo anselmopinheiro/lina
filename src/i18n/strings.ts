@@ -57,7 +57,11 @@ export interface UiStrings {
 
   // Pesquisa
   searchPlaceholder: string;
+  searchInputLabel: string;
+  searchModeLabel: string;
+  searchActionsLabel: string;
   searchButton: string;
+  searchClearButton: string;
   searchTextual: string;
   searchSemantic: string;
   searchHybrid: string;
@@ -801,6 +805,11 @@ export interface UiStrings {
   previewSelectItems: string;
   previewCheckboxExplanation: string;
   previewRelatedNotesUsed: string;
+  previewSectionRelatedNotes: string;
+  previewSectionTitle: string;
+  previewSectionFolder: string;
+  previewSectionYaml: string;
+  previewSectionTags: string;
   previewSuggestedTitle: string;
   previewSuggestedFolder: string;
   previewYamlSuggested: string;
@@ -810,6 +819,8 @@ export interface UiStrings {
   previewOtherRelatedNotes: string;
   previewTasksDetected: string;
   previewAnalysis: string;
+  previewAnalysisAlreadyExists: string;
+  previewAnalysisWillAppend: string;
   previewSummary: string;
   previewConfidence: string;
   previewLimitations: string;
@@ -829,6 +840,8 @@ export interface UiStrings {
   previewFolderNew: string;
   previewFolderInbox: string;
   previewFolderCurrent: string;
+  previewFolderExistingBadge: string;
+  previewFolderCurrentBadge: string;
   relatedOriginLabel: string;
   relatedScoreLabel: string;
   relatedReasonLabel: string;
@@ -1100,8 +1113,12 @@ const PT_PT: UiStrings = {
   sectionState: "Estado",
   sectionResults: "Resultados",
 
-  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags, /yaml...",
+  searchPlaceholder: "Pesquisar notas…",
+  searchInputLabel: "Pesquisar notas",
+  searchModeLabel: "Pesquisa",
+  searchActionsLabel: "Ações",
   searchButton: "Pesquisar",
+  searchClearButton: "Limpar pesquisa",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa semântica",
   searchHybrid: "Pesquisa híbrida",
@@ -1782,6 +1799,11 @@ const PT_PT: UiStrings = {
   previewSelectItems: "Seleciona os itens que pretendes aplicar à nota.",
   previewCheckboxExplanation: "As checkboxes da pré-visualização significam apenas seleção para aplicar, não estado concluído.",
   previewRelatedNotesUsed: "Notas relacionadas usadas",
+  previewSectionRelatedNotes: "Notas relacionadas",
+  previewSectionTitle: "Título",
+  previewSectionFolder: "Pasta",
+  previewSectionYaml: "YAML",
+  previewSectionTags: "Tags",
   previewSuggestedTitle: "Título sugerido",
   previewSuggestedFolder: "Pasta sugerida",
   previewYamlSuggested: "YAML sugerido",
@@ -1791,6 +1813,8 @@ const PT_PT: UiStrings = {
   previewOtherRelatedNotes: "Outras notas relacionadas",
   previewTasksDetected: "Tarefas detetadas",
   previewAnalysis: "Análise",
+  previewAnalysisAlreadyExists: "já existe",
+  previewAnalysisWillAppend: "Será acrescentada uma nova análise.",
   previewSummary: "Resumo",
   previewConfidence: "Grau de confiança",
   previewLimitations: "Limitações",
@@ -1810,6 +1834,8 @@ const PT_PT: UiStrings = {
   previewFolderNew: "Pasta inexistente na raiz do vault. O Lina não cria pastas automaticamente nesta fase.",
   previewFolderInbox: "Ignorada: a Inbox não deve ser usada como destino de organização.",
   previewFolderCurrent: "A nota já está na pasta sugerida.",
+  previewFolderExistingBadge: "existente",
+  previewFolderCurrentBadge: "já está aqui",
   relatedOriginLabel: "Origem",
   relatedScoreLabel: "Score",
   relatedReasonLabel: "Motivo",
@@ -2028,7 +2054,7 @@ const PT_PT: UiStrings = {
   sidebarDegradedProducerAging: "O Produtor não atualiza os artefactos há mais de 24 h.",
 
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
-  sidebarActionPlaceholder: "Ações...",
+  sidebarActionPlaceholder: "IA...",
   sidebarDiagnosticsButton: "Ver diagnóstico",
   deviceDiagnosticsSectionMaintenance: "Manutenção",
   deviceDiagnosticsMaintenanceRebuildIndex: "Reconstruir índice textual",
@@ -2081,8 +2107,12 @@ const EN: UiStrings = {
   sectionState: "Status",
   sectionResults: "Results",
 
-  searchPlaceholder: "Search or use a command: /ask, /tags, /yaml...",
+  searchPlaceholder: "Search notes…",
+  searchInputLabel: "Search notes",
+  searchModeLabel: "Search",
+  searchActionsLabel: "Actions",
   searchButton: "Search",
+  searchClearButton: "Clear search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
   searchHybrid: "Hybrid search",
@@ -2767,6 +2797,11 @@ const EN: UiStrings = {
   previewSelectItems: "Select the items you want to apply to the note.",
   previewCheckboxExplanation: "The preview checkboxes only mean selection for application, not completed state.",
   previewRelatedNotesUsed: "Related notes used",
+  previewSectionRelatedNotes: "Related notes",
+  previewSectionTitle: "Title",
+  previewSectionFolder: "Folder",
+  previewSectionYaml: "YAML",
+  previewSectionTags: "Tags",
   previewSuggestedTitle: "Suggested title",
   previewSuggestedFolder: "Suggested folder",
   previewYamlSuggested: "Suggested YAML",
@@ -2776,6 +2811,8 @@ const EN: UiStrings = {
   previewOtherRelatedNotes: "Other related notes",
   previewTasksDetected: "Detected tasks",
   previewAnalysis: "Analysis",
+  previewAnalysisAlreadyExists: "already exists",
+  previewAnalysisWillAppend: "A new analysis will be appended.",
   previewSummary: "Summary",
   previewConfidence: "Confidence level",
   previewLimitations: "Limitations",
@@ -2795,6 +2832,8 @@ const EN: UiStrings = {
   previewFolderNew: "Folder does not exist at vault root. Lina does not create folders automatically at this stage.",
   previewFolderInbox: "Ignored: Inbox should not be used as an organisation destination.",
   previewFolderCurrent: "The note is already in the suggested folder.",
+  previewFolderExistingBadge: "existing",
+  previewFolderCurrentBadge: "already here",
   relatedOriginLabel: "Origin",
   relatedScoreLabel: "Score",
   relatedReasonLabel: "Reason",
@@ -3013,7 +3052,7 @@ const EN: UiStrings = {
   sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
 
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
-  sidebarActionPlaceholder: "Actions...",
+  sidebarActionPlaceholder: "AI...",
   sidebarDiagnosticsButton: "View diagnostics",
   deviceDiagnosticsSectionMaintenance: "Maintenance",
   deviceDiagnosticsMaintenanceRebuildIndex: "Rebuild text index",

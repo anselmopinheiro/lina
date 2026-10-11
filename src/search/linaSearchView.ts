@@ -217,6 +217,7 @@ interface SelectableSectionItem {
   title?: string;
   reason?: string;
   description?: string;
+  statusLabel?: string;
 }
 
 interface SelectedAnalysisLink {
@@ -527,40 +528,59 @@ function snippetRepeatsTitle(snippet: string, title: string): boolean {
 }
 
 function cleanSearchSnippet(snippet: string): string {
-  return snippet
+  return normalizeSnippetPresentation(snippet)
     .replace(/^---\s*/, "")
     .replace(/---\s*$/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function getReadableSearchOrigin(origin: string, L: UiStrings): string {
-  switch (origin) {
-    case "Nome":
-      return `${L.originFoundIn} ${L.originFileName}`;
-    case "Caminho":
-      return `${L.originFoundIn} ${L.originFilePath}`;
-    case "Conteúdo":
-    case "Híbrida":
-    case "Textual":
-    case "Semântica":
-      return `${L.originFoundIn} ${L.originFileContent}`;
-    default:
-      return L.originNote;
-  }
+/** Pure, conservative presentation-only cleanup; indexed content is never changed. */
+export function normalizeSnippetPresentation(snippet: string): string {
+  const tableNormalized = snippet.split("\n").map((line) => {
+    const trimmed = line.trim();
+    const isSeparator = /^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$/.test(trimmed);
+    if (isSeparator) return "";
+    // Table rows are recognised only when they use structural pipes at both ends.
+    if (/^\|.*\|$/.test(trimmed) && trimmed.split("|").length >= 3) {
+      return trimmed.slice(1, -1).split("|").map((cell) => cell.trim()).filter(Boolean).join(" · ");
+    }
+    return line;
+  }).join("\n");
+  return tableNormalized
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*(?:[-*+] |\d+[.)] )/gm, "")
+    .replace(/(\*\*|__|~~|==|`)([^\n]*?)\1/g, "$2")
+    .replace(/(^|\s)[*_]([^*_\n]+)[*_](?=\s|$)/g, "$1$2")
+    .replace(/^---\s*/, "")
+    .replace(/---\s*$/, "")
+    .trim();
 }
 
-type SearchSnippetDisplay = {
-  text: string;
-  shouldHighlight: boolean;
-  isFallback: boolean;
-};
+type SearchSnippetPresentation =
+  | { kind: "text"; text: string; shouldHighlight: boolean }
+  | { kind: "metadata"; text: string }
+  | { kind: "image"; label: string };
 
-function getSearchSnippetDisplay(card: GroupedNoteCard): SearchSnippetDisplay | null {
+function isImageReference(value: string): boolean {
+  const image = "(?:jpg|jpeg|png|gif|webp|svg)";
+  return new RegExp(`^(?:!\\[\\[[^\\]]+\\.${image}\\]\\]|!\\[[^\\]]*\\]\\([^)]*\\.${image}(?:[?#][^)]*)?\\)|https?:\\/\\/\\S+\\.${image}(?:[?#]\\S*)?)$`, "i").test(value.trim());
+}
+
+function isTechnicalSnippet(value: string): boolean {
+  return /^```|\bdataview\b|\bfrom\s+["'][^"']+["']/i.test(value.trim());
+}
+
+function getSearchSnippetPresentation(card: GroupedNoteCard): SearchSnippetPresentation | null {
   const allSnippets = [card.snippet, ...card.extraSnippets]
     .map(raw => ({
       cleaned: cleanSearchSnippet(raw),
       isFrontmatter: snippetLooksLikeFrontmatter(raw),
+      isImage: isImageReference(raw),
     }))
     .filter(snippet => snippet.cleaned.length > 0);
 
@@ -569,26 +589,30 @@ function getSearchSnippetDisplay(card: GroupedNoteCard): SearchSnippetDisplay | 
     !snippetRepeatsTitle(snippet.cleaned, card.basename)
   );
 
-  if (usefulSnippet) {
+  if (usefulSnippet?.isImage) {
+    return { kind: "image", label: "Imagem" };
+  }
+  if (usefulSnippet && !isTechnicalSnippet(usefulSnippet.cleaned)) {
     const text = usefulSnippet.cleaned.length > 280
       ? `${usefulSnippet.cleaned.substring(0, 280)}...`
       : usefulSnippet.cleaned;
-    return { text, shouldHighlight: true, isFallback: false };
+    return { kind: "text", text, shouldHighlight: true };
   }
 
   if (allSnippets.some(snippet => snippet.isFrontmatter)) {
     return {
+      kind: "metadata",
       text: "Correspondência encontrada nos metadados da nota.",
-      shouldHighlight: false,
-      isFallback: true,
     };
   }
 
+  // Technical blocks are intentionally suppressed, never mislabelled as metadata.
+  if (allSnippets.some(snippet => isTechnicalSnippet(snippet.cleaned))) return null;
+
   if (allSnippets.some(snippet => snippetRepeatsTitle(snippet.cleaned, card.basename)) || card.origin === "Nome") {
     return {
+      kind: "metadata",
       text: "Correspondência encontrada no nome da nota.",
-      shouldHighlight: false,
-      isFallback: true,
     };
   }
 
@@ -1728,9 +1752,11 @@ export class LinaSearchView extends ItemView {
     searchSection.addClass("lina-search-section");
     searchSection.addClass("lina-mb-12");
 
-    const inputContainer = searchSection.createDiv();
+    const searchComposer = searchSection.createDiv();
+    searchComposer.addClass("lina-search-composer");
+
+    const inputContainer = searchComposer.createDiv();
     inputContainer.addClass("lina-search-input-container");
-    inputContainer.createSpan({ text: "🔍", cls: "lina-search-input-icon" });
 
     this.queryInput = inputContainer.createEl("input", {
       type: "text",
@@ -1738,28 +1764,48 @@ export class LinaSearchView extends ItemView {
     });
     this.queryInput.addClass("lina-search-input");
     this.queryInput.addClass("lina-w-full");
+    this.queryInput.setAttribute("enterkeyhint", "search");
+    this.queryInput.setAttribute("aria-label", this.L.searchInputLabel);
     const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
     this.queryInput.addEventListener("pointerdown", captureContextSelection);
     this.queryInput.addEventListener("mousedown", captureContextSelection);
     this.queryInput.addEventListener("focus", captureContextSelection);
     this.queryInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        void this.runSearch();
-      }
+      this.handleSearchInputKeydown(event);
     });
 
-    // Linha 1: Modo de pesquisa (dropdown flex:1) + Botão enviar compacto
-    const modeRow = searchSection.createDiv();
+    const clearSearchButton = inputContainer.createEl("button", { text: "×" });
+    clearSearchButton.type = "button";
+    clearSearchButton.addClass("lina-search-clear-btn");
+    clearSearchButton.setAttribute("aria-label", this.L.searchClearButton);
+    clearSearchButton.setAttribute("title", this.L.searchClearButton);
+    clearSearchButton.addEventListener("click", () => this.clearSearchInput(clearSearchButton));
+    this.queryInput.addEventListener("input", () => this.updateClearSearchButton(clearSearchButton));
+    this.updateClearSearchButton(clearSearchButton);
+
+    this.searchButton = inputContainer.createEl("button", { text: "↵" });
+    this.searchButton.type = "button";
+    this.searchButton.addClass("mod-cta");
+    this.searchButton.addClass("lina-search-btn");
+    this.searchButton.addClass("lina-search-submit-btn");
+    this.searchButton.setAttribute("aria-label", this.L.searchButton);
+    this.searchButton.setAttribute("title", this.L.searchButton);
+    this.searchButton.addEventListener("click", () => this.submitSearch());
+
+    const searchControls = searchComposer.createDiv();
+    searchControls.addClass("lina-search-controls");
+
+    // Tipo de pesquisa: estado persistente
+    const modeRow = searchControls.createDiv();
     modeRow.addClass("lina-search-mode-row");
 
     const modeWrapper = modeRow.createDiv();
     modeWrapper.addClass("lina-search-mode-wrapper");
-    modeWrapper.createSpan({ text: "🎛️", cls: "lina-search-mode-icon" });
 
     this.searchModeSelect = modeWrapper.createEl("select");
     this.searchModeSelect.addClass("dropdown");
     this.searchModeSelect.addClass("lina-search-mode-select");
-    this.searchModeSelect.setAttribute("aria-label", this.L.searchSelectMode);
+    this.searchModeSelect.setAttribute("aria-label", this.L.searchModeLabel);
 
     const searchModeOptions: Array<{ mode: SearchMode; label: string }> = [
       { mode: "textual", label: this.L.searchTextual },
@@ -1783,39 +1829,29 @@ export class LinaSearchView extends ItemView {
       void this.refreshState({ refreshSemanticAvailability: false });
     });
 
-    // Botão enviar compacto com destaque visual
-    this.searchButton = modeRow.createEl("button", { text: "➤" });
-    this.searchButton.addClass("mod-cta");
-    this.searchButton.addClass("lina-search-btn");
-    this.searchButton.addClass("lina-search-submit-btn");
-    this.searchButton.setAttribute("aria-label", this.L.searchButton);
-    this.searchButton.setAttribute("title", this.L.searchButton);
-    this.searchButton.addEventListener("click", () => void this.runSearch());
-
-    // Linha 2: Dropdown de Ações em linha própria a 100% de largura
-    const actionsRow = searchSection.createDiv();
+    // Ações: lançador imediato, sem estado persistente
+    const actionsRow = searchControls.createDiv();
     actionsRow.addClass("lina-actions-row");
 
     const actionsWrapper = actionsRow.createDiv();
     actionsWrapper.addClass("lina-actions-wrapper");
-    actionsWrapper.createSpan({ text: "⚡", cls: "lina-actions-icon" });
 
     this.actionsSelect = actionsWrapper.createEl("select");
     this.actionsSelect.addClass("dropdown");
     this.actionsSelect.addClass("lina-actions-select");
-    this.actionsSelect.setAttribute("aria-label", this.L.sectionQuickActions);
+    this.actionsSelect.setAttribute("aria-label", `${this.L.searchActionsLabel} de IA`);
 
     const placeholderOpt = this.actionsSelect.createEl("option", {
       value: "",
-      text: this.L.sidebarActionPlaceholder || "Ações...",
+      text: this.L.sidebarActionPlaceholder || this.L.searchActionsLabel,
     });
     placeholderOpt.disabled = true;
     placeholderOpt.selected = true;
 
-    this.actionsSelect.createEl("option", { value: "note", text: `📄 ${this.L.actionAnalyseNote}` });
-    this.actionsSelect.createEl("option", { value: "context", text: `🔗 ${this.L.actionAnalyseWithContext}` });
-    this.actionsSelect.createEl("option", { value: "inbox", text: `🗃️ ${this.L.actionAnalyseInbox}` });
-    this.actionsSelect.createEl("option", { value: "folder", text: `📁 ${this.L.actionAnalyseFolder}` });
+    this.actionsSelect.createEl("option", { value: "note", text: this.L.actionAnalyseNote });
+    this.actionsSelect.createEl("option", { value: "context", text: this.L.actionAnalyseWithContext });
+    this.actionsSelect.createEl("option", { value: "inbox", text: this.L.actionAnalyseInbox });
+    this.actionsSelect.createEl("option", { value: "folder", text: this.L.actionAnalyseFolder });
 
     this.actionsSelect.addEventListener("change", () => {
       const action = this.actionsSelect.value;
@@ -2721,7 +2757,8 @@ export class LinaSearchView extends ItemView {
     // 3. Collapsible "Estado" Accordion
     const stateDetails = this.stateContainer.createEl("details");
     stateDetails.addClass("lina-sidebar-state-details");
-    stateDetails.open = true;
+    // The compact status headline above remains visible; details are opt-in.
+    stateDetails.open = false;
 
     const stateSummary = stateDetails.createEl("summary");
     stateSummary.addClass("lina-accordion-summary");
@@ -2780,9 +2817,6 @@ export class LinaSearchView extends ItemView {
         }
       });
     }
-
-    const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
-    headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
 
     // Info Button to open diagnostics
     const infoBtn = stateCard.createEl("button", { cls: "lina-sidebar-state-info-btn", text: "ⓘ" });
@@ -2962,6 +2996,27 @@ export class LinaSearchView extends ItemView {
     if (this.searchModeRadioButtons?.hibrida?.checked) return "hibrida";
     if (this.searchModeRadioButtons?.semantica?.checked) return "semantica";
     return this.currentMode ?? "hibrida";
+  }
+
+  private submitSearch(): void {
+    void this.runSearch();
+  }
+
+  private handleSearchInputKeydown(event: KeyboardEvent): void {
+    const legacyKeyCode = Reflect.get(event, "keyCode");
+    if (event.key !== "Enter" || event.isComposing || legacyKeyCode === 229) return;
+    event.preventDefault();
+    this.submitSearch();
+  }
+
+  private updateClearSearchButton(clearSearchButton: HTMLButtonElement): void {
+    clearSearchButton.hidden = this.queryInput.value.length === 0;
+  }
+
+  private clearSearchInput(clearSearchButton: HTMLButtonElement): void {
+    this.queryInput.value = "";
+    this.updateClearSearchButton(clearSearchButton);
+    this.queryInput.focus();
   }
 
   private async runSearch(): Promise<void> {
@@ -4357,7 +4412,9 @@ ${truncatedContent}${truncationNote}
     path?: string,
     title?: string,
     reason?: string,
-    description?: string
+    description?: string,
+    statusLabel?: string,
+    showStatus = true
   ): void {
     const item = container.createDiv();
     item.addClass("lina-display-flex");
@@ -4398,6 +4455,11 @@ ${truncatedContent}${truncationNote}
     labelEl.addClass("lina-fs-085");
     labelEl.addClass("lina-color-normal");
 
+    if (reason && showStatus) {
+      const status = item.createSpan({ text: statusLabel ?? this.getSuggestionStatusLabel(reason) });
+      status.addClass("lina-suggestion-status");
+    }
+
     if (description) {
       const descriptionEl = labelWrapper.createDiv({ text: description });
       descriptionEl.addClass("lina-fs-08");
@@ -4423,12 +4485,14 @@ ${truncatedContent}${truncationNote}
     const toggleHandler = () => {
       checkbox.checked = !checkbox.checked;
       this.structuredSelections.set(id, checkbox.checked);
+      this.updateApplySelectedCount();
       // Atualizar estilo visual
       updateLabelStyle();
     };
 
     checkbox.addEventListener("change", () => {
       this.structuredSelections.set(id, checkbox.checked);
+      this.updateApplySelectedCount();
       updateLabelStyle();
     });
 
@@ -4441,6 +4505,27 @@ ${truncatedContent}${truncationNote}
       e.stopPropagation();
       toggleHandler();
     });
+  }
+
+  private getSuggestionStatusLabel(reason: string): string {
+    if (reason === "new" || reason === "new-tag") return "novo";
+    if (reason === "already_exists") return "já existe";
+    if (reason === "existing-tag") return "usada";
+    if (reason === "conflict") return "conflito";
+    return reason;
+  }
+
+  private getFolderPreviewStatusLabel(resolution: FolderMoveResolution): string {
+    if (resolution.canMove && resolution.exists) return this.L.previewFolderExistingBadge;
+    if (resolution.isCurrentFolder) return this.L.previewFolderCurrentBadge;
+    return resolution.reason;
+  }
+
+  private updateApplySelectedCount(): void {
+    const button = this.analysisResultEl?.querySelector<HTMLButtonElement>("[data-lina-apply-selected]");
+    if (!button) return;
+    const count = [...this.structuredSelections.values()].filter(Boolean).length;
+    button.setText(`${this.L.previewApplyButton} (${count})`);
   }
 
   /**
@@ -4472,7 +4557,7 @@ ${truncatedContent}${truncationNote}
     }
 
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description, item.statusLabel);
     }
   }
 
@@ -4527,6 +4612,10 @@ ${truncatedContent}${truncationNote}
         labelEl.addClass("lina-color-muted");
         labelEl.addClass("lina-flex-1");
         labelEl.addClass("lina-break-word");
+        if (item.reason) {
+          const status = itemDiv.createSpan({ text: item.statusLabel ?? this.getSuggestionStatusLabel(item.reason) });
+          status.addClass("lina-suggestion-status");
+        }
 
         if (item.reason === "already_exists") {
           labelEl.addClass("lina-color-accent");
@@ -4535,7 +4624,7 @@ ${truncatedContent}${truncationNote}
         }
       } else {
         // Item selecionável
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description, item.statusLabel);
       }
     }
   }
@@ -5374,17 +5463,6 @@ ${truncatedContent}${truncationNote}
 
     this.renderCopyAiResponseButton(this.analysisResultEl, this.formatStructuredAnalysisForClipboard(result));
 
-    // Clarificação da UI: checkboxes são para seleção, não para estado concluído
-    const clarificationContainer = this.analysisResultEl.createDiv();
-    clarificationContainer.addClass("lina-mb-12");
-    clarificationContainer.addClass("lina-p-8");
-    clarificationContainer.addClass("lina-bg-primary-alt");
-    clarificationContainer.addClass("lina-radius-4");
-    clarificationContainer.addClass("lina-fs-085");
-
-    clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
-    clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
-
     // Notas relacionadas usadas
     const notesInfoContainer = this.analysisResultEl.createDiv();
     notesInfoContainer.addClass("lina-mb-12");
@@ -5392,9 +5470,8 @@ ${truncatedContent}${truncationNote}
     notesInfoContainer.addClass("lina-color-muted");
 
     if (relatedNotes.length > 0) {
-      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
-
-      const notesList = notesInfoContainer.createDiv();
+      const notesList = notesInfoContainer.createEl("details");
+      notesList.createEl("summary", { text: `${this.L.previewSectionRelatedNotes} (${relatedNotes.length})` });
       notesList.addClass("lina-mt-4");
       notesList.addClass("lina-fs-08");
       notesList.addClass("lina-maxh-120");
@@ -5406,7 +5483,8 @@ ${truncatedContent}${truncationNote}
         this.renderRelatedNoteSummaryItem(notesList, note);
       }
     } else {
-      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
+      const emptyRelated = notesInfoContainer.createDiv({ text: this.L.previewSectionRelatedNotes });
+      emptyRelated.createSpan({ text: String(relatedNotesCount), cls: "lina-suggestion-status" });
     }
 
     // Título sugerido
@@ -5414,7 +5492,8 @@ ${truncatedContent}${truncationNote}
       const titleItems: SelectableSectionItem[] = [
         {
           id: "suggested",
-          label: `${this.L.renameUpdateH1}: ${result.suggestedTitle}`,
+          label: this.L.renameUpdateH1,
+          description: result.suggestedTitle,
           kind: "title",
           value: result.suggestedTitle,
           title: result.suggestedTitle
@@ -5426,7 +5505,8 @@ ${truncatedContent}${truncationNote}
         if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `${this.L.renameRenameFile}: ${readableFileName}`,
+            label: this.L.renameRenameFile,
+            description: readableFileName,
             kind: "rename-file",
             value: readableFileName,
             path: getPathInSameFolder(analysisFile, readableFileName),
@@ -5437,7 +5517,7 @@ ${truncatedContent}${truncationNote}
 
       this.createStructuredSection(
         this.analysisResultEl,
-        this.L.previewSuggestedTitle,
+        this.L.previewSectionTitle,
         "title",
         titleItems,
         ""
@@ -5451,7 +5531,7 @@ ${truncatedContent}${truncationNote}
       folderSection.addClass("lina-mt-12");
       folderSection.addClass("lina-mb-8");
 
-      const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
+      const titleEl = folderSection.createEl("strong", { text: this.L.previewSectionFolder });
       titleEl.addClass("lina-fs-09");
       titleEl.addClass("lina-display-block");
       titleEl.addClass("lina-mb-4");
@@ -5465,24 +5545,19 @@ ${truncatedContent}${truncationNote}
         analysisFile?.name,
         analysisFile?.path
       );
-      const folderValue = folderSection.createDiv({
-        text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder
-      });
+      const folderValueRow = folderSection.createDiv({ cls: "lina-folder-preview-value-row" });
+      const folderValue = folderValueRow.createDiv({ text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder });
       folderValue.addClass("lina-fs-085");
       folderValue.addClass("lina-color-muted");
-      folderValue.addClass("lina-mb-4");
 
-      const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
-      statusEl.addClass("lina-fs-085");
-      statusEl.addClass("lina-mb-4");
+      const statusEl = folderValueRow.createSpan({ text: this.getFolderPreviewStatusLabel(folderResolution) });
+      statusEl.addClass("lina-suggestion-status");
 
       const resolvedFolder = folderResolution.resolvedFolderPath ?? folderResolution.rawSuggestedFolder;
       const destinationPath = folderResolution.finalTargetPath ?? undefined;
       const canMove = folderResolution.canMove;
 
       if (canMove) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-success");
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
@@ -5492,39 +5567,12 @@ ${truncatedContent}${truncationNote}
           resolvedFolder,
           destinationPath,
           resolvedFolder,
-          folderResolution.reason
+          folderResolution.reason, undefined, undefined, false
         );
-      } else if (!analysisFile) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-warning");
-      } else if (folderResolution.hasCollision) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-warning");
       } else {
-        statusEl.addClass(folderResolution.isCurrentFolder ? "lina-color-muted" : "lina-color-warning");
+        statusEl.addClass("lina-color-muted");
       }
 
-      if (!canMove) {
-        const disabledItem = folderSection.createDiv();
-        disabledItem.addClass("lina-display-flex");
-        disabledItem.addClass("lina-items-start");
-        disabledItem.addClass("lina-gap-6");
-        disabledItem.addClass("lina-py-3");
-        disabledItem.addClass("lina-opacity-065");
-
-        const checkbox = disabledItem.createEl("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = false;
-        checkbox.disabled = true;
-        checkbox.addClass("lina-checkbox-offset");
-        checkbox.addClass("lina-cursor-not-allowed");
-
-        const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
-        labelEl.addClass("lina-fs-085");
-        labelEl.addClass("lina-color-muted");
-        labelEl.addClass("lina-flex-1");
-        labelEl.addClass("lina-break-word");
-      }
     }
 
     const tagProposals = result.tags
@@ -5556,36 +5604,40 @@ ${truncatedContent}${truncationNote}
         if (proposal.status === "already_exists") {
           yamlItems.push({
             id: `yaml_${proposal.property}`,
-            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlAlreadyExists}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
             kind: "yaml",
             value: proposal.property,
             disabled: true,
-            reason: "already_exists"
+            reason: "already_exists",
+            statusLabel: this.L.previewYamlAlreadyExists
           });
         } else if (proposal.status === "conflict") {
           yamlItems.push({
             id: `yaml_${proposal.property}`,
-            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlConflict}: ${proposal.existingValue}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
+            description: proposal.existingValue,
             kind: "yaml",
             value: proposal.property,
             disabled: true,
-            reason: "conflict"
+            reason: "conflict",
+            statusLabel: this.L.previewYamlConflict
           });
         } else {
           yamlItems.push({
             id: `yaml_${proposal.property}`,
-            label: `${proposal.property}: ${proposal.valueText} — ${this.L.previewYamlNew}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
             kind: "yaml",
             value: proposal.property,
             disabled: false,
-            reason: "new"
+            reason: "new",
+            statusLabel: this.L.previewYamlNew
           });
         }
       }
 
       this.createStructuredSectionWithStatus(
         this.analysisResultEl,
-        this.L.previewYamlSuggested,
+        this.L.previewSectionYaml,
         "yaml",
         yamlItems,
         this.L.previewYamlDisabled
@@ -5601,15 +5653,16 @@ ${truncatedContent}${truncationNote}
 
         return {
           id: `tag_${proposal.tag}`,
-          label: `${proposal.tag} — ${statusLabel}`,
+          label: proposal.tag,
           kind: "tag" as const,
           value: proposal.tag,
-          reason: proposal.existsInVault ? "existing-tag" : "new-tag"
+          reason: proposal.existsInVault ? "existing-tag" : "new-tag",
+          statusLabel
         };
       });
       this.createStructuredSection(
         this.analysisResultEl,
-        this.L.previewTagsSuggested,
+        this.L.previewSectionTags,
         "tags",
         tagItems,
         this.L.previewNoTags
@@ -5699,17 +5752,28 @@ ${truncatedContent}${truncationNote}
 
     // Análise
     if (result.analysis) {
-      this.createStructuredSection(
-        this.analysisResultEl,
-        this.L.previewAnalysis,
-        "analysis",
-        [{ id: "analysis_text", label: result.analysis, kind: "analysis", value: result.analysis }],
-        ""
-      );
+      const analysisSection = this.analysisResultEl.createDiv({ cls: "lina-mt-12" });
+      const analysisHeading = analysisSection.createEl("strong", { text: this.L.previewAnalysis });
+      let hasExistingAnalysis = false;
+      if (analysisFile) {
+        try {
+          hasExistingAnalysis = /^## Análise Lina\s*$/m.test(await this.app.vault.read(analysisFile));
+        } catch (error) {
+          console.warn("Não foi possível verificar análise existente:", error);
+        }
+      }
+      if (hasExistingAnalysis) {
+        analysisHeading.createSpan({ text: this.L.previewAnalysisAlreadyExists, cls: "lina-suggestion-status" });
+      }
+      analysisSection.createDiv({ text: result.analysis, cls: "lina-fs-085 lina-mt-4" });
+      this.createSelectableItem(analysisSection, "analysis_text", "Gravar análise na nota", false, "analysis", result.analysis);
+      if (hasExistingAnalysis) {
+        analysisSection.createDiv({ text: this.L.previewAnalysisWillAppend, cls: "lina-fs-085 lina-color-muted" });
+      }
     }
 
     // Informações adicionais
-    const infoContainer = this.analysisResultEl.createDiv();
+    const infoContainer = this.analysisResultEl.createDiv({ cls: "lina-analysis-summary" });
     infoContainer.addClass("lina-mt-12");
     infoContainer.addClass("lina-pt-8");
     infoContainer.addClass("lina-border-top");
@@ -5717,13 +5781,15 @@ ${truncatedContent}${truncationNote}
     infoContainer.addClass("lina-color-muted");
 
     if (result.summary) {
-      infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result.summary}` });
+      infoContainer.createEl("strong", { text: this.L.previewSummary });
+      infoContainer.createDiv({ text: result.summary, cls: "lina-analysis-summary-text" });
     }
     if (result.confidence) {
-      infoContainer.createDiv({ text: `${this.L.previewConfidence}: ${result.confidence}` });
+      infoContainer.createSpan({ text: `${this.L.previewConfidence}: ${result.confidence}`, cls: "lina-suggestion-status" });
     }
     if (result.limitations) {
-      infoContainer.createDiv({ text: `${this.L.previewLimitations}: ${result.limitations}` });
+      const limitations = result.limitations.trim().toLowerCase() === "nenhuma" ? "sem limitações" : result.limitations;
+      infoContainer.createSpan({ text: limitations === "sem limitações" ? limitations : `${this.L.previewLimitations}: ${limitations}`, cls: "lina-suggestion-status" });
     }
 
     // Botão "Aplicar selecionados à nota"
@@ -5731,9 +5797,11 @@ ${truncatedContent}${truncationNote}
     applyBtnContainer.addClass("lina-mt-16");
     applyBtnContainer.addClass("lina-text-center");
 
-    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
+    const applyBtn = applyBtnContainer.createEl("button", { text: `${this.L.previewApplyButton} (0)` });
+    applyBtn.setAttribute("data-lina-apply-selected", "true");
     applyBtn.addClass("lina-p-8-16");
     applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addClass("lina-analysis-apply-button");
     applyBtn.addEventListener("click", () => {
       void this.applySelectedChanges().catch((error: unknown) => {
         console.error("Lina: failed to apply selected changes", error);
@@ -6097,7 +6165,7 @@ ${truncatedContent}${truncationNote}
     // Proteção de integridade: verificar se a nota já contém conteúdo IA
     try {
       const currentContent = await this.app.vault.read(targetFile);
-      if (this.hasLinaGeneratedContent(currentContent)) {
+      if (this.hasLinaGeneratedContent(currentContent) && !secaoExiste(currentContent, SECCAO_ANALISE)) {
         const confirmed = await this.confirmReinsertAiContent();
         if (!confirmed) {
           new Notice(this.L.operationCancelledNoChange);
@@ -6457,7 +6525,6 @@ ${truncatedContent}${truncationNote}
   ): string {
     const analysisLines: string[] = [];
     const analysisDetailLines: string[] = [];
-    const existingAnalysisSection = getMarkdownSection(content, SECCAO_ANALISE);
     const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
     const linksToWrite: SelectedAnalysisLink[] = [];
     const seenLinkPaths = new Set<string>();
@@ -6482,10 +6549,7 @@ ${truncatedContent}${truncationNote}
     }
 
     const analysisDetailsText = analysisDetailLines.join("\n");
-    if (
-      analysisDetailsText.trim().length > 0 &&
-      !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))
-    ) {
+    if (analysisDetailsText.trim().length > 0) {
       analysisLines.push(analysisDetailsText);
     }
 
@@ -6510,10 +6574,22 @@ ${truncatedContent}${truncationNote}
       const beforeSectionEnd = content.substring(0, sectionEnd).replace(/\s+$/, "");
       const afterSectionEnd = content.substring(sectionEnd);
 
-      return `${beforeSectionEnd}\n\n---\n${analysisText}\n${afterSectionEnd}`;
+      return `${beforeSectionEnd}\n\n${this.createAnalysisCallout(analysisText)}\n${afterSectionEnd}`;
     }
 
-    return `${content}\n\n${SECCAO_ANALISE}\n${analysisText}\n`;
+    return `${content}\n\n${SECCAO_ANALISE}\n\n${this.createAnalysisCallout(analysisText)}\n`;
+  }
+
+  private createAnalysisCallout(analysisText: string, writtenAt = new Date()): string {
+    const timestamp = [
+      String(writtenAt.getDate()).padStart(2, "0"),
+      String(writtenAt.getMonth() + 1).padStart(2, "0"),
+      String(writtenAt.getFullYear())
+    ].join("/");
+    const time = `${String(writtenAt.getHours()).padStart(2, "0")}:${String(writtenAt.getMinutes()).padStart(2, "0")}`;
+    const quotedLines = analysisText.split("\n").map(line => line.length > 0 ? `> ${line}` : ">");
+
+    return [`> [!info]- ${timestamp} · ${time}`, ...quotedLines].join("\n");
   }
 
   // -----------------------------------------------------------------------
@@ -7676,154 +7752,30 @@ ${limitedContent}
    */
   private renderHighlightedCard(card: GroupedNoteCard, searchMode: SearchMode): void {
     const isSemantic = searchMode === "semantica";
-    const isHybrid = searchMode === "hibrida";
 
-    const cardEl = this.resultsEl.createDiv();
-    cardEl.addClass("lina-mb-8");
-    cardEl.addClass("lina-p-10");
-    cardEl.addClass("lina-border");
-    cardEl.addClass("lina-radius-4");
-    cardEl.addClass("lina-cursor-pointer");
+    const cardEl = this.resultsEl.createDiv({ cls: "lina-search-result" });
+    const titleRow = cardEl.createDiv({ cls: "lina-search-result-title-row" });
+    const badge = titleRow.createSpan({ cls: "lina-search-result-score" });
+    const score = isSemantic ? card.score * 100 : card.score;
+    badge.setText(Number.isFinite(score) ? `${Math.round(score)}%` : "?");
+    const titleEl = titleRow.createEl("strong", { cls: "lina-search-result-title" });
+    if (isSemantic) titleEl.setText(card.basename);
+    else renderHighlightedText(titleEl, card.basename, card.termsFound);
 
-    if (isSemantic) {
-      // Garantia defensiva: em modo semântico o score deve estar entre 0 e 1.
-      // Se não estiver, algo correu mal (ex: fallback textual indevido).
-      if (card.score > 1 || card.score < 0) {
-        // Score inválido para modo semântico. Não apresentar percentagem.
-        const titleEl = cardEl.createEl("strong");
-        titleEl.textContent = `(?) ${card.basename}`;
-        const pathEl = cardEl.createDiv({ text: card.path });
-        pathEl.addClass("lina-fs-085");
-        pathEl.addClass("lina-color-muted");
-        pathEl.addClass("lina-mt-4");
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-        cardEl.addEventListener("click", () => this.openNote(card.path));
-        return;
-      }
+    const pathEl = cardEl.createDiv({ cls: "lina-search-result-path" });
+    pathEl.setAttribute("data-note-path", card.path);
+    pathEl.setAttribute("title", card.path);
+    pathEl.setText(card.path.replace(/\/[^/]+$/, "") || card.path);
 
-      // Formato semântico: (NN%) Título da nota
-      const pct = Math.round(card.score * 100);
-      const titleEl = cardEl.createEl("strong");
-      titleEl.textContent = `(${pct}%) ${card.basename}`;
-
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-
-      // Excerto sem destaque
-      if (card.snippet && card.snippet.length > 0) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-      }
-    } else if (isHybrid) {
-      // Formato híbrido: (NN%) Título + scores parciais + origem funcional
-      const finalPct = Math.round(card.score);
-      const titleEl = cardEl.createEl("strong");
-      titleEl.textContent = `(${finalPct}%) ${card.basename}`;
-
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-
-      // Scores parciais
-      const textPct = Math.round(card.textScore ?? 0);
-      const semPct = Math.round(card.semanticScore ?? 0);
-      // Origem funcional: texto, semântica ou texto + semântica
-      const hasText = textPct > 0;
-      const hasSem = semPct > 0;
-      let originLabel = this.L.originHybrid;
-      if (hasText && hasSem) originLabel = this.L.originHybrid;
-      else if (hasText) originLabel = this.L.originText;
-      else if (hasSem) originLabel = this.L.originSemantic;
-
-      const metaEl = cardEl.createDiv();
-      metaEl.addClass("lina-fs-085");
-      metaEl.addClass("lina-color-muted");
-      metaEl.addClass("lina-mt-4");
-      metaEl.textContent = `${this.L.originText}: ${textPct}% · ${this.L.originSemantic}: ${semPct}% · ${this.L.originSource}: ${originLabel}`;
-
-      // Excerto com destaque
-      const snippetInfo = getSearchSnippetDisplay(card);
-      if (snippetInfo && !snippetInfo.isFallback) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-
-        if (snippetInfo.shouldHighlight) {
-          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-        } else {
-          snippetEl.setText(snippetInfo.text);
-        }
-      } else if (card.snippet) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-      }
-    } else {
-      // Formato textual/híbrido: com destaque de termos
-      const snippetInfo = getSearchSnippetDisplay(card);
-      const originLabel = snippetInfo?.isFallback
-        ? snippetInfo.text
-        : getReadableSearchOrigin(card.origin, this.L);
-
-      const titleEl = cardEl.createEl("strong");
-      renderHighlightedText(titleEl, card.basename, card.termsFound);
-
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-
-      const metaEl = cardEl.createDiv();
-      metaEl.setText(originLabel);
-      metaEl.addClass("lina-fs-085");
-      metaEl.addClass("lina-color-muted");
-      metaEl.addClass("lina-mt-6");
-
-      if (snippetInfo && !snippetInfo.isFallback) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-
-        if (snippetInfo.shouldHighlight) {
-          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-        } else {
-          snippetEl.setText(snippetInfo.text);
-        }
-      }
+    const snippet = getSearchSnippetPresentation(card);
+    if (snippet?.kind === "metadata") {
+      cardEl.createDiv({ text: snippet.text, cls: "lina-search-result-metadata" });
+    } else if (snippet?.kind === "image") {
+      cardEl.createSpan({ text: snippet.label, cls: "lina-search-result-image" });
+    } else if (snippet?.kind === "text") {
+      const snippetEl = cardEl.createDiv({ cls: "lina-search-result-snippet" });
+      if (!isSemantic && snippet.shouldHighlight) renderHighlightedText(snippetEl, snippet.text, card.termsFound);
+      else snippetEl.setText(snippet.text);
     }
 
     cardEl.addEventListener("click", () => this.openNote(card.path));

@@ -9,6 +9,7 @@ import {
 } from "../../src/search/sidebarStatusViewModel";
 import { DeviceDiagnosticsModal } from "../../src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics } from "../../src/device/deviceDiagnostics";
+import { LinaSearchView } from "../../src/search/linaSearchView";
 
 interface ElementStub {
   tag: string;
@@ -149,6 +150,8 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   // 1. modo de pesquisa controlado pelo novo dropdown
   it("1. search mode is controlled by a compact select dropdown", () => {
     const src = viewSource();
+    expect(src).toContain("const searchControls = searchComposer.createDiv();");
+    expect(src).toContain("searchControls.addClass(\"lina-search-controls\");");
     expect(src).toContain("this.searchModeSelect = modeWrapper.createEl(\"select\");");
     expect(src).toContain("this.searchModeSelect.addClass(\"lina-search-mode-select\");");
     expect(src).toContain("this.searchModeSelect.value = this.currentMode;");
@@ -198,10 +201,10 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
     const src = viewSource();
     expect(src).toContain("this.actionsSelect = actionsWrapper.createEl(\"select\");");
     expect(src).toContain("this.actionsSelect.addClass(\"lina-actions-select\");");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"note\", text: `📄 ${this.L.actionAnalyseNote}` });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"context\", text: `🔗 ${this.L.actionAnalyseWithContext}` });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"inbox\", text: `🗃️ ${this.L.actionAnalyseInbox}` });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"folder\", text: `📁 ${this.L.actionAnalyseFolder}` });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"note\", text: this.L.actionAnalyseNote });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"context\", text: this.L.actionAnalyseWithContext });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"inbox\", text: this.L.actionAnalyseInbox });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"folder\", text: this.L.actionAnalyseFolder });");
   });
 
   // 8. ação selecionada mantém comportamento
@@ -481,8 +484,8 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
 
   // 20. i18n cobre novos labels
   it("20. i18n provides comprehensive translations for Portuguese and English", () => {
-    expect(ptStrings.sidebarActionPlaceholder).toBe("Ações...");
-    expect(enStrings.sidebarActionPlaceholder).toBe("Actions...");
+    expect(ptStrings.sidebarActionPlaceholder).toBe("IA...");
+    expect(enStrings.sidebarActionPlaceholder).toBe("AI...");
     expect(ptStrings.sidebarDiagnosticsButton).toBe("Ver diagnóstico");
     expect(enStrings.sidebarDiagnosticsButton).toBe("View diagnostics");
     expect(ptStrings.deviceDiagnosticsSectionMaintenance).toBe("Manutenção");
@@ -498,13 +501,57 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
     const src = viewSource();
     expect(src).toContain("inputContainer.addClass(\"lina-search-input-container\");");
     expect(src).toContain("this.searchButton.addClass(\"lina-search-submit-btn\");");
-    expect(src).toContain("this.searchButton = modeRow.createEl(\"button\", { text: \"➤\" });");
+    expect(src).toContain("this.searchButton = inputContainer.createEl(\"button\", { text: \"↵\" });");
+  });
+
+  it("24. Enter and the integrated button use the shared submission path", () => {
+    const src = viewSource();
+    expect(src).toContain("private submitSearch(): void");
+    expect(src).toContain("this.handleSearchInputKeydown(event);");
+    expect(src).toContain("this.searchButton.addEventListener(\"click\", () => this.submitSearch());");
+  });
+
+  it("25. Enter submits once and ignores IME composition", () => {
+    const view = Object.create(LinaSearchView.prototype) as Record<string, any>;
+    const runSearch = vi.fn();
+    Object.assign(view, { runSearch });
+    const submitted = { key: "Enter", isComposing: false, keyCode: 13, preventDefault: vi.fn() };
+    view.handleSearchInputKeydown(submitted);
+    expect(submitted.preventDefault).toHaveBeenCalledOnce();
+    expect(runSearch).toHaveBeenCalledOnce();
+
+    view.handleSearchInputKeydown({ key: "Enter", isComposing: true, keyCode: 229, preventDefault: vi.fn() });
+    expect(runSearch).toHaveBeenCalledOnce();
+  });
+
+  it("26. clear visibility and action update the input without submitting", () => {
+    const view = Object.create(LinaSearchView.prototype) as Record<string, any>;
+    const input = { value: "consulta", focus: vi.fn() };
+    const clear = { hidden: true };
+    const runSearch = vi.fn();
+    Object.assign(view, { queryInput: input, runSearch });
+    view.updateClearSearchButton(clear);
+    expect(clear.hidden).toBe(false);
+    view.clearSearchInput(clear);
+    expect(input.value).toBe("");
+    expect(clear.hidden).toBe(true);
+    expect(input.focus).toHaveBeenCalledOnce();
+    expect(runSearch).not.toHaveBeenCalled();
+  });
+
+  it("27. input carries search keyboard and accessible labels", () => {
+    const src = viewSource();
+    expect(src).toContain('this.queryInput.setAttribute("enterkeyhint", "search");');
+    expect(src).toContain('this.queryInput.setAttribute("aria-label", this.L.searchInputLabel);');
+    expect(src).toContain('clearSearchButton.setAttribute("aria-label", this.L.searchClearButton);');
+    expect(ptStrings.searchInputLabel).toBe("Pesquisar notas");
+    expect(enStrings.searchInputLabel).toBe("Search notes");
   });
 
   // 22. Dedicated actions row
   it("22. Dedicated full-width actions row occupies separate line", () => {
     const src = viewSource();
-    expect(src).toContain("const actionsRow = searchSection.createDiv();");
+    expect(src).toContain("const actionsRow = searchControls.createDiv();");
     expect(src).toContain("actionsRow.addClass(\"lina-actions-row\");");
     expect(src).toContain("actionsWrapper.addClass(\"lina-actions-wrapper\");");
   });
@@ -517,5 +564,26 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
     expect(src).toContain("stateCard.addClass(\"lina-sidebar-state-card\");");
     expect(src).toContain("roleBox.createSpan({ text: sidebarStatus.role.title, cls: \"lina-sidebar-role-badge\" });");
     expect(src).toContain("const infoBtn = stateCard.createEl(\"button\", { cls: \"lina-sidebar-state-info-btn\", text: \"ⓘ\" });");
+  });
+
+  it("28. selectors have distinct nominal labels and responsive shared controls", () => {
+    const src = viewSource();
+    const css = cssSource();
+    expect(src).toContain('this.searchModeSelect.setAttribute("aria-label", this.L.searchModeLabel);');
+    expect(src).toContain('this.actionsSelect.setAttribute("aria-label", `${this.L.searchActionsLabel} de IA`);');
+    expect(css).toContain(".lina-search-controls");
+    expect(css).toContain("flex-wrap: wrap;");
+    expect(css).toContain("flex: 1 1 220px;");
+    expect(ptStrings.searchModeLabel).toBe("Pesquisa");
+    expect(ptStrings.searchActionsLabel).toBe("Ações");
+  });
+
+  it("29. search composer contains input and controls with concise copy", () => {
+    const src = viewSource();
+    expect(src).toContain("const searchComposer = searchSection.createDiv();");
+    expect(src).toContain("searchComposer.addClass(\"lina-search-composer\");");
+    expect(src).toContain("const inputContainer = searchComposer.createDiv();");
+    expect(src).toContain("const searchControls = searchComposer.createDiv();");
+    expect(ptStrings.searchPlaceholder).toBe("Pesquisar notas…");
   });
 });
