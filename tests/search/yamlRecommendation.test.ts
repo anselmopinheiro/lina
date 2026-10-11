@@ -5,6 +5,9 @@ import {
   filterAllowedYamlProperties,
   mergeYamlRecommendations,
   parseFrontmatterProperties,
+  readYamlMetadataScalars,
+  toYamlSuggestionValue,
+  yamlComparisonKey,
 } from "../../src/search/yamlRecommendation";
 
 describe("yaml recommendation", () => {
@@ -115,5 +118,43 @@ describe("yaml recommendation", () => {
       contextual,
       "tipo, estado",
     )).toEqual({ tipo: "reuniao", estado: "ativo" });
+  });
+
+  it("reads scalar metadata types without silently making them writable", () => {
+    expect(readYamlMetadataScalars("nota")).toEqual(["nota"]);
+    expect(readYamlMetadataScalars(7)).toEqual([7]);
+    expect(readYamlMetadataScalars(true)).toEqual([true]);
+    expect(toYamlSuggestionValue("nota")).toBe("nota");
+    expect(toYamlSuggestionValue(7)).toBeUndefined();
+    expect(toYamlSuggestionValue(true)).toBeUndefined();
+  });
+
+  it("handles homogeneous metadata lists and rejects mixed or unsupported values deterministically", () => {
+    expect(readYamlMetadataScalars(["ativo", "revisto"])).toEqual(["ativo", "revisto"]);
+    expect(readYamlMetadataScalars([1, 2])).toEqual([1, 2]);
+    expect(readYamlMetadataScalars([true, false])).toEqual([true, false]);
+    expect(readYamlMetadataScalars(["ativo", 1])).toBeUndefined();
+    expect(readYamlMetadataScalars(null)).toBeUndefined();
+    expect(readYamlMetadataScalars(undefined)).toBeUndefined();
+    expect(readYamlMetadataScalars({ estado: "ativo" })).toBeUndefined();
+    expect(toYamlSuggestionValue(["ativo", "revisto"])).toEqual(["ativo", "revisto"]);
+    expect(toYamlSuggestionValue([1, 2])).toBeUndefined();
+    expect(toYamlSuggestionValue([true, false])).toBeUndefined();
+    expect(toYamlSuggestionValue(["ativo", 1])).toBeUndefined();
+  });
+
+  it("uses type-aware comparison keys for metadata evidence", () => {
+    expect(yamlComparisonKey(true)).not.toBe(yamlComparisonKey("true"));
+    expect(yamlComparisonKey(1)).not.toBe(yamlComparisonKey("1"));
+    expect(yamlComparisonKey(["1"])).not.toBe(yamlComparisonKey(1));
+  });
+
+  it("does not promote non-text metadata through the contextual proposal boundary", () => {
+    expect(buildContextualYamlCandidates([
+      { yaml: { estado: true, prioridade: 1, lista: ["a", 1], tags: "ignorada", fora: "x" }, score: 20 },
+      { yaml: { estado: "ativo" }, score: 10 },
+    ], "estado, prioridade, lista, tags")).toEqual([
+      { property: "estado", value: "ativo", valueText: "ativo", pairNoteCount: 1, relatedScore: 10, propertyNoteCount: 1 },
+    ]);
   });
 });

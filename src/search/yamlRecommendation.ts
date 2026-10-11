@@ -1,5 +1,15 @@
 /** UI-independent YAML suggestion validation and proposal preparation. */
 
+/** Values that Obsidian's metadata cache can safely expose to this feature. */
+export type YamlMetadataScalar = string | number | boolean;
+export type YamlMetadataValue = YamlMetadataScalar | readonly YamlMetadataScalar[];
+export type YamlMetadataRecord = Readonly<Record<string, unknown>>;
+
+/**
+ * Values accepted by Lina's existing proposal and write pipeline. Metadata
+ * reading is wider than this boundary by design: numeric and boolean values
+ * are evidence, not automatically writable suggestions.
+ */
 export type YamlSuggestionValue = string | string[];
 export type YamlSuggestions = Record<string, YamlSuggestionValue>;
 
@@ -19,7 +29,7 @@ export interface YamlProposalOptions {
 }
 
 export interface RelatedYamlSource {
-  readonly yaml: YamlSuggestions;
+  readonly yaml: YamlMetadataRecord;
   readonly score?: number;
 }
 
@@ -32,9 +42,43 @@ export interface ContextualYamlCandidate {
   readonly propertyNoteCount: number;
 }
 
+function isYamlMetadataScalar(value: unknown): value is YamlMetadataScalar {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+/** Returns scalar metadata values, rejecting null, objects and mixed lists. */
+export function readYamlMetadataScalars(value: unknown): readonly YamlMetadataScalar[] | undefined {
+  const values: unknown[] = Array.isArray(value)
+    ? Array.from(value, (item): unknown => item)
+    : [value];
+  const scalarValues = values.filter(isYamlMetadataScalar);
+  if (values.length === 0 || scalarValues.length !== values.length) return undefined;
+  const scalarType = typeof values[0];
+  if (!values.every(item => typeof item === scalarType)) return undefined;
+  return scalarValues;
+}
+
+/** Stable type-aware key for comparison, ranking and deduplication only. */
+export function yamlComparisonKey(value: unknown): string | undefined {
+  const values = readYamlMetadataScalars(value);
+  if (!values) return undefined;
+  const scalarKey = (item: YamlMetadataScalar) => `${typeof item}:${JSON.stringify(item)}`;
+  return Array.isArray(value) ? `array:[${values.map(scalarKey).join(",")}]` : scalarKey(values[0]);
+}
+
+/** Explicitly narrows metadata evidence to the existing writable contract. */
+export function toYamlSuggestionValue(value: unknown): YamlSuggestionValue | undefined {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return undefined;
+  const values = readYamlMetadataScalars(value);
+  if (!values) return undefined;
+  const textValues = values.filter((item): item is string => typeof item === "string");
+  return textValues.length === values.length ? textValues : undefined;
+}
+
 /** Keeps the established allow-list behavior and reserves tags for its own flow. */
 export function filterAllowedYamlProperties(
-  yaml: YamlSuggestions,
+  yaml: YamlMetadataRecord,
   allowedProperties: string,
 ): YamlSuggestions {
   const allowed = allowedProperties.split(",").map(property => property.trim().toLowerCase());
@@ -42,7 +86,8 @@ export function filterAllowedYamlProperties(
 
   for (const [property, value] of Object.entries(yaml)) {
     if (allowed.includes(property.toLowerCase()) && property.toLowerCase() !== "tags") {
-      filtered[property] = value;
+      const suggestionValue = toYamlSuggestionValue(value);
+      if (suggestionValue !== undefined) filtered[property] = suggestionValue;
     }
   }
 
@@ -121,11 +166,16 @@ export function buildContextualYamlCandidates(
 
   for (const source of relatedSources) {
     const score = Number.isFinite(source.score) ? source.score ?? 0 : 0;
-    const eligible = filterAllowedYamlProperties(source.yaml, allowedProperties);
+    const allowed = allowedProperties.split(",").map(property => property.trim().toLowerCase());
 
-    for (const [property, value] of Object.entries(eligible)) {
+    for (const [property, rawValue] of Object.entries(source.yaml)) {
+      if (!allowed.includes(property.toLowerCase()) || property.toLowerCase() === "tags") continue;
+      const value = toYamlSuggestionValue(rawValue);
+      if (value === undefined) continue;
       const valueText = Array.isArray(value) ? value.join(", ") : String(value);
-      const candidateKey = `${property}\u0000${valueText}`;
+      const comparisonKey = yamlComparisonKey(value);
+      if (!comparisonKey) continue;
+      const candidateKey = `${property.toLocaleLowerCase()}\u0000${comparisonKey}`;
       const existing = candidates.get(candidateKey);
       candidates.set(candidateKey, {
         property,
