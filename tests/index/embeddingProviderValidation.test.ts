@@ -205,6 +205,7 @@ describe("embedding provider validation and fail-fast generation", () => {
     expect(result.success).toBe(true);
     expect(result.generated).toBe(2);
     expect(result.outcome).toBe("completed");
+    expect(result.publicationId).toEqual(expect.any(String));
     expect(requestUrlMock).toHaveBeenCalledTimes(3);
     expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(true);
   });

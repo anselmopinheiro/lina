@@ -2925,7 +2925,11 @@ export default class LinaPlugin extends Plugin {
     const deviceId = this.getDeviceId();
     try {
       return await updateProducerState(this.app.vault.adapter, deviceId, mutator);
-    } catch {
+    } catch (error) {
+      console.warn(
+        "Lina: failed to persist producer state during producer-state update; the primary publication was not reverted.",
+        error,
+      );
       return null;
     }
   }
@@ -4067,10 +4071,45 @@ export default class LinaPlugin extends Plugin {
       );
 
       if (success) {
+        const publicationTimestamp = new Date().toISOString();
+        if (provenance) {
+          await this.updateProducerState((current) => {
+            const textIndex = {
+              lastSuccessfulPublicationAt: publicationTimestamp,
+              ...(policy?.policyHash !== undefined ? { exclusionPolicyHash: policy.policyHash } : {}),
+              ...(policy?.policyRevision !== undefined ? { exclusionPolicyRevision: policy.policyRevision } : {}),
+            };
+            if (!current) {
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: publicationTimestamp,
+                textIndex,
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: publicationTimestamp,
+                },
+              });
+            }
+            return createProducerState({
+              activeProducerId: provenance.producerDeviceId,
+              producerEpoch: provenance.producerEpoch,
+              updatedAt: publicationTimestamp,
+              textIndex: { ...current.textIndex, ...textIndex },
+              embeddings: current.embeddings,
+              maintenance: {
+                status: "idle",
+                lastError: null,
+                lastRunAt: publicationTimestamp,
+              },
+            });
+          });
+        }
         this.indexDiagnostic.totalNotes = updatedNotes.length;
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
-        this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.indexDiagnostic.lastUpdatedAt = publicationTimestamp;
         this.markEmbeddingWorkStatusDirty(options.embeddingWorkInvalidationReason ?? "text-index-published");
         this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {

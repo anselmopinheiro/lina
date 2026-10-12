@@ -848,3 +848,7 @@ To maintain clarity and avoid hardware-centric assumptions, all Lina codebase sy
 | **Ownership** | Exclusive authorization to publish `.lina/index/*` artifacts. | Master lock, Primary status |
 | **Epoch** | Monotonically increasing fencing generation number. | Version counter, Lock generation |
 | **Artifact Publication** | Atomically writing canonical index and vector files to `.lina/index/*`. | Master push, Index dump |
+
+## Producer-state publication telemetry (LINA-022)
+
+`producer-state.json` records successful publication events under the existing ownership and epoch rules; it does not provide a periodic heartbeat. A successful incremental text-index publication updates `updatedAt` and `textIndex.lastSuccessfulPublicationAt` while preserving the embedding state. A successful canonical embedding publication returns its already-created `publicationId` to the runtime, which records it with `embeddings.lastSuccessfulPublicationAt`. Failure to persist this telemetry is non-blocking: the primary publication is retained and a diagnostic warning is emitted. The schema is unchanged. Saving an exclusion policy alone is not a text-index publication and does not update producer-state; a resulting index reconciliation does so only when it actually publishes the text index.

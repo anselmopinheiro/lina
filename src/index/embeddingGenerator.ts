@@ -1546,6 +1546,7 @@ export async function generateEmbeddingsForChunks(
   });
   return {
     success: true,
+    publicationId: publication.publicationId,
     total: allRecords.length,
     generated: newRecords.length,
     kept: keptRecords.length,

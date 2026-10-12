@@ -5,6 +5,7 @@ import { chunkText, Chunk } from "../../src/index/chunker";
 import { hashContent } from "../../src/index/noteHasher";
 import { IndexedNote, readIndexedChunks, readIndexedNotes, saveTextIndex } from "../../src/index/indexStore";
 import { searchTextIndex } from "../../src/search/textSearch";
+import { createProducerState, loadProducerState, saveProducerState } from "../../src/device/producerState";
 import { FakeAdapter } from "../helpers/fakeAdapter";
 
 type TestableLinaPlugin = LinaPlugin & Record<string, unknown>;
@@ -914,6 +915,68 @@ describe("text index controller integration", () => {
       revision: 1,
       reason: "text-index-published",
     });
+  });
+
+  it("LINA-022: records a successful incremental text publication without replacing embedding state", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    const existingContent = "Existing note content long enough for the text index.";
+    const liveContent = "Live note content long enough for the automatic batch.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const liveFile = makeFile("Live.md", liveContent, 200);
+    const producerId = "11111111-1111-4111-8111-111111111111";
+    const ownership = {
+      schemaVersion: 1 as const,
+      activeProducerId: producerId,
+      epoch: 1,
+      acquiredAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    await saveProducerState(adapter, createProducerState({
+      activeProducerId: producerId,
+      producerEpoch: 1,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      embeddings: {
+        lastSuccessfulPublicationAt: "2026-08-01T00:00:00.000Z",
+        publicationId: "emb-existing",
+      },
+    }), ownership);
+    vault.setMarkdownFiles([existingFile, liveFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(liveFile.path, liveContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+    plugin.indexedNotes = [noteFromFile(existingFile, existingContent)];
+    plugin.indexedChunks = chunksForFile(existingFile, existingContent);
+    plugin.textIndexLoaded = true;
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "create", file: liveFile, path: liveFile.path, receivedAt: "2026-07-12T00:00:00.000Z",
+    }]);
+
+    const state = await loadProducerState(adapter);
+    expect(state?.textIndex.lastSuccessfulPublicationAt).toEqual(expect.any(String));
+    expect(state?.updatedAt).toBe(state?.textIndex.lastSuccessfulPublicationAt);
+    expect(state?.embeddings).toMatchObject({
+      lastSuccessfulPublicationAt: "2026-08-01T00:00:00.000Z",
+      publicationId: "emb-existing",
+    });
+  });
+
+  it("LINA-022: logs a non-blocking producer-state persistence failure", async () => {
+    const { adapter, plugin } = createHarness();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    adapter.setOptions({ simulateWriteError: true });
+
+    const state = await plugin.updateProducerState(() => createProducerState({
+      activeProducerId: "11111111-1111-4111-8111-111111111111",
+      producerEpoch: 1,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    }));
+
+    expect(state).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("failed to persist producer state"),
+      expect.any(Error),
+    );
   });
 
   it("does not mark embedding work dirty after a failed automatic text index save", async () => {
