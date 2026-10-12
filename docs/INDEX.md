@@ -42,6 +42,7 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 
 ### 2.2 Arquitetura Normativa (`docs/architecture/`)
 - **[docs/architecture/LINA-PANEL-UI-UX.md](architecture/LINA-PANEL-UI-UX.md)** — Contratos de apresentação, pesquisa e análise IA do painel Lina.
+- **[docs/architecture/LOCAL-FIRST-TAXONOMY-ARCHITECTURE-001.md](architecture/LOCAL-FIRST-TAXONOMY-ARCHITECTURE-001.md)** — Taxonomia local-first de Tags e YAML: arquitetura, contratos (`TaxonomyPlan`, hierarquia de tags, YAML tipado), validação runtime e estado consolidado.
 - **[docs/architecture/sync-foundations.md](architecture/sync-foundations.md)** — Fundações de sincronização multi-dispositivo e partições de armazenamento (`.lina/` partilhado vs `data.json` local).
 - **[docs/architecture/producer-ownership.md](architecture/producer-ownership.md)** — Active Producer Ownership, Monotonic Epoch Fencing, histórico de transições e recuperação.
 - **[docs/architecture/device-identity.md](architecture/device-identity.md)** — Identidade persistente de dispositivo (UUID v4) via APIs oficiais do Obsidian.
