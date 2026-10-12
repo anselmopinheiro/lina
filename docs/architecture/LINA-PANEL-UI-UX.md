@@ -19,3 +19,5 @@ Search type is persistent state and actions are an immediate launcher that retur
 Visual language uses small theme-variable badges, primary content before state and auxiliary information, and no fixed colour semantics. Known presentation debt: partial Markdown table fragments can still need refinement.
 
 The preview distinguishes section, content/action and metadata levels. Its section labels are concise; confidence and limitations are secondary metadata while the summary stays readable. The final apply button fills its container for mobile use. These UI choices do not alter search, generation, parsing or note-writing contracts.
+
+The analysis panel presents only the final reconciled suggestions. Technical taxonomy observability (support counts, semantic neighbours, plan, local/AI origin) is not rendered, and a related-notes row appears only when related notes exist.

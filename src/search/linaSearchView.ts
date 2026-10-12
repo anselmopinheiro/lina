@@ -20,7 +20,6 @@ import { isProviderEndpointLocal } from "../ai/providerCapabilities";
 import { resolveEffectiveAnalysisConfig } from "../settings/effectiveAiConfig";
 import { searchTextIndex } from "./textSearch";
 import { runSemanticTaxonomyExperiment } from "./semanticTaxonomyExperiment";
-import { buildSemanticTaxonomyDiagnostic } from "./semanticTaxonomyDiagnostic";
 import type { TaxonomyPlan } from "./taxonomyPlan";
 import {
   fallbackTaxonomyRuntime,
@@ -5508,13 +5507,15 @@ ${truncatedContent}${truncationNote}
 
     this.renderCopyAiResponseButton(this.analysisResultEl, this.formatStructuredAnalysisForClipboard(result));
 
-    // Notas relacionadas usadas
-    const notesInfoContainer = this.analysisResultEl.createDiv();
-    notesInfoContainer.addClass("lina-mb-12");
-    notesInfoContainer.addClass("lina-fs-085");
-    notesInfoContainer.addClass("lina-color-muted");
+    // Notas relacionadas usadas; sem notas relacionadas não se mostra a linha "0".
+    const notesInfoContainer = relatedNotes.length > 0 || relatedNotesCount > 0
+      ? this.analysisResultEl.createDiv()
+      : null;
+    notesInfoContainer?.addClass("lina-mb-12");
+    notesInfoContainer?.addClass("lina-fs-085");
+    notesInfoContainer?.addClass("lina-color-muted");
 
-    if (relatedNotes.length > 0) {
+    if (notesInfoContainer && relatedNotes.length > 0) {
       const notesList = notesInfoContainer.createEl("details");
       notesList.createEl("summary", { text: `${this.L.previewSectionRelatedNotes} (${relatedNotes.length})` });
       notesList.addClass("lina-mt-4");
@@ -5527,7 +5528,7 @@ ${truncatedContent}${truncationNote}
       for (const note of relatedNotes.slice(0, 10)) { // Limitar a 10 para não sobrecarregar
         this.renderRelatedNoteSummaryItem(notesList, note);
       }
-    } else {
+    } else if (notesInfoContainer) {
       const emptyRelated = notesInfoContainer.createDiv({ text: this.L.previewSectionRelatedNotes });
       emptyRelated.createSpan({ text: String(relatedNotesCount), cls: "lina-suggestion-status" });
     }
@@ -5891,29 +5892,6 @@ ${truncatedContent}${truncationNote}
   }
 
   /**
-   * Diagnóstico experimental, só de leitura: compara o resultado atual com o motor local.
-   * Não aplica nem persiste nada e não corre em batch/inbox.
-   */
-  private renderSemanticTaxonomyDiagnostic(result: StructuredAnalysisResult, runtime: TaxonomyRuntimePlan | null): void {
-    const container = this.analysisResultEl;
-    if (!container || this.currentStructuredResult !== result) return;
-
-    const text = runtime
-      ? buildSemanticTaxonomyDiagnostic(
-        { ...runtime.experiment, current: { tags: result.tags ?? [], yaml: result.yaml ?? {} } },
-        runtime.plan,
-      ).lines.join("\n")
-      : "Índice de embeddings indisponível ou incompatível: motor local não executado.";
-
-    const details = container.createEl("details");
-    details.addClass("lina-mt-12");
-    details.addClass("lina-fs-08");
-    details.addClass("lina-color-muted");
-    details.createEl("summary", { text: "Diagnóstico experimental — taxonomia local (só leitura, não aplicado)" });
-    details.createEl("pre", { text }).addClass("lina-pre-wrap");
-  }
-
-  /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
   private async processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): Promise<void> {
@@ -5953,10 +5931,6 @@ ${truncatedContent}${truncationNote}
       }
 
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
-
-      if (this.currentAnalysisScope === "single-note") {
-        this.renderSemanticTaxonomyDiagnostic(json, taxonomy);
-      }
     } else {
       // Fallback textual
       this.clearLastSuggestedMetadata();
@@ -6880,7 +6854,6 @@ ${truncatedContent}${truncationNote}
           text: "A análise IA falhou; as sugestões locais de taxonomia continuam disponíveis para revisão.",
           attr: { style: "color: var(--text-warning); padding: 8px 0;" },
         });
-        this.renderSemanticTaxonomyDiagnostic(localResult, fallbackRuntime);
         return;
       }
       if (result.message.includes("Tempo limite")) {

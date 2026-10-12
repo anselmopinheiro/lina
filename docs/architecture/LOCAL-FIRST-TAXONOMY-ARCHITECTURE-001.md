@@ -164,9 +164,14 @@ individualmente um cartão da Inbox usa o fluxo da análise individual, logo ben
 
 ### 7.2 Diagnóstico experimental
 
-`Diagnóstico experimental — taxonomia local` mantém-se **temporariamente** como observabilidade:
-só leitura, sem escrita, sem IA nem embeddings adicionais, apenas na análise individual; mostra
-vizinhos, similaridade, suporte e plano. A decisão de o remover é futura (§10).
+O bloco `Diagnóstico experimental — taxonomia local` **já não é renderizado na interface**. A
+vista mostra apenas a sugestão final reconciliada; suporte, vizinhos, similaridade, plano e
+origem local/IA não fazem parte da experiência quotidiana.
+
+A infraestrutura permanece: `buildSemanticTaxonomyDiagnostic` (`semanticTaxonomyDiagnostic.ts`) e
+os dados do plano (`TaxonomyRuntimePlan.experiment`/`plan`) continuam disponíveis e testados para
+observabilidade técnica futura. Ocultar o bloco não altera o motor, o plano, a reconciliação nem
+os custos. A decisão de remover definitivamente o módulo de diagnóstico é futura (§10).
 
 ## 8. `internalLinks`
 
@@ -215,7 +220,7 @@ Estado: `IDEIA FUTURA — NÃO IMPLEMENTADA — NÃO BLOQUEIA A CONSOLIDAÇÃO`.
 
 1. Vocabulário preferencial para a IA com tags de suporte 1.
 2. Observar o crescimento e a convergência da taxonomia após uso real.
-3. Decidir quando remover o diagnóstico experimental.
+3. Decidir quando remover definitivamente o módulo de diagnóstico (já oculto na UI).
 
 ## 11. Critérios de encerramento
 
@@ -231,7 +236,7 @@ YAML tipado:              PRESERVADO
 Custos adicionais:        ZERO
 Batch/Inbox:              INALTERADOS
 internalLinks:            RESOLVIDO
-Diagnóstico experimental: MANTIDO TEMPORARIAMENTE
+Diagnóstico experimental: OCULTO NA UI (infraestrutura preservada)
 ```
 
 ## 12. Testes de referência

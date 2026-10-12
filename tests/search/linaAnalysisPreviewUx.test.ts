@@ -288,3 +288,63 @@ describe("LINA-007 structured analysis preview contracts", () => {
     expect(absent.view.structuredSelections.get("analysis_text")).toBe(false);
   });
 });
+
+describe("post-taxonomy analysis panel presentation", () => {
+  const targetFile = Object.assign(Object.create(TFile.prototype), { path: "Nota.md", name: "Nota.md", extension: "md" }) as TFile;
+  const related = { title: "Outra", path: "Outra.md", snippet: "", score: 50 };
+  const source = () => readFileSync(resolve(process.cwd(), "src/search/linaSearchView.ts"), "utf8");
+
+  const render = async (relatedNotes: unknown[], relatedCount = relatedNotes.length) => {
+    const root = node();
+    const view = analysisView();
+    Object.assign(view, {
+      analysisResultEl: root, structuredSelections: new Map(), selectableItemsMap: new Map(),
+      app: {
+        vault: { read: async () => "# Nota\n", getAllLoadedFiles: () => [] },
+        workspace: { getActiveFile: () => targetFile },
+        metadataCache: { getTags: () => ({ "#direcao/turma": 3 }) },
+      },
+      renderCopyAiResponseButton() {}, formatStructuredAnalysisForClipboard: () => "",
+      renderRelatedNoteSummaryItem() {},
+    });
+    await view.renderStructuredPreview({
+      summary: "Resumo",
+      tags: ["direcao/turma"],
+      yaml: { tipo: "contacto_ee", area: "escolar" },
+      suggestedTitle: "Contacto EE",
+    }, relatedCount, relatedNotes, targetFile);
+    return { root, view };
+  };
+
+  it("never renders the experimental taxonomy diagnostic in the normal panel", async () => {
+    const { root } = await render([related]);
+    const text = allText(root);
+
+    expect(text).not.toContain("Diagnóstico experimental");
+    expect(text).not.toMatch(/MOTOR LOCAL|MOTOR ATUAL|PLANO|suporte \d+\/\d+/);
+    expect(source()).not.toContain("renderSemanticTaxonomyDiagnostic");
+    expect(source()).not.toContain("Diagnóstico experimental");
+  });
+
+  it("keeps the reconciled suggestions available, preserving hierarchical tags", async () => {
+    const { root, view } = await render([]);
+    const text = allText(root);
+
+    expect(text).toContain("direcao/turma");
+    expect(text).not.toContain("direcaoturma");
+    expect(text).toContain("tipo: contacto_ee");
+    expect(text).toContain("area: escolar");
+    expect(text).toContain("Contacto EE");
+    // Todas as sugestões começam por selecionar: Aplicar (0) até haver seleção explícita.
+    expect([...view.structuredSelections.values()].every((selected: boolean) => selected === false)).toBe(true);
+    expect(text).toMatch(/\(0\)/);
+  });
+
+  it("shows no related-notes row when there are none, and a compact list when there are", async () => {
+    const none = allText((await render([])).root);
+    const some = allText((await render([related])).root);
+
+    expect(none).not.toContain("Notas relacionadas");
+    expect(some).toContain("Notas relacionadas (1)");
+  });
+});

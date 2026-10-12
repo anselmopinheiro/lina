@@ -219,7 +219,7 @@ describe("batch e inbox preservam o comportamento histórico", () => {
   });
 
   it("o plano é consumido apenas no âmbito single-note", () => {
-    const take = slice("private takePendingTaxonomyPlan(", "private renderSemanticTaxonomyDiagnostic(");
+    const take = slice("private takePendingTaxonomyPlan(", "private async processAIResponse(");
     expect(take).toContain('this.currentAnalysisScope !== "single-note"');
     expect(take).toContain("this.pendingTaxonomyPlan = null;");
   });
