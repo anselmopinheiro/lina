@@ -19,6 +19,16 @@ import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { isProviderEndpointLocal } from "../ai/providerCapabilities";
 import { resolveEffectiveAnalysisConfig } from "../settings/effectiveAiConfig";
 import { searchTextIndex } from "./textSearch";
+import { runSemanticTaxonomyExperiment } from "./semanticTaxonomyExperiment";
+import { buildSemanticTaxonomyDiagnostic } from "./semanticTaxonomyDiagnostic";
+import type { TaxonomyPlan } from "./taxonomyPlan";
+import {
+  fallbackTaxonomyRuntime,
+  prepareTaxonomyRuntime,
+  reconcileTaxonomyRuntime,
+  type TaxonomyRuntimePlan,
+} from "./taxonomyRuntime";
+import type { TaxonomyAiRequest } from "./taxonomyReconciliation";
 import { generateProviderText } from "../ai/textProvider";
 import {
   getLocalAnalysisProvider,
@@ -38,8 +48,7 @@ import {
   buildContextualTagCandidates,
   formatTagUsageLabel,
   mergeTagRecommendations,
-  normalizeTag,
-  normalizeTags,
+  preserveTagIdentities,
   prepareTagProposals,
   type ContextualTagCandidate,
   type ExistingVaultTag,
@@ -625,7 +634,7 @@ function getSearchSnippetPresentation(card: GroupedNoteCard): SearchSnippetPrese
 
 function extrairTagsDeValorYaml(value: string | string[]): string[] {
   if (Array.isArray(value)) {
-    return normalizeTags(value);
+    return preserveTagIdentities(value);
   }
 
   const trimmed = value.trim();
@@ -636,10 +645,10 @@ function extrairTagsDeValorYaml(value: string | string[]): string[] {
       .substring(1, trimmed.length - 1)
       .split(",")
       .map(tag => tag.trim().replace(/^["']|["']$/g, ""));
-    return normalizeTags(inlineItems);
+    return preserveTagIdentities(inlineItems);
   }
 
-  return normalizeTags(trimmed.split(",").map(tag => tag.trim()));
+  return preserveTagIdentities(trimmed.split(",").map(tag => tag.trim()));
 }
 
 function normalizeComparableText(text: string): string {
@@ -1017,7 +1026,7 @@ function extrairTagsDoFrontmatter(frontmatter: string): string[] {
     }
     if (inTags) {
       if (trimmed.startsWith("- ")) {
-        tags.push(normalizeTag(trimmed.substring(2).trim()));
+        tags.push(preserveTagIdentities([trimmed.substring(2).trim()])[0] ?? "");
       } else if (trimmed.includes(":")) {
         inTags = false;
       } else if (trimmed.length === 0) {
@@ -1071,6 +1080,8 @@ export class LinaSearchView extends ItemView {
 
   // Resultado estruturado atual (para aplicar à nota)
   private currentStructuredResult?: StructuredAnalysisResult;
+  /** Plano taxonómico local da análise normal em curso; consumido uma única vez. */
+  private pendingTaxonomyPlan: { path: string; runtime: TaxonomyRuntimePlan } | null = null;
 
   /** Caminho do ficheiro ativo para aplicar alterações */
   private currentActiveFilePath?: string;
@@ -2235,7 +2246,7 @@ export class LinaSearchView extends ItemView {
     const uniqueTags: string[] = [];
     const seen = new Set<string>();
 
-    for (const tag of normalizeTags(tags)) {
+    for (const tag of preserveTagIdentities(tags)) {
       if (seen.has(tag)) continue;
       seen.add(tag);
       uniqueTags.push(tag);
@@ -2303,7 +2314,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private formatTagsForClipboard(tags: string[]): string {
-    return normalizeTags(tags).join(", ");
+    return preserveTagIdentities(tags).join(", ");
   }
 
   private formatSuggestedMetadataForClipboard(): string {
@@ -3481,7 +3492,7 @@ export class LinaSearchView extends ItemView {
     const { json } = extrairJsonDaResposta(aiText);
     const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
     const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
-    return normalizeTags(rawTags).slice(0, maxTags);
+    return preserveTagIdentities(rawTags).slice(0, maxTags);
   }
 
   private buildYamlCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
@@ -4091,9 +4102,52 @@ export class LinaSearchView extends ItemView {
   // -----------------------------------------------------------------------
 
   /**
+   * Secções do prompt que dependem do pedido taxonómico. Sem pedido devolve exatamente o
+   * texto histórico; a decisão do que pedir à IA vem de `TaxonomyAiRequest` (taxonomyRuntime).
+   */
+  private buildTaxonomyPromptSections(
+    historicalYamlSection: string,
+    taxonomyRequest?: TaxonomyAiRequest,
+  ): { yamlSection: string; tagsRules: string; jsonFields: string } {
+    const historicalTagsRules = `Regras para tags (no máximo ${this.plugin.settings.maxSuggestedTags}):
+
+* minúsculas, sem acentos, espaços convertidos para underscore
+* evitar tags genéricas como "projeto", "sistema", "nota" ou "geral"
+* normalizar: "Gestão de Trabalhos" → gestao_trabalhos`;
+    const historicalYamlField = '  "yaml": {\n    "propriedade": "valor"\n  },\n';
+    const tagsField = '  "tags": ["tag1", "tag2"],\n';
+    if (!taxonomyRequest) {
+      return {
+        yamlSection: historicalYamlSection,
+        tagsRules: historicalTagsRules,
+        jsonFields: `${historicalYamlField}${tagsField}`,
+      };
+    }
+
+    const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
+    const requestedYaml = yamlEnabled && taxonomyRequest.requestedYamlProperties.length > 0;
+    let yamlSection = historicalYamlSection;
+    if (yamlEnabled) {
+      yamlSection = requestedYaml
+        ? `* Para taxonomia, sugere APENAS estas propriedades YAML: ${taxonomyRequest.requestedYamlProperties.join(", ")}.
+* NÃO devolvas estas propriedades já resolvidas localmente: ${taxonomyRequest.omittedYamlProperties.join(", ") || "nenhuma"}.
+* As tags devem ser devolvidas apenas no campo "tags". NÃO incluas "tags" dentro do objeto "yaml".`
+        : "* A taxonomia YAML foi resolvida localmente. NÃO incluas o campo \"yaml\".";
+    }
+
+    return {
+      yamlSection,
+      tagsRules: taxonomyRequest.requestTags
+        ? historicalTagsRules
+        : "Regras para tags:\n\n* As tags foram resolvidas localmente. NÃO incluas o campo \"tags\".",
+      jsonFields: `${requestedYaml ? '  "yaml": { "propriedade": "valor" },\n' : !yamlEnabled ? historicalYamlField : ""}${taxonomyRequest.requestTags ? tagsField : ""}`,
+    };
+  }
+
+  /**
    * Constrói o prompt interno para análise da nota atual, pedindo JSON estruturado.
    */
-  private buildCurrentNoteAnalysisPrompt(title: string, path: string, content: string): string {
+  private buildCurrentNoteAnalysisPrompt(title: string, path: string, content: string, taxonomyRequest?: TaxonomyAiRequest): string {
     let truncatedContent = content;
     let truncationNote = "";
 
@@ -4144,6 +4198,9 @@ export class LinaSearchView extends ItemView {
 * NÃO incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
 
+    const taxonomySections = this.buildTaxonomyPromptSections(yamlSection, taxonomyRequest);
+    yamlSection = taxonomySections.yamlSection;
+
     const linksInstruction = `* Como ainda não são passadas notas relacionadas, o campo "internalLinks" deve ser um array vazio [].`;
 
     return `${languageInstruction}
@@ -4173,11 +4230,7 @@ ${existingFoldersSection}
 * Se tiveres pouca confiança, deixa "suggestedFolder" vazio ou usa a pasta atual se ela não for Inbox.
 * Se a pasta atual parecer adequada e não for Inbox, usa: "${currentFolder}"
 
-Regras para tags (no máximo ${this.plugin.settings.maxSuggestedTags}):
-
-* minúsculas, sem acentos, espaços convertidos para underscore
-* evitar tags genéricas como "projeto", "sistema", "nota" ou "geral"
-* normalizar: "Gestão de Trabalhos" → gestao_trabalhos
+${taxonomySections.tagsRules}
 
 Regras para links internos:
 ${linksInstruction}
@@ -4192,11 +4245,7 @@ Estrutura JSON obrigatória:
   "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
-  "yaml": {
-    "propriedade": "valor"
-  },
-  "tags": ["tag1", "tag2"],
-  "internalLinks": [],
+${taxonomySections.jsonFields}  "internalLinks": [],
   "tasks": ["tarefa 1", "tarefa 2"],
   "analysis": "texto da análise detalhada em 3-5 frases",
   "confidence": "alto | médio | baixo",
@@ -4227,7 +4276,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas, pedindo JSON estruturado.
    */
-  private buildCurrentNoteAnalysisPromptWithContext(title: string, path: string, content: string, relatedNotes: RelatedNote[]): string {
+  private buildCurrentNoteAnalysisPromptWithContext(title: string, path: string, content: string, relatedNotes: RelatedNote[], taxonomyRequest?: TaxonomyAiRequest): string {
     let truncatedContent = content;
     let truncationNote = "";
 
@@ -4298,6 +4347,9 @@ ${truncatedContent}${truncationNote}
 * NÃO incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
 
+    const taxonomySections = this.buildTaxonomyPromptSections(yamlSection, taxonomyRequest);
+    yamlSection = taxonomySections.yamlSection;
+
     return `${languageInstruction}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
@@ -4327,11 +4379,7 @@ ${existingFoldersSection}
 * Se tiveres pouca confiança, deixa "suggestedFolder" vazio ou usa a pasta atual se ela não for Inbox.
 * Se a pasta atual parecer adequada e não for Inbox, usa: "${currentFolder}"
 
-Regras para tags (no máximo ${this.plugin.settings.maxSuggestedTags}):
-
-* minúsculas, sem acentos, espaços convertidos para underscore
-* evitar tags genéricas como "projeto", "sistema", "nota" ou "geral"
-* normalizar: "Gestão de Trabalhos" → gestao_trabalhos
+${taxonomySections.tagsRules}
 
 Regras estritas para links internos:
 
@@ -4360,11 +4408,7 @@ Estrutura JSON obrigatória:
   "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
-  "yaml": {
-    "propriedade": "valor"
-  },
-  "tags": ["tag1", "tag2"],
-  "internalLinks": [
+${taxonomySections.jsonFields}  "internalLinks": [
     { "path": "caminho/exato/de/um/candidato.md", "reason": "motivo breve e específico" }
   ],
   "tasks": ["tarefa 1", "tarefa 2"],
@@ -4737,7 +4781,7 @@ ${truncatedContent}${truncationNote}
       }
     }
 
-    return normalizeTags(selectedTags);
+    return preserveTagIdentities(selectedTags);
   }
 
   private async applySelectedTagsFromCommand(applyTarget: AskApplyTarget): Promise<void> {
@@ -4821,9 +4865,9 @@ ${truncatedContent}${truncationNote}
     const cache = this.app.metadataCache.getFileCache(file);
 
     for (const tagCache of cache?.tags ?? []) {
-      const normalizedTag = normalizeTag(tagCache.tag.replace(/^#/, ""));
-      if (normalizedTag) {
-        tags.add(normalizedTag);
+      const identity = preserveTagIdentities([tagCache.tag])[0];
+      if (identity) {
+        tags.add(identity);
       }
     }
 
@@ -4862,10 +4906,11 @@ ${truncatedContent}${truncationNote}
       if (!(relatedFile instanceof TFile)) return null;
 
       try {
-        const content = await this.app.vault.read(relatedFile);
-        const { frontmatter } = extrairFrontmatter(content);
+        // Valores tipados da cache de metadados; o estreitamento para valores graváveis
+        // acontece em yamlRecommendation antes de qualquer proposta chegar à UI.
+        const frontmatter = this.app.metadataCache.getFileCache(relatedFile)?.frontmatter;
         return {
-          yaml: Object.fromEntries(parseFrontmatterProperties(frontmatter)),
+          yaml: frontmatter ?? {},
           score: note.score,
         };
       } catch {
@@ -5810,6 +5855,65 @@ ${truncatedContent}${truncationNote}
   }
 
   /**
+   * Calcula o plano taxonómico local para a nota (RuntimeEmbeddingIndex + metadataCache já
+   * existentes). Só leitura: sem embeddings, rede, LLM nem persistência. Em qualquer falha
+   * devolve `null` e a análise segue o caminho histórico.
+   */
+  private async computeTaxonomyRuntime(path: string): Promise<TaxonomyRuntimePlan | null> {
+    try {
+      const chunks = await readIndexedChunks(this.app);
+      const runtimeIndex = chunks
+        ? await this.plugin.getRuntimeEmbeddingIndex(this.filterChunksByUserContentRules(chunks))
+        : null;
+      if (!runtimeIndex) return null;
+
+      const experiment = runSemanticTaxonomyExperiment(runtimeIndex, normalizePath(path), this.app.metadataCache, this.app.vault, {
+        topK: 10,
+        maxTags: this.plugin.settings.maxSuggestedTags ?? 8,
+        yamlAllowedProperties: this.plugin.settings.yamlAllowedProperties,
+      });
+      return prepareTaxonomyRuntime(experiment, {
+        yamlAllowedProperties: this.plugin.settings.yamlAllowedProperties,
+        yamlEnabled: this.plugin.settings.yamlSuggestionsEnabled,
+      });
+    } catch (error) {
+      console.warn("Lina: plano de taxonomia local indisponível", error);
+      return null;
+    }
+  }
+
+  /** Consome o plano da análise normal; nunca é reutilizado por outro fluxo ou nota. */
+  private takePendingTaxonomyPlan(path: string): TaxonomyRuntimePlan | null {
+    const pending = this.pendingTaxonomyPlan;
+    this.pendingTaxonomyPlan = null;
+    if (!pending || this.currentAnalysisScope !== "single-note") return null;
+    return pending.path === normalizePath(path) ? pending.runtime : null;
+  }
+
+  /**
+   * Diagnóstico experimental, só de leitura: compara o resultado atual com o motor local.
+   * Não aplica nem persiste nada e não corre em batch/inbox.
+   */
+  private renderSemanticTaxonomyDiagnostic(result: StructuredAnalysisResult, runtime: TaxonomyRuntimePlan | null): void {
+    const container = this.analysisResultEl;
+    if (!container || this.currentStructuredResult !== result) return;
+
+    const text = runtime
+      ? buildSemanticTaxonomyDiagnostic(
+        { ...runtime.experiment, current: { tags: result.tags ?? [], yaml: result.yaml ?? {} } },
+        runtime.plan,
+      ).lines.join("\n")
+      : "Índice de embeddings indisponível ou incompatível: motor local não executado.";
+
+    const details = container.createEl("details");
+    details.addClass("lina-mt-12");
+    details.addClass("lina-fs-08");
+    details.addClass("lina-color-muted");
+    details.createEl("summary", { text: "Diagnóstico experimental — taxonomia local (só leitura, não aplicado)" });
+    details.createEl("pre", { text }).addClass("lina-pre-wrap");
+  }
+
+  /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
   private async processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): Promise<void> {
@@ -5818,9 +5922,24 @@ ${truncatedContent}${truncationNote}
     const { json, error } = extrairJsonDaResposta(aiText);
 
     if (json && !error) {
-      const contextualTagCandidates = await this.getContextualTagCandidates(relatedNotes);
-      const contextualYamlCandidates = await this.getContextualYamlCandidates(relatedNotes);
-      this.prepareStructuredAnalysisResult(json, contextualTagCandidates, contextualYamlCandidates);
+      const taxonomy = this.takePendingTaxonomyPlan(currentPath);
+      if (taxonomy) {
+        // A decisão local-first pertence ao taxonomyRuntime; a vista só aplica o resultado.
+        const reconciliation = reconcileTaxonomyRuntime(
+          taxonomy,
+          json.tags,
+          json.yaml,
+          this.plugin.settings.yamlAllowedProperties,
+          this.plugin.settings.maxSuggestedTags ?? 8,
+        );
+        json.tags = reconciliation?.tags.length ? [...reconciliation.tags] : undefined;
+        json.yaml = reconciliation && Object.keys(reconciliation.yaml).length > 0 ? reconciliation.yaml : undefined;
+        this.prepareStructuredAnalysisResult(json, [], [], taxonomy.plan);
+      } else {
+        const contextualTagCandidates = await this.getContextualTagCandidates(relatedNotes);
+        const contextualYamlCandidates = await this.getContextualYamlCandidates(relatedNotes);
+        this.prepareStructuredAnalysisResult(json, contextualTagCandidates, contextualYamlCandidates);
+      }
 
       // Filtrar links internos
       if (json.internalLinks && allowedPaths.length > 0) {
@@ -5834,6 +5953,10 @@ ${truncatedContent}${truncationNote}
       }
 
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
+
+      if (this.currentAnalysisScope === "single-note") {
+        this.renderSemanticTaxonomyDiagnostic(json, taxonomy);
+      }
     } else {
       // Fallback textual
       this.clearLastSuggestedMetadata();
@@ -6355,7 +6478,7 @@ ${truncatedContent}${truncationNote}
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
     const existingProps = parseFrontmatterProperties(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
-    const normalizedSelectedTags = normalizeTags(selectedTags);
+    const normalizedSelectedTags = preserveTagIdentities(selectedTags);
 
     // Construir novas linhas YAML
     const newLines: string[] = [];
@@ -6387,7 +6510,7 @@ ${truncatedContent}${truncationNote}
 
     // Adicionar tags selecionadas
     if (normalizedSelectedTags.length > 0) {
-      const allTags = [...new Set([...existingTags, ...normalizedSelectedTags])];
+      const allTags = preserveTagIdentities([...existingTags, ...normalizedSelectedTags]);
       if (allTags.length > 0) {
         newLines.push("tags:");
         for (const tag of allTags) {
@@ -6716,9 +6839,13 @@ ${truncatedContent}${truncationNote}
       : [];
     const relatedFilterResult = await this.filterRelatedNotesByUserContentRules(initialRelatedNotes);
     const relatedNotes = relatedFilterResult.notes;
+    // Local-first: o plano decide que lacunas a (única) chamada IA ainda tem de cobrir.
+    const taxonomyRuntime = await this.computeTaxonomyRuntime(path);
+    this.pendingTaxonomyPlan = taxonomyRuntime ? { path: normalizePath(path), runtime: taxonomyRuntime } : null;
+    const taxonomyRequest = taxonomyRuntime?.request;
     const prompt = options.withContext
-      ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes)
-      : this.buildCurrentNoteAnalysisPrompt(title, path, content);
+      ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes, taxonomyRequest)
+      : this.buildCurrentNoteAnalysisPrompt(title, path, content, taxonomyRequest);
     const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
 
     if (analysisRunId !== this.analysisRunId) {
@@ -6733,6 +6860,29 @@ ${truncatedContent}${truncationNote}
     this.analysisResultEl.empty();
 
     if (!result.success) {
+      // Falha da IA: preservar as sugestões locais suportadas, sem nova chamada.
+      const fallbackRuntime = this.takePendingTaxonomyPlan(path);
+      const fallback = fallbackTaxonomyRuntime(
+        fallbackRuntime ?? undefined,
+        this.plugin.settings.yamlAllowedProperties,
+        this.plugin.settings.maxSuggestedTags ?? 8,
+      );
+      if (fallbackRuntime && fallback && (fallback.tags.length > 0 || Object.keys(fallback.yaml).length > 0)) {
+        const localResult: StructuredAnalysisResult = {
+          summary: "",
+          ...(fallback.tags.length > 0 ? { tags: [...fallback.tags] } : {}),
+          ...(Object.keys(fallback.yaml).length > 0 ? { yaml: fallback.yaml } : {}),
+        };
+        this.prepareStructuredAnalysisResult(localResult, [], [], fallbackRuntime.plan);
+        this.preserveSingleNoteSuggestedMetadata(localResult.yaml, localResult.tags ?? []);
+        await this.renderStructuredPreview(localResult, relatedNotes.length, relatedNotes, currentFile);
+        this.analysisResultEl.createDiv({
+          text: "A análise IA falhou; as sugestões locais de taxonomia continuam disponíveis para revisão.",
+          attr: { style: "color: var(--text-warning); padding: 8px 0;" },
+        });
+        this.renderSemanticTaxonomyDiagnostic(localResult, fallbackRuntime);
+        return;
+      }
       if (result.message.includes("Tempo limite")) {
         this.analysisResultEl.createDiv({
           text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
@@ -7238,6 +7388,7 @@ ${limitedContent}
     result: StructuredAnalysisResult,
     contextualTagCandidates: ContextualTagCandidate[] = [],
     contextualYamlCandidates: ContextualYamlCandidate[] = [],
+    taxonomyPlan?: TaxonomyPlan,
   ): void {
     const yamlTags = result.yaml?.tags;
     if (yamlTags && (!result.tags || result.tags.length === 0)) {
@@ -7247,7 +7398,8 @@ ${limitedContent}
       }
     }
 
-    if (result.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
+    // Com plano local o resultado já foi reconciliado pelo taxonomyRuntime: não voltar a fundir.
+    if (!taxonomyPlan && result.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
       result.yaml = mergeYamlRecommendations(
         result.yaml,
         contextualYamlCandidates,
@@ -7259,11 +7411,12 @@ ${limitedContent}
       delete result.yaml;
     }
 
-    if (result.tags || contextualTagCandidates.length > 0) {
+    if (!taxonomyPlan && (result.tags || contextualTagCandidates.length > 0)) {
       result.tags = mergeTagRecommendations(
         result.tags ?? [],
         contextualTagCandidates,
         this.plugin.settings.maxSuggestedTags ?? 8,
+        this.getExistingVaultTags(),
       );
     }
   }
@@ -7521,7 +7674,7 @@ ${limitedContent}
       if (!item.result) continue;
 
       const yaml = item.result.yaml ? { ...item.result.yaml } : {};
-      const tags = normalizeTags(item.result.tags ?? []);
+      const tags = preserveTagIdentities(item.result.tags ?? []);
       if (Object.keys(yaml).length === 0 && tags.length === 0) continue;
 
       this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item.file.path), {
