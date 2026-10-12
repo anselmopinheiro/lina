@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-08T19:30:54.503Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-12T12:56:07.978Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -74,8 +74,12 @@ var PT_PT = {
   sectionQuickActions: "A\xE7\xF5es r\xE1pidas",
   sectionState: "Estado",
   sectionResults: "Resultados",
-  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags, /yaml...",
+  searchPlaceholder: "Pesquisar notas\u2026",
+  searchInputLabel: "Pesquisar notas",
+  searchModeLabel: "Pesquisa",
+  searchActionsLabel: "A\xE7\xF5es",
   searchButton: "Pesquisar",
+  searchClearButton: "Limpar pesquisa",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa sem\xE2ntica",
   searchHybrid: "Pesquisa h\xEDbrida",
@@ -766,6 +770,11 @@ var PT_PT = {
   previewSelectItems: "Seleciona os itens que pretendes aplicar \xE0 nota.",
   previewCheckboxExplanation: "As checkboxes da pr\xE9-visualiza\xE7\xE3o significam apenas sele\xE7\xE3o para aplicar, n\xE3o estado conclu\xEDdo.",
   previewRelatedNotesUsed: "Notas relacionadas usadas",
+  previewSectionRelatedNotes: "Notas relacionadas",
+  previewSectionTitle: "T\xEDtulo",
+  previewSectionFolder: "Pasta",
+  previewSectionYaml: "YAML",
+  previewSectionTags: "Tags",
   previewSuggestedTitle: "T\xEDtulo sugerido",
   previewSuggestedFolder: "Pasta sugerida",
   previewYamlSuggested: "YAML sugerido",
@@ -775,6 +784,8 @@ var PT_PT = {
   previewOtherRelatedNotes: "Outras notas relacionadas",
   previewTasksDetected: "Tarefas detetadas",
   previewAnalysis: "An\xE1lise",
+  previewAnalysisAlreadyExists: "j\xE1 existe",
+  previewAnalysisWillAppend: "Ser\xE1 acrescentada uma nova an\xE1lise.",
   previewSummary: "Resumo",
   previewConfidence: "Grau de confian\xE7a",
   previewLimitations: "Limita\xE7\xF5es",
@@ -794,6 +805,8 @@ var PT_PT = {
   previewFolderNew: "Pasta inexistente na raiz do vault. O Lina n\xE3o cria pastas automaticamente nesta fase.",
   previewFolderInbox: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o.",
   previewFolderCurrent: "A nota j\xE1 est\xE1 na pasta sugerida.",
+  previewFolderExistingBadge: "existente",
+  previewFolderCurrentBadge: "j\xE1 est\xE1 aqui",
   relatedOriginLabel: "Origem",
   relatedScoreLabel: "Score",
   relatedReasonLabel: "Motivo",
@@ -1001,10 +1014,10 @@ var PT_PT = {
   sidebarDegradedGenerationIntegrity: "Os ficheiros sincronizados ainda n\xE3o est\xE3o consistentes. A aguardar nova sincroniza\xE7\xE3o.",
   sidebarDegradedPolicyMismatch: "As regras de exclus\xE3o foram atualizadas. A aguardar atualiza\xE7\xE3o dos artefactos.",
   sidebarDegradedVectorMismatch: "Os embeddings n\xE3o s\xE3o compat\xEDveis com a configura\xE7\xE3o atual.",
-  sidebarDegradedProducerStale: "O Produtor n\xE3o atualiza os artefactos h\xE1 mais de 48 h.",
-  sidebarDegradedProducerAging: "O Produtor n\xE3o atualiza os artefactos h\xE1 mais de 24 h.",
+  sidebarDegradedProducerStale: "Sem registo de atividade do Produtor h\xE1 mais de 48 h.",
+  sidebarDegradedProducerAging: "Sem registo de atividade do Produtor h\xE1 mais de 24 h.",
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
-  sidebarActionPlaceholder: "A\xE7\xF5es...",
+  sidebarActionPlaceholder: "IA...",
   sidebarDiagnosticsButton: "Ver diagn\xF3stico",
   deviceDiagnosticsSectionMaintenance: "Manuten\xE7\xE3o",
   deviceDiagnosticsMaintenanceRebuildIndex: "Reconstruir \xEDndice textual",
@@ -1050,8 +1063,12 @@ var EN = {
   sectionQuickActions: "Quick actions",
   sectionState: "Status",
   sectionResults: "Results",
-  searchPlaceholder: "Search or use a command: /ask, /tags, /yaml...",
+  searchPlaceholder: "Search notes\u2026",
+  searchInputLabel: "Search notes",
+  searchModeLabel: "Search",
+  searchActionsLabel: "Actions",
   searchButton: "Search",
+  searchClearButton: "Clear search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
   searchHybrid: "Hybrid search",
@@ -1746,6 +1763,11 @@ var EN = {
   previewSelectItems: "Select the items you want to apply to the note.",
   previewCheckboxExplanation: "The preview checkboxes only mean selection for application, not completed state.",
   previewRelatedNotesUsed: "Related notes used",
+  previewSectionRelatedNotes: "Related notes",
+  previewSectionTitle: "Title",
+  previewSectionFolder: "Folder",
+  previewSectionYaml: "YAML",
+  previewSectionTags: "Tags",
   previewSuggestedTitle: "Suggested title",
   previewSuggestedFolder: "Suggested folder",
   previewYamlSuggested: "Suggested YAML",
@@ -1755,6 +1777,8 @@ var EN = {
   previewOtherRelatedNotes: "Other related notes",
   previewTasksDetected: "Detected tasks",
   previewAnalysis: "Analysis",
+  previewAnalysisAlreadyExists: "already exists",
+  previewAnalysisWillAppend: "A new analysis will be appended.",
   previewSummary: "Summary",
   previewConfidence: "Confidence level",
   previewLimitations: "Limitations",
@@ -1774,6 +1798,8 @@ var EN = {
   previewFolderNew: "Folder does not exist at vault root. Lina does not create folders automatically at this stage.",
   previewFolderInbox: "Ignored: Inbox should not be used as an organisation destination.",
   previewFolderCurrent: "The note is already in the suggested folder.",
+  previewFolderExistingBadge: "existing",
+  previewFolderCurrentBadge: "already here",
   relatedOriginLabel: "Origin",
   relatedScoreLabel: "Score",
   relatedReasonLabel: "Reason",
@@ -1981,10 +2007,10 @@ var EN = {
   sidebarDegradedGenerationIntegrity: "Synchronized files are not yet consistent. Waiting for synchronization to complete.",
   sidebarDegradedPolicyMismatch: "Exclusion rules were updated. Waiting for artifact update.",
   sidebarDegradedVectorMismatch: "Embeddings are not compatible with the current configuration.",
-  sidebarDegradedProducerStale: "The Producer has not updated artifacts in over 48h.",
-  sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
+  sidebarDegradedProducerStale: "No Producer activity has been recorded in over 48h.",
+  sidebarDegradedProducerAging: "No Producer activity has been recorded in over 24h.",
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
-  sidebarActionPlaceholder: "Actions...",
+  sidebarActionPlaceholder: "AI...",
   sidebarDiagnosticsButton: "View diagnostics",
   deviceDiagnosticsSectionMaintenance: "Maintenance",
   deviceDiagnosticsMaintenanceRebuildIndex: "Rebuild text index",
@@ -13192,6 +13218,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   });
   return {
     success: true,
+    publicationId: publication.publicationId,
     total: allRecords.length,
     generated: newRecords.length,
     kept: keptRecords.length,
@@ -21333,12 +21360,12 @@ function buildSidebarStatusViewModel(input) {
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
+  } else if (effectiveTextUpdated) {
+    textStatus = computeFreshnessFromTimestamp(effectiveTextUpdated, nowMs);
   } else if (textIndexFreshness) {
     textStatus = textIndexFreshness;
   } else if (companionState == null ? void 0 : companionState.textIndexFreshness) {
     textStatus = companionState.textIndexFreshness;
-  } else if (effectiveTextUpdated) {
-    textStatus = computeFreshnessFromTimestamp(effectiveTextUpdated, nowMs);
   } else {
     textStatus = textIndexReady ? "fresh" : "unknown";
   }
@@ -21444,12 +21471,6 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedVectorMismatch
     };
-  } else if ((companionState == null ? void 0 : companionState.producerFreshness) === "stale") {
-    degradedAlert = {
-      kind: "producer-stale",
-      level: "warning",
-      message: strings.sidebarDegradedProducerStale
-    };
   } else if (!semanticAvailable && !semanticPreparing && !embeddingsChecking && (currentSearchMode === "semantica" || currentSearchMode === "hibrida")) {
     degradedAlert = {
       kind: "semantic-unavailable",
@@ -21457,7 +21478,13 @@ function buildSidebarStatusViewModel(input) {
       message: strings.sidebarSearchSemanticUnavailableOnDevice,
       detail: semanticReason != null ? semanticReason : strings.sidebarSearchModelUnavailableLocally
     };
-  } else if ((companionState == null ? void 0 : companionState.producerFreshness) === "aging") {
+  } else if (roleKey !== "active-producer" && (companionState == null ? void 0 : companionState.producerFreshness) === "stale") {
+    degradedAlert = {
+      kind: "producer-stale",
+      level: "warning",
+      message: strings.sidebarDegradedProducerStale
+    };
+  } else if (roleKey !== "active-producer" && (companionState == null ? void 0 : companionState.producerFreshness) === "aging") {
     degradedAlert = {
       kind: "producer-aging",
       level: "info",
@@ -21513,6 +21540,590 @@ function buildSidebarStatusViewModel(input) {
     maintenance,
     action
   };
+}
+
+// src/search/semanticNeighborhood.ts
+function normalizedCentroid(vectors, dimensions, ordinals) {
+  const total = new Float64Array(dimensions);
+  let validCount = 0;
+  for (const ordinal of ordinals) {
+    const offset = ordinal * dimensions;
+    let squaredNorm = 0;
+    for (let dimension = 0; dimension < dimensions; dimension++) {
+      const value = vectors[offset + dimension];
+      if (!Number.isFinite(value)) return null;
+      squaredNorm += value * value;
+    }
+    if (squaredNorm === 0) continue;
+    const inverseNorm = 1 / Math.sqrt(squaredNorm);
+    for (let dimension = 0; dimension < dimensions; dimension++) {
+      total[dimension] += vectors[offset + dimension] * inverseNorm;
+    }
+    validCount++;
+  }
+  if (validCount === 0) return null;
+  let squaredMeanNorm = 0;
+  for (let dimension = 0; dimension < dimensions; dimension++) {
+    total[dimension] /= validCount;
+    squaredMeanNorm += total[dimension] * total[dimension];
+  }
+  if (squaredMeanNorm === 0) return null;
+  const inverseMeanNorm = 1 / Math.sqrt(squaredMeanNorm);
+  const centroid = new Float32Array(dimensions);
+  for (let dimension = 0; dimension < dimensions; dimension++) {
+    centroid[dimension] = total[dimension] * inverseMeanNorm;
+  }
+  return centroid;
+}
+function groupIndexedNoteVectors(index) {
+  var _a, _b;
+  if (!Number.isInteger(index.dimensions) || index.dimensions <= 0 || !Number.isInteger(index.count) || index.count < 0 || index.records.length !== index.count || index.vectors.length !== index.count * index.dimensions) {
+    return null;
+  }
+  const byPath = /* @__PURE__ */ new Map();
+  const chunkIds = /* @__PURE__ */ new Set();
+  const ordinals = /* @__PURE__ */ new Set();
+  for (let position = 0; position < index.records.length; position++) {
+    const record = index.records[position];
+    const ordinal = (_a = record.vectorOrdinal) != null ? _a : position;
+    if (!record.path || !record.chunkId || !Number.isInteger(ordinal) || ordinal < 0 || ordinal >= index.count || chunkIds.has(record.chunkId) || ordinals.has(ordinal)) {
+      return null;
+    }
+    chunkIds.add(record.chunkId);
+    ordinals.add(ordinal);
+    const noteOrdinals = (_b = byPath.get(record.path)) != null ? _b : [];
+    noteOrdinals.push(ordinal);
+    byPath.set(record.path, noteOrdinals);
+  }
+  return Array.from(byPath, ([path, ordinals2]) => ({ path, ordinals: ordinals2 }));
+}
+function findSemanticNeighborhood(index, sourcePath, maximum) {
+  if (!Number.isInteger(maximum) || maximum < 0) return { status: "invalid-limit", neighbors: [] };
+  const notes = groupIndexedNoteVectors(index);
+  if (!notes) return { status: "invalid-index", neighbors: [] };
+  if (notes.length === 0) return { status: "empty-index", neighbors: [] };
+  const source = notes.find((note) => note.path === sourcePath);
+  if (!source) return { status: "source-not-indexed", neighbors: [] };
+  const sourceVector = normalizedCentroid(index.vectors, index.dimensions, source.ordinals);
+  if (!sourceVector) return { status: "source-no-valid-vector", neighbors: [] };
+  const neighbors = [];
+  for (const note of notes) {
+    if (note.path === sourcePath) continue;
+    const noteVector = normalizedCentroid(index.vectors, index.dimensions, note.ordinals);
+    if (!noteVector) continue;
+    neighbors.push({ path: note.path, score: cosineSimilarity(sourceVector, noteVector) });
+  }
+  neighbors.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
+  return { status: "ok", neighbors: neighbors.slice(0, maximum) };
+}
+
+// src/search/yamlRecommendation.ts
+function isYamlMetadataScalar(value) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+function readYamlMetadataScalars(value) {
+  const values = Array.isArray(value) ? Array.from(value, (item2) => item2) : [value];
+  const scalarValues = values.filter(isYamlMetadataScalar);
+  if (values.length === 0 || scalarValues.length !== values.length) return void 0;
+  const scalarType = typeof values[0];
+  if (!values.every((item2) => typeof item2 === scalarType)) return void 0;
+  return scalarValues;
+}
+function yamlComparisonKey(value) {
+  const values = readYamlMetadataScalars(value);
+  if (!values) return void 0;
+  const scalarKey = (item2) => `${typeof item2}:${JSON.stringify(item2)}`;
+  return Array.isArray(value) ? `array:[${values.map(scalarKey).join(",")}]` : scalarKey(values[0]);
+}
+function toYamlSuggestionValue(value) {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return void 0;
+  const values = readYamlMetadataScalars(value);
+  if (!values) return void 0;
+  const textValues = values.filter((item2) => typeof item2 === "string");
+  return textValues.length === values.length ? textValues : void 0;
+}
+function filterAllowedYamlProperties(yaml, allowedProperties) {
+  const allowed = allowedProperties.split(",").map((property) => property.trim().toLowerCase());
+  const filtered = {};
+  for (const [property, value] of Object.entries(yaml)) {
+    if (allowed.includes(property.toLowerCase()) && property.toLowerCase() !== "tags") {
+      const suggestionValue = toYamlSuggestionValue(value);
+      if (suggestionValue !== void 0) filtered[property] = suggestionValue;
+    }
+  }
+  return filtered;
+}
+function parseFrontmatterProperties(frontmatter) {
+  const properties = /* @__PURE__ */ new Map();
+  for (const line of frontmatter.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("- ")) continue;
+    const colonIndex = trimmed.indexOf(":");
+    if (colonIndex > 0) {
+      const property = trimmed.substring(0, colonIndex).trim();
+      properties.set(property, trimmed.substring(colonIndex + 1).trim());
+    }
+  }
+  return properties;
+}
+function findYamlExistingProperty(existingProperties, property, keyMatching) {
+  if (keyMatching === "exact") return existingProperties.get(property);
+  for (const [existingProperty, existingValue] of existingProperties) {
+    if (existingProperty.toLowerCase() === property.toLowerCase()) return existingValue;
+  }
+  return void 0;
+}
+function buildYamlProposals(yaml, existingProperties, options) {
+  return Object.entries(yaml).map(([property, value]) => {
+    const valueText = Array.isArray(value) ? value.join(", ") : String(value);
+    const existingValue = findYamlExistingProperty(existingProperties, property, options.keyMatching);
+    const exists = existingValue !== void 0 && (existingValue.length > 0 || options.emptyExistingValue === "already_exists");
+    if (!exists) return { property, value, valueText, status: "new" };
+    if (existingValue === valueText || existingValue.length === 0) {
+      return { property, value, valueText, status: "already_exists" };
+    }
+    return { property, value, valueText, status: "conflict", existingValue };
+  });
+}
+function buildContextualYamlCandidates(relatedSources, allowedProperties) {
+  var _a, _b, _c, _d;
+  const candidates = /* @__PURE__ */ new Map();
+  const propertyNoteCounts = /* @__PURE__ */ new Map();
+  for (const source of relatedSources) {
+    const score = Number.isFinite(source.score) ? (_a = source.score) != null ? _a : 0 : 0;
+    const allowed = allowedProperties.split(",").map((property) => property.trim().toLowerCase());
+    for (const [property, rawValue] of Object.entries(source.yaml)) {
+      if (!allowed.includes(property.toLowerCase()) || property.toLowerCase() === "tags") continue;
+      const value = toYamlSuggestionValue(rawValue);
+      if (value === void 0) continue;
+      const valueText = Array.isArray(value) ? value.join(", ") : String(value);
+      const comparisonKey = yamlComparisonKey(value);
+      if (!comparisonKey) continue;
+      const candidateKey = `${property.toLocaleLowerCase()}\0${comparisonKey}`;
+      const existing = candidates.get(candidateKey);
+      candidates.set(candidateKey, {
+        property,
+        value,
+        valueText,
+        pairNoteCount: ((_b = existing == null ? void 0 : existing.pairNoteCount) != null ? _b : 0) + 1,
+        relatedScore: ((_c = existing == null ? void 0 : existing.relatedScore) != null ? _c : 0) + score
+      });
+      propertyNoteCounts.set(property, ((_d = propertyNoteCounts.get(property)) != null ? _d : 0) + 1);
+    }
+  }
+  return Array.from(candidates.values(), (candidate) => {
+    var _a2;
+    return {
+      ...candidate,
+      propertyNoteCount: (_a2 = propertyNoteCounts.get(candidate.property)) != null ? _a2 : 0
+    };
+  }).sort(
+    (left, right) => right.pairNoteCount - left.pairNoteCount || right.relatedScore - left.relatedScore || right.propertyNoteCount - left.propertyNoteCount || left.property.localeCompare(right.property) || left.valueText.localeCompare(right.valueText)
+  );
+}
+function mergeYamlRecommendations(llmYaml, contextualCandidates, allowedProperties) {
+  const allowedLlmYaml = filterAllowedYamlProperties(llmYaml, allowedProperties);
+  const capacity = Object.keys(allowedLlmYaml).length;
+  if (capacity === 0 || contextualCandidates.length === 0) return allowedLlmYaml;
+  const merged = {};
+  for (const candidate of contextualCandidates) {
+    if (Object.prototype.hasOwnProperty.call(merged, candidate.property)) continue;
+    merged[candidate.property] = candidate.value;
+    if (Object.keys(merged).length === capacity) return merged;
+  }
+  for (const [property, value] of Object.entries(allowedLlmYaml)) {
+    if (Object.prototype.hasOwnProperty.call(merged, property)) continue;
+    merged[property] = value;
+    if (Object.keys(merged).length === capacity) break;
+  }
+  return merged;
+}
+
+// src/search/taxonomyPlan.ts
+var TAXONOMY_MINIMUM_SUPPORT = 2;
+var TAXONOMY_MINIMUM_QUALIFYING_TAGS = 1;
+function listPlannableYamlProperties(allowedProperties) {
+  const seen = /* @__PURE__ */ new Set();
+  const properties = [];
+  for (const raw of allowedProperties.split(",")) {
+    const property = raw.trim();
+    const key = property.toLocaleLowerCase();
+    if (!property || key === "tags" || seen.has(key)) continue;
+    seen.add(key);
+    properties.push(property);
+  }
+  return properties;
+}
+function planTags(tags, neighborTotal, available, minimumSupport, requiredCount) {
+  const candidates = tags.filter((tag) => tag.neighborCount >= minimumSupport).map((tag) => ({ tag: tag.tag, support: tag.neighborCount, neighborTotal: tag.neighborTotal }));
+  const sufficient = available && candidates.length >= requiredCount;
+  return {
+    sufficiency: sufficient ? "LOCAL_SUFFICIENT" : "LOCAL_INSUFFICIENT",
+    source: sufficient ? "local" : "ai-needed",
+    needsAi: !sufficient,
+    reason: !available ? "neighborhood-unavailable" : sufficient ? "local-supported" : "no-qualifying-tag",
+    candidates: sufficient ? candidates : [],
+    evidence: { neighborTotal, minimumSupport, qualifyingCount: candidates.length, requiredCount }
+  };
+}
+function planYamlProperty(property, winners, evidence, neighborTotal, available, minimumSupport) {
+  const key = property.toLocaleLowerCase();
+  const evidenceBase = { neighborTotal, minimumSupport };
+  if (!available) {
+    return { property, source: "ai-needed", needsAi: true, reason: "neighborhood-unavailable", evidence: { ...evidenceBase, bestSupport: 0 } };
+  }
+  const candidates = evidence.filter((item2) => item2.property.toLocaleLowerCase() === key);
+  const bestSupport = candidates.reduce((best, item2) => Math.max(best, item2.neighborCount), 0);
+  const winner = winners.find((item2) => item2.property.toLocaleLowerCase() === key);
+  if (winner) {
+    if (toYamlSuggestionValue(winner.value) === void 0) {
+      return { property, source: "none", needsAi: false, reason: "not-writable", evidence: { ...evidenceBase, bestSupport } };
+    }
+    return {
+      property,
+      source: "local",
+      needsAi: false,
+      reason: "local-supported",
+      candidate: { value: winner.value, support: winner.neighborCount, neighborTotal: winner.neighborTotal },
+      evidence: { ...evidenceBase, bestSupport }
+    };
+  }
+  const reason = candidates.length === 0 ? "no-candidate" : bestSupport >= minimumSupport ? "ambiguous" : "insufficient-support";
+  return { property, source: "ai-needed", needsAi: true, reason, evidence: { ...evidenceBase, bestSupport } };
+}
+function buildTaxonomyPlan(result2, options) {
+  var _a, _b, _c;
+  const minimumSupport = (_a = options.minimumSupport) != null ? _a : TAXONOMY_MINIMUM_SUPPORT;
+  const requiredTags = (_b = options.minimumQualifyingTags) != null ? _b : TAXONOMY_MINIMUM_QUALIFYING_TAGS;
+  const available = result2.neighborhoodStatus === "ok";
+  const neighborTotal = result2.neighbors.length;
+  const yamlEnabled = (_c = options.yamlEnabled) != null ? _c : true;
+  const tags = planTags(result2.local.tags, neighborTotal, available, minimumSupport, requiredTags);
+  const properties = yamlEnabled ? listPlannableYamlProperties(options.yamlAllowedProperties).map((property) => planYamlProperty(property, result2.local.yaml, result2.local.yamlEvidence, neighborTotal, available, minimumSupport)) : [];
+  const yamlNeedsAi = properties.some((property) => property.needsAi);
+  return {
+    neighborhoodStatus: result2.neighborhoodStatus,
+    neighborTotal,
+    tags,
+    yaml: { enabled: yamlEnabled, properties, needsAi: yamlNeedsAi },
+    needsAi: tags.needsAi || yamlNeedsAi
+  };
+}
+
+// src/search/semanticTaxonomyExperiment.ts
+function tagIdentity(tag) {
+  return tag.trim().replace(/^#/, "").toLocaleLowerCase();
+}
+function readMetadataTags(cache) {
+  var _a, _b;
+  const tags = /* @__PURE__ */ new Map();
+  for (const tag of (_a = cache.tags) != null ? _a : []) {
+    const preserved = tag.tag.trim().replace(/^#/, "");
+    if (preserved) tags.set(tagIdentity(preserved), preserved);
+  }
+  const frontmatterTags = (_b = cache.frontmatter) == null ? void 0 : _b.tags;
+  const values = Array.isArray(frontmatterTags) ? frontmatterTags : [frontmatterTags];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const preserved = value.trim().replace(/^#/, "");
+    if (preserved) tags.set(tagIdentity(preserved), preserved);
+  }
+  return [...tags.values()];
+}
+function allowedYamlProperties(value) {
+  return new Set(value.split(",").map((property) => property.trim().toLocaleLowerCase()).filter(Boolean));
+}
+function runSemanticTaxonomyExperiment(index, sourcePath, metadataCache, files, options) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
+  const current = { tags: (_b = (_a = options.current) == null ? void 0 : _a.tags) != null ? _b : [], yaml: (_d = (_c = options.current) == null ? void 0 : _c.yaml) != null ? _d : {} };
+  const neighborhood = findSemanticNeighborhood(index, sourcePath, options.topK);
+  if (neighborhood.status !== "ok") {
+    return { neighborhoodStatus: neighborhood.status, neighbors: [], current, local: { tags: [], yaml: [], yamlEvidence: [] } };
+  }
+  const neighborTotal = neighborhood.neighbors.length;
+  const tagEvidence = /* @__PURE__ */ new Map();
+  const yamlEvidence = /* @__PURE__ */ new Map();
+  const allowed = allowedYamlProperties(options.yamlAllowedProperties);
+  const globalTags = (_f = (_e = metadataCache.getTags) == null ? void 0 : _e.call(metadataCache)) != null ? _f : {};
+  for (const neighbor of neighborhood.neighbors) {
+    const file = files.getAbstractFileByPath(neighbor.path);
+    if (!file) continue;
+    const metadata = metadataCache.getFileCache(file);
+    if (!metadata) continue;
+    for (const tag of readMetadataTags(metadata)) {
+      const key = tagIdentity(tag);
+      const previous = tagEvidence.get(key);
+      tagEvidence.set(key, {
+        tag: (_g = previous == null ? void 0 : previous.tag) != null ? _g : tag,
+        neighborCount: ((_h = previous == null ? void 0 : previous.neighborCount) != null ? _h : 0) + 1,
+        neighborTotal,
+        similarityTotal: ((_i = previous == null ? void 0 : previous.similarityTotal) != null ? _i : 0) + neighbor.score,
+        ...(previous == null ? void 0 : previous.globalUsageCount) !== void 0 ? { globalUsageCount: previous.globalUsageCount } : typeof globalTags[`#${tag}`] === "number" ? { globalUsageCount: globalTags[`#${tag}`] } : {}
+      });
+    }
+    for (const [property, rawValue] of Object.entries((_j = metadata.frontmatter) != null ? _j : {})) {
+      const propertyKey = property.toLocaleLowerCase();
+      if (!allowed.has(propertyKey) || propertyKey === "tags") continue;
+      const valuesInNeighbor = /* @__PURE__ */ new Set();
+      for (const value of (_k = readYamlMetadataScalars(rawValue)) != null ? _k : []) {
+        const valueKey = yamlComparisonKey(value);
+        if (!valueKey) continue;
+        if (valuesInNeighbor.has(valueKey)) continue;
+        valuesInNeighbor.add(valueKey);
+        const key = `${propertyKey}\0${valueKey}`;
+        const previous = yamlEvidence.get(key);
+        yamlEvidence.set(key, {
+          property: (_l = previous == null ? void 0 : previous.property) != null ? _l : property,
+          value: (_m = previous == null ? void 0 : previous.value) != null ? _m : value,
+          neighborCount: ((_n = previous == null ? void 0 : previous.neighborCount) != null ? _n : 0) + 1,
+          neighborTotal,
+          similarityTotal: ((_o = previous == null ? void 0 : previous.similarityTotal) != null ? _o : 0) + neighbor.score
+        });
+      }
+    }
+  }
+  const minimumTagSupport = (_p = options.minimumTagSupport) != null ? _p : TAXONOMY_MINIMUM_SUPPORT;
+  const tags = [...tagEvidence.values()].sort(
+    (left, right) => {
+      var _a2, _b2;
+      return (right.neighborCount >= minimumTagSupport ? 1 : 0) - (left.neighborCount >= minimumTagSupport ? 1 : 0) || right.neighborCount - left.neighborCount || right.similarityTotal - left.similarityTotal || ((_a2 = right.globalUsageCount) != null ? _a2 : 0) - ((_b2 = left.globalUsageCount) != null ? _b2 : 0) || left.tag.localeCompare(right.tag);
+    }
+  ).slice(0, options.maxTags);
+  const minimumYamlSupport = (_q = options.minimumYamlSupport) != null ? _q : TAXONOMY_MINIMUM_SUPPORT;
+  const yamlByProperty = /* @__PURE__ */ new Map();
+  for (const evidence of yamlEvidence.values()) {
+    const values = (_r = yamlByProperty.get(evidence.property.toLocaleLowerCase())) != null ? _r : [];
+    values.push(evidence);
+    yamlByProperty.set(evidence.property.toLocaleLowerCase(), values);
+  }
+  const yaml = [];
+  const yamlEvidenceSorted = [];
+  for (const values of yamlByProperty.values()) {
+    values.sort((left, right) => right.neighborCount - left.neighborCount || right.similarityTotal - left.similarityTotal || String(left.value).localeCompare(String(right.value)));
+    const winner = values[0];
+    const runnerUp = values[1];
+    yamlEvidenceSorted.push(...values);
+    if (!winner || winner.neighborCount < minimumYamlSupport) continue;
+    if (runnerUp && runnerUp.neighborCount === winner.neighborCount && Math.abs(runnerUp.similarityTotal - winner.similarityTotal) < 1e-6) continue;
+    yaml.push(winner);
+  }
+  yaml.sort((left, right) => left.property.localeCompare(right.property));
+  yamlEvidenceSorted.sort((left, right) => left.property.localeCompare(right.property));
+  return {
+    neighborhoodStatus: "ok",
+    neighbors: neighborhood.neighbors,
+    current,
+    local: { tags, yaml, yamlEvidence: yamlEvidenceSorted }
+  };
+}
+
+// src/search/tagRecommendation.ts
+function preserveTagIdentity(tag) {
+  let identity = tag.trim().replace(/^#/, "");
+  identity = identity.normalize("NFC").replace(/\s+/g, "_");
+  return identity.replace(/[^\p{L}\p{N}_/-]/gu, "");
+}
+function normalizeTagComparisonKey(tag) {
+  let normalized = tag.trim().toLowerCase();
+  normalized = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  normalized = normalized.replace(/\s+/g, "_");
+  return normalized.replace(/[^a-z0-9_/-]/g, "");
+}
+function preserveTagIdentities(tags) {
+  const identities = /* @__PURE__ */ new Map();
+  for (const rawTag of tags) {
+    const identity = preserveTagIdentity(rawTag);
+    const comparisonKey = normalizeTagComparisonKey(identity);
+    if (identity && comparisonKey && !identities.has(comparisonKey)) {
+      identities.set(comparisonKey, identity);
+    }
+  }
+  return [...identities.values()];
+}
+function normalizeLlmTagIdentities(tags) {
+  const identities = /* @__PURE__ */ new Map();
+  for (const rawTag of tags) {
+    const comparisonKey = normalizeTagComparisonKey(rawTag);
+    if (comparisonKey && !identities.has(comparisonKey)) {
+      identities.set(comparisonKey, comparisonKey);
+    }
+  }
+  return [...identities.values()];
+}
+function hasEntityLikeShape(rawTag) {
+  return /^\p{Lu}\p{Ll}+$/u.test(rawTag.trim());
+}
+function buildTagInventory(rawTags) {
+  var _a, _b;
+  const inventory = /* @__PURE__ */ new Map();
+  for (const [original, rawCount] of Object.entries(rawTags)) {
+    const identity = preserveTagIdentity(original);
+    const comparisonKey = normalizeTagComparisonKey(identity);
+    if (!identity || !comparisonKey) continue;
+    const count = typeof rawCount === "number" ? rawCount : 0;
+    const existing = inventory.get(comparisonKey);
+    inventory.set(comparisonKey, {
+      comparisonKey,
+      // Preserve the first cache identity deterministically when equivalent
+      // spellings are reported by separate metadata sources.
+      identity: (_a = existing == null ? void 0 : existing.identity) != null ? _a : identity,
+      count: ((_b = existing == null ? void 0 : existing.count) != null ? _b : 0) + count
+    });
+  }
+  return inventory;
+}
+function prepareTagProposals(rawTags, inventory, maximum, existingNoteTags) {
+  const identities = normalizeLlmTagIdentities(rawTags);
+  const limited = maximum === void 0 ? identities : identities.slice(0, maximum);
+  return limited.map((tag) => {
+    var _a;
+    const comparisonKey = normalizeTagComparisonKey(tag);
+    const existing = inventory.get(comparisonKey);
+    const existsInNote = existingNoteTags === void 0 ? void 0 : [...existingNoteTags].some((existingTag) => normalizeTagComparisonKey(existingTag) === comparisonKey);
+    return {
+      tag: (_a = existing == null ? void 0 : existing.identity) != null ? _a : tag,
+      existsInVault: Boolean(existing),
+      ...existing ? { usageCount: existing.count } : {},
+      ...existsInNote === void 0 ? {} : { existsInNote }
+    };
+  });
+}
+function buildContextualTagCandidates(relatedSources, inventory) {
+  var _a, _b, _c, _d;
+  const candidates = /* @__PURE__ */ new Map();
+  for (const source of relatedSources) {
+    const score = Number.isFinite(source.score) ? (_a = source.score) != null ? _a : 0 : 0;
+    for (const tag of preserveTagIdentities(source.tags)) {
+      const comparisonKey = normalizeTagComparisonKey(tag);
+      const existing = (_d = candidates.get(comparisonKey)) != null ? _d : {
+        tag: (_c = (_b = inventory.get(comparisonKey)) == null ? void 0 : _b.identity) != null ? _c : tag,
+        relatedNoteCount: 0,
+        relatedScore: 0
+      };
+      candidates.set(comparisonKey, {
+        tag: existing.tag,
+        relatedNoteCount: existing.relatedNoteCount + 1,
+        relatedScore: existing.relatedScore + score
+      });
+    }
+  }
+  return Array.from(candidates, ([comparisonKey, evidence]) => {
+    var _a2;
+    const globalUsageCount = (_a2 = inventory.get(comparisonKey)) == null ? void 0 : _a2.count;
+    return {
+      tag: evidence.tag,
+      relatedNoteCount: evidence.relatedNoteCount,
+      relatedScore: evidence.relatedScore,
+      ...globalUsageCount === void 0 ? {} : { globalUsageCount }
+    };
+  }).sort(
+    (left, right) => {
+      var _a2, _b2;
+      return right.relatedNoteCount - left.relatedNoteCount || right.relatedScore - left.relatedScore || ((_a2 = right.globalUsageCount) != null ? _a2 : 0) - ((_b2 = left.globalUsageCount) != null ? _b2 : 0) || left.tag.localeCompare(right.tag);
+    }
+  );
+}
+function mergeTagRecommendations(llmTags, contextualCandidates, maximum, inventory = /* @__PURE__ */ new Map()) {
+  if (contextualCandidates.length === 0) return normalizeLlmTagIdentities(llmTags).slice(0, maximum);
+  const contextualTags = new Set(contextualCandidates.map((candidate) => normalizeTagComparisonKey(candidate.tag)));
+  const ranked = [
+    ...contextualCandidates.map((candidate, index) => ({
+      tag: candidate.tag,
+      baselineRank: index,
+      weakEntityEvidence: false
+    })),
+    ...llmTags.map((rawTag, index) => ({
+      tag: normalizeTagComparisonKey(rawTag),
+      baselineRank: contextualCandidates.length + index,
+      weakEntityEvidence: hasEntityLikeShape(rawTag)
+    })).filter((candidate) => candidate.tag.length > 0 && !contextualTags.has(normalizeTagComparisonKey(candidate.tag)))
+  ].map((candidate) => {
+    var _a, _b, _c;
+    const comparisonKey = normalizeTagComparisonKey(candidate.tag);
+    const contextual = contextualCandidates.find((item2) => normalizeTagComparisonKey(item2.tag) === comparisonKey);
+    const globalUsageCount = (_b = (_a = inventory.get(comparisonKey)) == null ? void 0 : _a.count) != null ? _b : 0;
+    const weakTaxonomy = globalUsageCount <= 1 && ((_c = contextual == null ? void 0 : contextual.relatedNoteCount) != null ? _c : 0) <= 1;
+    return {
+      ...candidate,
+      // A demotion, never an exclusion: a candidate remains eligible if space remains.
+      penalty: candidate.weakEntityEvidence && weakTaxonomy ? 1 : 0
+    };
+  });
+  return ranked.sort((left, right) => left.penalty - right.penalty || left.baselineRank - right.baselineRank).reduce((tags, candidate) => {
+    if (!tags.some((tag) => normalizeTagComparisonKey(tag) === normalizeTagComparisonKey(candidate.tag))) {
+      tags.push(candidate.tag);
+    }
+    return tags;
+  }, []).slice(0, maximum);
+}
+function formatTagUsageLabel(count, alreadyUsedLabel) {
+  return `${alreadyUsedLabel}: ${count}`;
+}
+
+// src/search/taxonomyReconciliation.ts
+function buildTaxonomyAiRequest(plan) {
+  const requestedYamlProperties = plan.yaml.properties.filter((property) => property.needsAi).map((property) => property.property);
+  const omittedYamlProperties = plan.yaml.properties.filter((property) => !property.needsAi).map((property) => property.property);
+  return {
+    requestTags: plan.tags.needsAi,
+    requestedYamlProperties,
+    omittedYamlProperties
+  };
+}
+function sameProperty(left, right) {
+  return left.toLocaleLowerCase() === right.toLocaleLowerCase();
+}
+function reconcileTaxonomyRecommendations(plan, aiTags, aiYaml, allowedProperties, maximumTags) {
+  const request = buildTaxonomyAiRequest(plan);
+  const localTagCandidates = plan.tags.needsAi ? [] : plan.tags.candidates.map((candidate) => ({
+    tag: candidate.tag,
+    relatedNoteCount: candidate.support,
+    relatedScore: candidate.support
+  }));
+  const tags = mergeTagRecommendations(
+    request.requestTags ? aiTags != null ? aiTags : [] : [],
+    localTagCandidates,
+    maximumTags
+  );
+  const allowedAiYaml = filterAllowedYamlProperties(aiYaml != null ? aiYaml : {}, allowedProperties);
+  const yaml = {};
+  const yamlSources = {};
+  for (const property of plan.yaml.properties) {
+    if (property.source !== "local" || !property.candidate) continue;
+    const value = toYamlSuggestionValue(property.candidate.value);
+    if (value === void 0) continue;
+    yaml[property.property] = value;
+    yamlSources[property.property] = "local";
+  }
+  for (const requestedProperty of request.requestedYamlProperties) {
+    const entry = Object.entries(allowedAiYaml).find(([property]) => sameProperty(property, requestedProperty));
+    if (!entry || Object.keys(yaml).some((property) => sameProperty(property, requestedProperty))) continue;
+    yaml[requestedProperty] = entry[1];
+    yamlSources[requestedProperty] = "ai";
+  }
+  for (const property of listPlannableYamlProperties(allowedProperties)) {
+    if (!(property in yamlSources)) yamlSources[property] = "none";
+  }
+  return {
+    tags,
+    yaml,
+    request,
+    tagSource: plan.tags.needsAi ? tags.length > 0 ? "ai" : "none" : "local",
+    yamlSources
+  };
+}
+
+// src/search/taxonomyRuntime.ts
+function prepareTaxonomyRuntime(experiment, options) {
+  const plan = buildTaxonomyPlan(experiment, options);
+  return { experiment, plan, request: buildTaxonomyAiRequest(plan) };
+}
+function reconcileTaxonomyRuntime(runtime, aiTags, aiYaml, allowedProperties, maximumTags) {
+  return runtime === void 0 ? void 0 : reconcileTaxonomyRecommendations(runtime.plan, aiTags, aiYaml, allowedProperties, maximumTags);
+}
+function fallbackTaxonomyRuntime(runtime, allowedProperties, maximumTags) {
+  return reconcileTaxonomyRuntime(runtime, [], {}, allowedProperties, maximumTags);
 }
 
 // src/search/linaSearchView.ts
@@ -21718,76 +22329,69 @@ function snippetRepeatsTitle(snippet, title) {
   return !!normalizedSnippet && !!normalizedTitle && normalizedSnippet === normalizedTitle;
 }
 function cleanSearchSnippet(snippet) {
-  return snippet.replace(/^---\s*/, "").replace(/---\s*$/, "").replace(/\s+/g, " ").trim();
+  return normalizeSnippetPresentation(snippet).replace(/^---\s*/, "").replace(/---\s*$/, "").replace(/\s+/g, " ").trim();
 }
-function getReadableSearchOrigin(origin, L) {
-  switch (origin) {
-    case "Nome":
-      return `${L.originFoundIn} ${L.originFileName}`;
-    case "Caminho":
-      return `${L.originFoundIn} ${L.originFilePath}`;
-    case "Conte\xFAdo":
-    case "H\xEDbrida":
-    case "Textual":
-    case "Sem\xE2ntica":
-      return `${L.originFoundIn} ${L.originFileContent}`;
-    default:
-      return L.originNote;
-  }
+function normalizeSnippetPresentation(snippet) {
+  const tableNormalized = snippet.split("\n").map((line) => {
+    const trimmed = line.trim();
+    const isSeparator = /^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$/.test(trimmed);
+    if (isSeparator) return "";
+    if (/^\|.*\|$/.test(trimmed) && trimmed.split("|").length >= 3) {
+      return trimmed.slice(1, -1).split("|").map((cell) => cell.trim()).filter(Boolean).join(" \xB7 ");
+    }
+    return line;
+  }).join("\n");
+  return tableNormalized.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2").replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/^\s{0,3}#{1,6}\s+/gm, "").replace(/^\s*(?:[-*+] |\d+[.)] )/gm, "").replace(/(\*\*|__|~~|==|`)([^\n]*?)\1/g, "$2").replace(/(^|\s)[*_]([^*_\n]+)[*_](?=\s|$)/g, "$1$2").replace(/^---\s*/, "").replace(/---\s*$/, "").trim();
 }
-function getSearchSnippetDisplay(card) {
+function isImageReference(value) {
+  const image = "(?:jpg|jpeg|png|gif|webp|svg)";
+  return new RegExp(`^(?:!\\[\\[[^\\]]+\\.${image}\\]\\]|!\\[[^\\]]*\\]\\([^)]*\\.${image}(?:[?#][^)]*)?\\)|https?:\\/\\/\\S+\\.${image}(?:[?#]\\S*)?)$`, "i").test(value.trim());
+}
+function isTechnicalSnippet(value) {
+  return /^```|\bdataview\b|\bfrom\s+["'][^"']+["']/i.test(value.trim());
+}
+function getSearchSnippetPresentation(card) {
   const allSnippets = [card.snippet, ...card.extraSnippets].map((raw) => ({
     cleaned: cleanSearchSnippet(raw),
-    isFrontmatter: snippetLooksLikeFrontmatter(raw)
+    isFrontmatter: snippetLooksLikeFrontmatter(raw),
+    isImage: isImageReference(raw)
   })).filter((snippet) => snippet.cleaned.length > 0);
   const usefulSnippet = allSnippets.find(
     (snippet) => !snippet.isFrontmatter && !snippetRepeatsTitle(snippet.cleaned, card.basename)
   );
-  if (usefulSnippet) {
+  if (usefulSnippet == null ? void 0 : usefulSnippet.isImage) {
+    return { kind: "image", label: "Imagem" };
+  }
+  if (usefulSnippet && !isTechnicalSnippet(usefulSnippet.cleaned)) {
     const text2 = usefulSnippet.cleaned.length > 280 ? `${usefulSnippet.cleaned.substring(0, 280)}...` : usefulSnippet.cleaned;
-    return { text: text2, shouldHighlight: true, isFallback: false };
+    return { kind: "text", text: text2, shouldHighlight: true };
   }
   if (allSnippets.some((snippet) => snippet.isFrontmatter)) {
     return {
-      text: "Correspond\xEAncia encontrada nos metadados da nota.",
-      shouldHighlight: false,
-      isFallback: true
+      kind: "metadata",
+      text: "Correspond\xEAncia encontrada nos metadados da nota."
     };
   }
+  if (allSnippets.some((snippet) => isTechnicalSnippet(snippet.cleaned))) return null;
   if (allSnippets.some((snippet) => snippetRepeatsTitle(snippet.cleaned, card.basename)) || card.origin === "Nome") {
     return {
-      text: "Correspond\xEAncia encontrada no nome da nota.",
-      shouldHighlight: false,
-      isFallback: true
+      kind: "metadata",
+      text: "Correspond\xEAncia encontrada no nome da nota."
     };
   }
   return null;
 }
-function normalizarTag(tag) {
-  let t = tag.trim().toLowerCase();
-  t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  t = t.replace(/\s+/g, "_");
-  t = t.replace(/[^a-z0-9_-]/g, "");
-  return t;
-}
-function normalizarTags(tags) {
-  const normalized = tags.map(normalizarTag).filter((t) => t.length > 0);
-  return [...new Set(normalized)];
-}
 function extrairTagsDeValorYaml(value) {
   if (Array.isArray(value)) {
-    return normalizarTags(value);
+    return preserveTagIdentities(value);
   }
   const trimmed = value.trim();
   if (!trimmed) return [];
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     const inlineItems = trimmed.substring(1, trimmed.length - 1).split(",").map((tag) => tag.trim().replace(/^["']|["']$/g, ""));
-    return normalizarTags(inlineItems);
+    return preserveTagIdentities(inlineItems);
   }
-  return normalizarTags(trimmed.split(",").map((tag) => tag.trim()));
-}
-function formatTagUsageLabel(count, alreadyUsedLabel) {
-  return `${alreadyUsedLabel}: ${count}`;
+  return preserveTagIdentities(trimmed.split(",").map((tag) => tag.trim()));
 }
 function normalizeComparableText(text2) {
   return text2.replace(/\s+/g, " ").trim().toLowerCase();
@@ -22023,19 +22627,6 @@ function filtrarLinksInternos(links, currentPath2, allowedPaths) {
   }
   return valid;
 }
-function filtrarYamlValido(yaml, allowedProperties) {
-  const allowed = allowedProperties.split(",").map((p) => p.trim().toLowerCase());
-  const filtered = {};
-  for (const [key, value] of Object.entries(yaml)) {
-    if (allowed.includes(key.toLowerCase())) {
-      if (key.toLowerCase() === "tags") {
-        continue;
-      }
-      filtered[key] = value;
-    }
-  }
-  return filtered;
-}
 function extrairFrontmatter(content) {
   const trimmed = content.trim();
   if (trimmed.startsWith("---")) {
@@ -22050,26 +22641,11 @@ function extrairFrontmatter(content) {
   }
   return { frontmatter: "", body: trimmed, hasFrontmatter: false };
 }
-function parseFrontmatterLines(frontmatter) {
-  const map = /* @__PURE__ */ new Map();
-  const lines = frontmatter.split("\n");
-  let currentKey = "";
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("- ")) continue;
-    const colonIndex = trimmed.indexOf(":");
-    if (colonIndex > 0) {
-      currentKey = trimmed.substring(0, colonIndex).trim();
-      const value = trimmed.substring(colonIndex + 1).trim();
-      map.set(currentKey, value);
-    }
-  }
-  return map;
-}
 function secaoExiste(body, titulo) {
   return body.includes(titulo);
 }
 function extrairTagsDoFrontmatter(frontmatter) {
+  var _a;
   const lines = frontmatter.split("\n");
   let inTags = false;
   const tags = [];
@@ -22091,7 +22667,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
     }
     if (inTags) {
       if (trimmed.startsWith("- ")) {
-        tags.push(normalizarTag(trimmed.substring(2).trim()));
+        tags.push((_a = preserveTagIdentities([trimmed.substring(2).trim()])[0]) != null ? _a : "");
       } else if (trimmed.includes(":")) {
         inTags = false;
       } else if (trimmed.length === 0) {
@@ -22117,6 +22693,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     this.structuredSelections = /* @__PURE__ */ new Map();
     // Mapeamento robusto de itens selecionáveis para recolha correta
     this.selectableItemsMap = /* @__PURE__ */ new Map();
+    /** Plano taxonómico local da análise normal em curso; consumido uma única vez. */
+    this.pendingTaxonomyPlan = null;
     this.lastSuggestedTags = [];
     this.lastSuggestedYaml = {};
     this.lastBatchSuggestedMetadataByPath = /* @__PURE__ */ new Map();
@@ -22349,26 +22927,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   }
   getExistingVaultTags() {
     var _a, _b;
-    const existingTags = /* @__PURE__ */ new Map();
     const metaCache = this.app.metadataCache;
-    const rawTags = (_b = (_a = metaCache.getTags) == null ? void 0 : _a.call(metaCache)) != null ? _b : {};
-    const tags = rawTags;
-    for (const [original, rawCount] of Object.entries(tags)) {
-      const count = typeof rawCount === "number" ? rawCount : 0;
-      const normalized = normalizarTag(original);
-      if (!normalized) continue;
-      const existing = existingTags.get(normalized);
-      if (existing) {
-        existing.count += count;
-      } else {
-        existingTags.set(normalized, {
-          original,
-          normalized,
-          count
-        });
-      }
-    }
-    return existingTags;
+    return buildTagInventory((_b = (_a = metaCache.getTags) == null ? void 0 : _a.call(metaCache)) != null ? _b : {});
   }
   getExistingVaultFolders() {
     return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian28.TFolder).map((folder) => (0, import_obsidian28.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
@@ -22661,33 +23221,51 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const searchSection = contentEl.createDiv();
     searchSection.addClass("lina-search-section");
     searchSection.addClass("lina-mb-12");
-    const inputContainer = searchSection.createDiv();
+    const searchComposer = searchSection.createDiv();
+    searchComposer.addClass("lina-search-composer");
+    const inputContainer = searchComposer.createDiv();
     inputContainer.addClass("lina-search-input-container");
-    inputContainer.createSpan({ text: "\u{1F50D}", cls: "lina-search-input-icon" });
     this.queryInput = inputContainer.createEl("input", {
       type: "text",
       placeholder: this.L.searchPlaceholder
     });
     this.queryInput.addClass("lina-search-input");
     this.queryInput.addClass("lina-w-full");
+    this.queryInput.setAttribute("enterkeyhint", "search");
+    this.queryInput.setAttribute("aria-label", this.L.searchInputLabel);
     const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
     this.queryInput.addEventListener("pointerdown", captureContextSelection);
     this.queryInput.addEventListener("mousedown", captureContextSelection);
     this.queryInput.addEventListener("focus", captureContextSelection);
     this.queryInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        void this.runSearch();
-      }
+      this.handleSearchInputKeydown(event);
     });
-    const modeRow = searchSection.createDiv();
+    const clearSearchButton = inputContainer.createEl("button", { text: "\xD7" });
+    clearSearchButton.type = "button";
+    clearSearchButton.addClass("lina-search-clear-btn");
+    clearSearchButton.setAttribute("aria-label", this.L.searchClearButton);
+    clearSearchButton.setAttribute("title", this.L.searchClearButton);
+    clearSearchButton.addEventListener("click", () => this.clearSearchInput(clearSearchButton));
+    this.queryInput.addEventListener("input", () => this.updateClearSearchButton(clearSearchButton));
+    this.updateClearSearchButton(clearSearchButton);
+    this.searchButton = inputContainer.createEl("button", { text: "\u21B5" });
+    this.searchButton.type = "button";
+    this.searchButton.addClass("mod-cta");
+    this.searchButton.addClass("lina-search-btn");
+    this.searchButton.addClass("lina-search-submit-btn");
+    this.searchButton.setAttribute("aria-label", this.L.searchButton);
+    this.searchButton.setAttribute("title", this.L.searchButton);
+    this.searchButton.addEventListener("click", () => this.submitSearch());
+    const searchControls = searchComposer.createDiv();
+    searchControls.addClass("lina-search-controls");
+    const modeRow = searchControls.createDiv();
     modeRow.addClass("lina-search-mode-row");
     const modeWrapper = modeRow.createDiv();
     modeWrapper.addClass("lina-search-mode-wrapper");
-    modeWrapper.createSpan({ text: "\u{1F39B}\uFE0F", cls: "lina-search-mode-icon" });
     this.searchModeSelect = modeWrapper.createEl("select");
     this.searchModeSelect.addClass("dropdown");
     this.searchModeSelect.addClass("lina-search-mode-select");
-    this.searchModeSelect.setAttribute("aria-label", this.L.searchSelectMode);
+    this.searchModeSelect.setAttribute("aria-label", this.L.searchModeLabel);
     const searchModeOptions = [
       { mode: "textual", label: this.L.searchTextual },
       { mode: "hibrida", label: this.L.searchHybrid },
@@ -22707,32 +23285,24 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       this.currentMode = this.searchModeSelect.value;
       void this.refreshState({ refreshSemanticAvailability: false });
     });
-    this.searchButton = modeRow.createEl("button", { text: "\u27A4" });
-    this.searchButton.addClass("mod-cta");
-    this.searchButton.addClass("lina-search-btn");
-    this.searchButton.addClass("lina-search-submit-btn");
-    this.searchButton.setAttribute("aria-label", this.L.searchButton);
-    this.searchButton.setAttribute("title", this.L.searchButton);
-    this.searchButton.addEventListener("click", () => void this.runSearch());
-    const actionsRow = searchSection.createDiv();
+    const actionsRow = searchControls.createDiv();
     actionsRow.addClass("lina-actions-row");
     const actionsWrapper = actionsRow.createDiv();
     actionsWrapper.addClass("lina-actions-wrapper");
-    actionsWrapper.createSpan({ text: "\u26A1", cls: "lina-actions-icon" });
     this.actionsSelect = actionsWrapper.createEl("select");
     this.actionsSelect.addClass("dropdown");
     this.actionsSelect.addClass("lina-actions-select");
-    this.actionsSelect.setAttribute("aria-label", this.L.sectionQuickActions);
+    this.actionsSelect.setAttribute("aria-label", `${this.L.searchActionsLabel} de IA`);
     const placeholderOpt = this.actionsSelect.createEl("option", {
       value: "",
-      text: this.L.sidebarActionPlaceholder || "A\xE7\xF5es..."
+      text: this.L.sidebarActionPlaceholder || this.L.searchActionsLabel
     });
     placeholderOpt.disabled = true;
     placeholderOpt.selected = true;
-    this.actionsSelect.createEl("option", { value: "note", text: `\u{1F4C4} ${this.L.actionAnalyseNote}` });
-    this.actionsSelect.createEl("option", { value: "context", text: `\u{1F517} ${this.L.actionAnalyseWithContext}` });
-    this.actionsSelect.createEl("option", { value: "inbox", text: `\u{1F5C3}\uFE0F ${this.L.actionAnalyseInbox}` });
-    this.actionsSelect.createEl("option", { value: "folder", text: `\u{1F4C1} ${this.L.actionAnalyseFolder}` });
+    this.actionsSelect.createEl("option", { value: "note", text: this.L.actionAnalyseNote });
+    this.actionsSelect.createEl("option", { value: "context", text: this.L.actionAnalyseWithContext });
+    this.actionsSelect.createEl("option", { value: "inbox", text: this.L.actionAnalyseInbox });
+    this.actionsSelect.createEl("option", { value: "folder", text: this.L.actionAnalyseFolder });
     this.actionsSelect.addEventListener("change", () => {
       const action = this.actionsSelect.value;
       this.actionsSelect.value = "";
@@ -23057,7 +23627,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   setLastSuggestedTags(tags) {
     const uniqueTags = [];
     const seen = /* @__PURE__ */ new Set();
-    for (const tag of normalizarTags(tags)) {
+    for (const tag of preserveTagIdentities(tags)) {
       if (seen.has(tag)) continue;
       seen.add(tag);
       uniqueTags.push(tag);
@@ -23107,7 +23677,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return this.formatYamlLines(yaml).join("\n").trim();
   }
   formatTagsForClipboard(tags) {
-    return normalizarTags(tags).join(", ");
+    return preserveTagIdentities(tags).join(", ");
   }
   formatSuggestedMetadataForClipboard() {
     const lines = [];
@@ -23203,8 +23773,9 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     }
   }
   renderPreservedSuggestedTags(container, tags) {
-    const validTags = normalizarTags(tags);
-    if (validTags.length === 0) return;
+    var _a;
+    const tagProposals = prepareTagProposals(tags, this.getExistingVaultTags());
+    if (tagProposals.length === 0) return;
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
@@ -23212,11 +23783,9 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     titleEl.addClass("lina-fs-09");
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
-    const existingVaultTags = this.getExistingVaultTags();
-    for (const tag of validTags) {
-      const existingTag = existingVaultTags.get(tag);
-      const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
-      this.createPreservedMetadataItem(section, `tag::${tag}`, `${tag} - ${statusLabel}`, "tag", tag);
+    for (const proposal of tagProposals) {
+      const statusLabel = proposal.existsInVault ? formatTagUsageLabel((_a = proposal.usageCount) != null ? _a : 0, this.L.previewTagExisting) : this.L.previewTagNew;
+      this.createPreservedMetadataItem(section, `tag::${proposal.tag}`, `${proposal.tag} - ${statusLabel}`, "tag", proposal.tag);
     }
   }
   /** Cria um item selecionável apenas para metadados preservados. */
@@ -23460,7 +24029,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     }
     const stateDetails = this.stateContainer.createEl("details");
     stateDetails.addClass("lina-sidebar-state-details");
-    stateDetails.open = true;
+    stateDetails.open = false;
     const stateSummary = stateDetails.createEl("summary");
     stateSummary.addClass("lina-accordion-summary");
     stateSummary.addClass("lina-sidebar-state-summary");
@@ -23505,8 +24074,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
         }
       });
     }
-    const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
-    headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
     const infoBtn = stateCard.createEl("button", { cls: "lina-sidebar-state-info-btn", text: "\u24D8" });
     infoBtn.setAttribute("aria-label", this.L.mainCommandShowDeviceDiagnostics || "Ver diagn\xF3stico");
     infoBtn.setAttribute("title", this.L.mainCommandShowDeviceDiagnostics || "Ver diagn\xF3stico");
@@ -23655,6 +24222,23 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     if ((_e = (_d = this.searchModeRadioButtons) == null ? void 0 : _d.hibrida) == null ? void 0 : _e.checked) return "hibrida";
     if ((_g = (_f = this.searchModeRadioButtons) == null ? void 0 : _f.semantica) == null ? void 0 : _g.checked) return "semantica";
     return (_h = this.currentMode) != null ? _h : "hibrida";
+  }
+  submitSearch() {
+    void this.runSearch();
+  }
+  handleSearchInputKeydown(event) {
+    const legacyKeyCode = Reflect.get(event, "keyCode");
+    if (event.key !== "Enter" || event.isComposing || legacyKeyCode === 229) return;
+    event.preventDefault();
+    this.submitSearch();
+  }
+  updateClearSearchButton(clearSearchButton) {
+    clearSearchButton.hidden = this.queryInput.value.length === 0;
+  }
+  clearSearchInput(clearSearchButton) {
+    this.queryInput.value = "";
+    this.updateClearSearchButton(clearSearchButton);
+    this.queryInput.focus();
   }
   async runSearch() {
     const commandIntent = parseLinaCommand(this.queryInput.value);
@@ -24041,7 +24625,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const { json } = extrairJsonDaResposta(aiText);
     const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
     const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
-    return normalizarTags(rawTags).slice(0, maxTags);
+    return preserveTagIdentities(rawTags).slice(0, maxTags);
   }
   buildYamlCommandPrompt(noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
@@ -24078,7 +24662,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     if (!(json == null ? void 0 : json.yaml) || typeof json.yaml !== "object" || Array.isArray(json.yaml)) {
       return {};
     }
-    return filtrarYamlValido(json.yaml, this.plugin.settings.yamlAllowedProperties);
+    return filterAllowedYamlProperties(json.yaml, this.plugin.settings.yamlAllowedProperties);
   }
   getSelectedTextFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
@@ -24509,9 +25093,42 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   // Construção de prompts (Fase 5A - agora pedem JSON)
   // -----------------------------------------------------------------------
   /**
+   * Secções do prompt que dependem do pedido taxonómico. Sem pedido devolve exatamente o
+   * texto histórico; a decisão do que pedir à IA vem de `TaxonomyAiRequest` (taxonomyRuntime).
+   */
+  buildTaxonomyPromptSections(historicalYamlSection, taxonomyRequest) {
+    const historicalTagsRules = `Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
+
+* min\xFAsculas, sem acentos, espa\xE7os convertidos para underscore
+* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
+* normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos`;
+    const historicalYamlField = '  "yaml": {\n    "propriedade": "valor"\n  },\n';
+    const tagsField = '  "tags": ["tag1", "tag2"],\n';
+    if (!taxonomyRequest) {
+      return {
+        yamlSection: historicalYamlSection,
+        tagsRules: historicalTagsRules,
+        jsonFields: `${historicalYamlField}${tagsField}`
+      };
+    }
+    const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
+    const requestedYaml = yamlEnabled && taxonomyRequest.requestedYamlProperties.length > 0;
+    let yamlSection = historicalYamlSection;
+    if (yamlEnabled) {
+      yamlSection = requestedYaml ? `* Para taxonomia, sugere APENAS estas propriedades YAML: ${taxonomyRequest.requestedYamlProperties.join(", ")}.
+* N\xC3O devolvas estas propriedades j\xE1 resolvidas localmente: ${taxonomyRequest.omittedYamlProperties.join(", ") || "nenhuma"}.
+* As tags devem ser devolvidas apenas no campo "tags". N\xC3O incluas "tags" dentro do objeto "yaml".` : '* A taxonomia YAML foi resolvida localmente. N\xC3O incluas o campo "yaml".';
+    }
+    return {
+      yamlSection,
+      tagsRules: taxonomyRequest.requestTags ? historicalTagsRules : 'Regras para tags:\n\n* As tags foram resolvidas localmente. N\xC3O incluas o campo "tags".',
+      jsonFields: `${requestedYaml ? '  "yaml": { "propriedade": "valor" },\n' : !yamlEnabled ? historicalYamlField : ""}${taxonomyRequest.requestTags ? tagsField : ""}`
+    };
+  }
+  /**
    * Constrói o prompt interno para análise da nota atual, pedindo JSON estruturado.
    */
-  buildCurrentNoteAnalysisPrompt(title, path, content) {
+  buildCurrentNoteAnalysisPrompt(title, path, content, taxonomyRequest) {
     let truncatedContent = content;
     let truncationNote = "";
     if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
@@ -24558,6 +25175,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       yamlSection = `* A sugest\xE3o de YAML est\xE1 DESATIVADA.
 * N\xC3O incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
+    const taxonomySections = this.buildTaxonomyPromptSections(yamlSection, taxonomyRequest);
+    yamlSection = taxonomySections.yamlSection;
     const linksInstruction = `* Como ainda n\xE3o s\xE3o passadas notas relacionadas, o campo "internalLinks" deve ser um array vazio [].`;
     return `${languageInstruction}
 
@@ -24586,11 +25205,7 @@ ${existingFoldersSection}
 * Se tiveres pouca confian\xE7a, deixa "suggestedFolder" vazio ou usa a pasta atual se ela n\xE3o for Inbox.
 * Se a pasta atual parecer adequada e n\xE3o for Inbox, usa: "${currentFolder}"
 
-Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
-
-* min\xFAsculas, sem acentos, espa\xE7os convertidos para underscore
-* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
-* normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos
+${taxonomySections.tagsRules}
 
 Regras para links internos:
 ${linksInstruction}
@@ -24605,11 +25220,7 @@ Estrutura JSON obrigat\xF3ria:
   "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
-  "yaml": {
-    "propriedade": "valor"
-  },
-  "tags": ["tag1", "tag2"],
-  "internalLinks": [],
+${taxonomySections.jsonFields}  "internalLinks": [],
   "tasks": ["tarefa 1", "tarefa 2"],
   "analysis": "texto da an\xE1lise detalhada em 3-5 frases",
   "confidence": "alto | m\xE9dio | baixo",
@@ -24639,7 +25250,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas, pedindo JSON estruturado.
    */
-  buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) {
+  buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes, taxonomyRequest) {
     let truncatedContent = content;
     let truncationNote = "";
     if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
@@ -24710,6 +25321,8 @@ ${truncatedContent}${truncationNote}
       yamlSection = `* A sugest\xE3o de YAML est\xE1 DESATIVADA.
 * N\xC3O incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
+    const taxonomySections = this.buildTaxonomyPromptSections(yamlSection, taxonomyRequest);
+    yamlSection = taxonomySections.yamlSection;
     return `${languageInstruction}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
@@ -24739,11 +25352,7 @@ ${existingFoldersSection}
 * Se tiveres pouca confian\xE7a, deixa "suggestedFolder" vazio ou usa a pasta atual se ela n\xE3o for Inbox.
 * Se a pasta atual parecer adequada e n\xE3o for Inbox, usa: "${currentFolder}"
 
-Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
-
-* min\xFAsculas, sem acentos, espa\xE7os convertidos para underscore
-* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
-* normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos
+${taxonomySections.tagsRules}
 
 Regras estritas para links internos:
 
@@ -24772,11 +25381,7 @@ Estrutura JSON obrigat\xF3ria:
   "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
-  "yaml": {
-    "propriedade": "valor"
-  },
-  "tags": ["tag1", "tag2"],
-  "internalLinks": [
+${taxonomySections.jsonFields}  "internalLinks": [
     { "path": "caminho/exato/de/um/candidato.md", "reason": "motivo breve e espec\xEDfico" }
   ],
   "tasks": ["tarefa 1", "tarefa 2"],
@@ -24812,7 +25417,7 @@ ${truncatedContent}${truncationNote}
    * Cria um item selecionável na UI.
    * Clicar apenas seleciona/desseleciona. Não escreve na nota.
    */
-  createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason, description) {
+  createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason, description, statusLabel, showStatus = true) {
     const item2 = container.createDiv();
     item2.addClass("lina-display-flex");
     item2.addClass("lina-items-start");
@@ -24844,6 +25449,10 @@ ${truncatedContent}${truncationNote}
     const labelEl = labelWrapper.createDiv({ text: label });
     labelEl.addClass("lina-fs-085");
     labelEl.addClass("lina-color-normal");
+    if (reason && showStatus) {
+      const status = item2.createSpan({ text: statusLabel != null ? statusLabel : this.getSuggestionStatusLabel(reason) });
+      status.addClass("lina-suggestion-status");
+    }
     if (description) {
       const descriptionEl = labelWrapper.createDiv({ text: description });
       descriptionEl.addClass("lina-fs-08");
@@ -24866,10 +25475,12 @@ ${truncatedContent}${truncationNote}
     const toggleHandler = () => {
       checkbox.checked = !checkbox.checked;
       this.structuredSelections.set(id, checkbox.checked);
+      this.updateApplySelectedCount();
       updateLabelStyle();
     };
     checkbox.addEventListener("change", () => {
       this.structuredSelections.set(id, checkbox.checked);
+      this.updateApplySelectedCount();
       updateLabelStyle();
     });
     item2.addEventListener("click", (e) => {
@@ -24880,6 +25491,25 @@ ${truncatedContent}${truncationNote}
       e.stopPropagation();
       toggleHandler();
     });
+  }
+  getSuggestionStatusLabel(reason) {
+    if (reason === "new" || reason === "new-tag") return "novo";
+    if (reason === "already_exists") return "j\xE1 existe";
+    if (reason === "existing-tag") return "usada";
+    if (reason === "conflict") return "conflito";
+    return reason;
+  }
+  getFolderPreviewStatusLabel(resolution) {
+    if (resolution.canMove && resolution.exists) return this.L.previewFolderExistingBadge;
+    if (resolution.isCurrentFolder) return this.L.previewFolderCurrentBadge;
+    return resolution.reason;
+  }
+  updateApplySelectedCount() {
+    var _a;
+    const button = (_a = this.analysisResultEl) == null ? void 0 : _a.querySelector("[data-lina-apply-selected]");
+    if (!button) return;
+    const count = [...this.structuredSelections.values()].filter(Boolean).length;
+    button.setText(`${this.L.previewApplyButton} (${count})`);
   }
   /**
    * Cria uma secção da pré-visualização estruturada.
@@ -24900,13 +25530,14 @@ ${truncatedContent}${truncationNote}
       return;
     }
     for (const item2 of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description);
+      this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description, item2.statusLabel);
     }
   }
   /**
    * Cria uma secção da pré-visualização estruturada com suporte para itens desativados.
    */
   createStructuredSectionWithStatus(container, title, idPrefix, items, noItemsMessage) {
+    var _a;
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
@@ -24940,13 +25571,17 @@ ${truncatedContent}${truncationNote}
         labelEl.addClass("lina-color-muted");
         labelEl.addClass("lina-flex-1");
         labelEl.addClass("lina-break-word");
+        if (item2.reason) {
+          const status = itemDiv.createSpan({ text: (_a = item2.statusLabel) != null ? _a : this.getSuggestionStatusLabel(item2.reason) });
+          status.addClass("lina-suggestion-status");
+        }
         if (item2.reason === "already_exists") {
           labelEl.addClass("lina-color-accent");
         } else if (item2.reason === "conflict") {
           labelEl.addClass("lina-color-warning");
         }
       } else {
-        this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description);
+        this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description, item2.statusLabel);
       }
     }
   }
@@ -24999,18 +25634,16 @@ ${truncatedContent}${truncationNote}
       const content = await this.app.vault.read(targetFile);
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
-    const existingVaultTags = this.getExistingVaultTags();
-    const tagItems = suggestedTags.map((tag) => {
-      const existingTag = existingVaultTags.get(tag);
-      const isAlreadyInNote = existingNoteTags.has(tag);
-      const statusLabel = isAlreadyInNote ? this.L.tagsAlreadyInNote : existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
+    const tagItems = prepareTagProposals(suggestedTags, this.getExistingVaultTags(), void 0, existingNoteTags).map((proposal) => {
+      var _a;
+      const statusLabel = proposal.existsInNote ? this.L.tagsAlreadyInNote : proposal.existsInVault ? formatTagUsageLabel((_a = proposal.usageCount) != null ? _a : 0, this.L.previewTagExisting) : this.L.previewTagNew;
       return {
-        id: `tag_${tag}`,
-        label: `${tag} \u2014 ${statusLabel}`,
+        id: `tag_${proposal.tag}`,
+        label: `${proposal.tag} \u2014 ${statusLabel}`,
         kind: "tag",
-        value: tag,
-        disabled: isAlreadyInNote,
-        reason: isAlreadyInNote ? "already_exists" : existingTag ? "existing-tag" : "new-tag"
+        value: proposal.tag,
+        disabled: proposal.existsInNote === true,
+        reason: proposal.existsInNote ? "already_exists" : proposal.existsInVault ? "existing-tag" : "new-tag"
       };
     });
     this.createStructuredSectionWithStatus(
@@ -25039,7 +25672,7 @@ ${truncatedContent}${truncationNote}
         selectedTags.push(item2.value);
       }
     }
-    return normalizarTags(selectedTags);
+    return preserveTagIdentities(selectedTags);
   }
   async applySelectedTagsFromCommand(applyTarget) {
     const activeFile = this.app.workspace.getActiveFile();
@@ -25109,12 +25742,53 @@ ${truncatedContent}${truncationNote}
     const tags = new Set(extrairTagsDoFrontmatter(frontmatter));
     const cache = this.app.metadataCache.getFileCache(file);
     for (const tagCache of (_a = cache == null ? void 0 : cache.tags) != null ? _a : []) {
-      const normalizedTag = normalizarTag(tagCache.tag.replace(/^#/, ""));
-      if (normalizedTag) {
-        tags.add(normalizedTag);
+      const identity = preserveTagIdentities([tagCache.tag])[0];
+      if (identity) {
+        tags.add(identity);
       }
     }
     return tags;
+  }
+  async getContextualTagCandidates(relatedNotes) {
+    if (relatedNotes.length === 0) return [];
+    const relatedSources = await Promise.all(relatedNotes.map(async (note) => {
+      const relatedFile = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(relatedFile instanceof import_obsidian28.TFile)) return null;
+      try {
+        const content = await this.app.vault.read(relatedFile);
+        return {
+          tags: [...this.getExistingTagsForNote(relatedFile, content)],
+          score: note.score
+        };
+      } catch (e) {
+        return null;
+      }
+    }));
+    return buildContextualTagCandidates(
+      relatedSources.filter((source) => source !== null),
+      this.getExistingVaultTags()
+    );
+  }
+  async getContextualYamlCandidates(relatedNotes) {
+    if (relatedNotes.length === 0) return [];
+    const relatedSources = await Promise.all(relatedNotes.map(async (note) => {
+      var _a;
+      const relatedFile = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(relatedFile instanceof import_obsidian28.TFile)) return null;
+      try {
+        const frontmatter = (_a = this.app.metadataCache.getFileCache(relatedFile)) == null ? void 0 : _a.frontmatter;
+        return {
+          yaml: frontmatter != null ? frontmatter : {},
+          score: note.score
+        };
+      } catch (e) {
+        return null;
+      }
+    }));
+    return buildContextualYamlCandidates(
+      relatedSources.filter((source) => source !== null),
+      this.plugin.settings.yamlAllowedProperties
+    );
   }
   async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
@@ -25123,39 +25797,38 @@ ${truncatedContent}${truncationNote}
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
-        existingFrontmatter = parseFrontmatterLines(frontmatter);
+        existingFrontmatter = parseFrontmatterProperties(frontmatter);
       }
     }
     const yamlItems = [];
-    for (const [key, value] of Object.entries(suggestedYaml)) {
-      const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-      const existingEntry = this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, key);
-      if (existingEntry) {
-        if (existingEntry.value === valueStr || existingEntry.value.length === 0) {
-          yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlAlreadyExists}`,
-            kind: "yaml",
-            value: key,
-            disabled: true,
-            reason: "already_exists"
-          });
-        } else {
-          yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlConflict}: ${existingEntry.value}`,
-            kind: "yaml",
-            value: key,
-            disabled: true,
-            reason: "conflict"
-          });
-        }
+    for (const proposal of buildYamlProposals(suggestedYaml, existingFrontmatter, {
+      keyMatching: "case-insensitive",
+      emptyExistingValue: "already_exists"
+    })) {
+      if (proposal.status === "already_exists") {
+        yamlItems.push({
+          id: `yaml_${proposal.property}`,
+          label: `${proposal.property}: ${proposal.valueText} \u2014 ${this.L.previewYamlAlreadyExists}`,
+          kind: "yaml",
+          value: proposal.property,
+          disabled: true,
+          reason: "already_exists"
+        });
+      } else if (proposal.status === "conflict") {
+        yamlItems.push({
+          id: `yaml_${proposal.property}`,
+          label: `${proposal.property}: ${proposal.valueText} \u2014 ${this.L.previewYamlConflict}: ${proposal.existingValue}`,
+          kind: "yaml",
+          value: proposal.property,
+          disabled: true,
+          reason: "conflict"
+        });
       } else {
         yamlItems.push({
-          id: `yaml_${key}`,
-          label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlNew}`,
+          id: `yaml_${proposal.property}`,
+          label: `${proposal.property}: ${proposal.valueText} \u2014 ${this.L.previewYamlNew}`,
           kind: "yaml",
-          value: key,
+          value: proposal.property,
           disabled: false,
           reason: "new"
         });
@@ -25177,14 +25850,6 @@ ${truncatedContent}${truncationNote}
     applyBtn.addEventListener("click", () => {
       void this.applySelectedYamlFromCommand(applyTarget, suggestedYaml);
     });
-  }
-  getFrontmatterEntryCaseInsensitive(frontmatter, key) {
-    for (const [existingKey, existingValue] of frontmatter.entries()) {
-      if (existingKey.toLowerCase() === key.toLowerCase()) {
-        return { value: existingValue };
-      }
-    }
-    return void 0;
   }
   getSelectedYamlKeysFromStructuredSelections() {
     const selectedYamlKeys = [];
@@ -25232,10 +25897,10 @@ ${truncatedContent}${truncationNote}
         return;
       }
       const { frontmatter } = extrairFrontmatter(originalContent);
-      const existingFrontmatter = parseFrontmatterLines(frontmatter);
+      const existingFrontmatter = parseFrontmatterProperties(frontmatter);
       const newSelectedYamlKeys = selectedYamlKeys.filter((key) => {
         const originalKey = Object.keys(suggestedYaml).find((suggestedKey) => suggestedKey.toLowerCase() === key.toLowerCase());
-        return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
+        return !!originalKey && findYamlExistingProperty(existingFrontmatter, originalKey, "case-insensitive") === void 0;
       });
       if (newSelectedYamlKeys.length === 0) {
         new import_obsidian28.Notice(this.L.yamlNoChanges);
@@ -25605,21 +26270,13 @@ ${truncatedContent}${truncationNote}
     const analysisFile = (_a = targetFile != null ? targetFile : this.app.workspace.getActiveFile()) != null ? _a : void 0;
     this.currentActiveFilePath = analysisFile == null ? void 0 : analysisFile.path;
     this.renderCopyAiResponseButton(this.analysisResultEl, this.formatStructuredAnalysisForClipboard(result2));
-    const clarificationContainer = this.analysisResultEl.createDiv();
-    clarificationContainer.addClass("lina-mb-12");
-    clarificationContainer.addClass("lina-p-8");
-    clarificationContainer.addClass("lina-bg-primary-alt");
-    clarificationContainer.addClass("lina-radius-4");
-    clarificationContainer.addClass("lina-fs-085");
-    clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
-    clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
-    const notesInfoContainer = this.analysisResultEl.createDiv();
-    notesInfoContainer.addClass("lina-mb-12");
-    notesInfoContainer.addClass("lina-fs-085");
-    notesInfoContainer.addClass("lina-color-muted");
-    if (relatedNotes.length > 0) {
-      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
-      const notesList = notesInfoContainer.createDiv();
+    const notesInfoContainer = relatedNotes.length > 0 || relatedNotesCount > 0 ? this.analysisResultEl.createDiv() : null;
+    notesInfoContainer == null ? void 0 : notesInfoContainer.addClass("lina-mb-12");
+    notesInfoContainer == null ? void 0 : notesInfoContainer.addClass("lina-fs-085");
+    notesInfoContainer == null ? void 0 : notesInfoContainer.addClass("lina-color-muted");
+    if (notesInfoContainer && relatedNotes.length > 0) {
+      const notesList = notesInfoContainer.createEl("details");
+      notesList.createEl("summary", { text: `${this.L.previewSectionRelatedNotes} (${relatedNotes.length})` });
       notesList.addClass("lina-mt-4");
       notesList.addClass("lina-fs-08");
       notesList.addClass("lina-maxh-120");
@@ -25629,14 +26286,16 @@ ${truncatedContent}${truncationNote}
       for (const note of relatedNotes.slice(0, 10)) {
         this.renderRelatedNoteSummaryItem(notesList, note);
       }
-    } else {
-      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
+    } else if (notesInfoContainer) {
+      const emptyRelated = notesInfoContainer.createDiv({ text: this.L.previewSectionRelatedNotes });
+      emptyRelated.createSpan({ text: String(relatedNotesCount), cls: "lina-suggestion-status" });
     }
     if (result2.suggestedTitle) {
       const titleItems = [
         {
           id: "suggested",
-          label: `${this.L.renameUpdateH1}: ${result2.suggestedTitle}`,
+          label: this.L.renameUpdateH1,
+          description: result2.suggestedTitle,
           kind: "title",
           value: result2.suggestedTitle,
           title: result2.suggestedTitle
@@ -25647,7 +26306,8 @@ ${truncatedContent}${truncationNote}
         if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `${this.L.renameRenameFile}: ${readableFileName}`,
+            label: this.L.renameRenameFile,
+            description: readableFileName,
             kind: "rename-file",
             value: readableFileName,
             path: getPathInSameFolder(analysisFile, readableFileName),
@@ -25657,7 +26317,7 @@ ${truncatedContent}${truncationNote}
       }
       this.createStructuredSection(
         this.analysisResultEl,
-        this.L.previewSuggestedTitle,
+        this.L.previewSectionTitle,
         "title",
         titleItems,
         ""
@@ -25668,7 +26328,7 @@ ${truncatedContent}${truncationNote}
       const folderSection = this.analysisResultEl.createDiv();
       folderSection.addClass("lina-mt-12");
       folderSection.addClass("lina-mb-8");
-      const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
+      const titleEl = folderSection.createEl("strong", { text: this.L.previewSectionFolder });
       titleEl.addClass("lina-fs-09");
       titleEl.addClass("lina-display-block");
       titleEl.addClass("lina-mb-4");
@@ -25681,21 +26341,16 @@ ${truncatedContent}${truncationNote}
         analysisFile == null ? void 0 : analysisFile.name,
         analysisFile == null ? void 0 : analysisFile.path
       );
-      const folderValue = folderSection.createDiv({
-        text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder
-      });
+      const folderValueRow = folderSection.createDiv({ cls: "lina-folder-preview-value-row" });
+      const folderValue = folderValueRow.createDiv({ text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder });
       folderValue.addClass("lina-fs-085");
       folderValue.addClass("lina-color-muted");
-      folderValue.addClass("lina-mb-4");
-      const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
-      statusEl.addClass("lina-fs-085");
-      statusEl.addClass("lina-mb-4");
+      const statusEl = folderValueRow.createSpan({ text: this.getFolderPreviewStatusLabel(folderResolution) });
+      statusEl.addClass("lina-suggestion-status");
       const resolvedFolder = (_c = folderResolution.resolvedFolderPath) != null ? _c : folderResolution.rawSuggestedFolder;
       const destinationPath = (_d = folderResolution.finalTargetPath) != null ? _d : void 0;
       const canMove = folderResolution.canMove;
       if (canMove) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-success");
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
@@ -25705,38 +26360,16 @@ ${truncatedContent}${truncationNote}
           resolvedFolder,
           destinationPath,
           resolvedFolder,
-          folderResolution.reason
+          folderResolution.reason,
+          void 0,
+          void 0,
+          false
         );
-      } else if (!analysisFile) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-warning");
-      } else if (folderResolution.hasCollision) {
-        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.addClass("lina-color-warning");
       } else {
-        statusEl.addClass(folderResolution.isCurrentFolder ? "lina-color-muted" : "lina-color-warning");
-      }
-      if (!canMove) {
-        const disabledItem = folderSection.createDiv();
-        disabledItem.addClass("lina-display-flex");
-        disabledItem.addClass("lina-items-start");
-        disabledItem.addClass("lina-gap-6");
-        disabledItem.addClass("lina-py-3");
-        disabledItem.addClass("lina-opacity-065");
-        const checkbox = disabledItem.createEl("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = false;
-        checkbox.disabled = true;
-        checkbox.addClass("lina-checkbox-offset");
-        checkbox.addClass("lina-cursor-not-allowed");
-        const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
-        labelEl.addClass("lina-fs-085");
-        labelEl.addClass("lina-color-muted");
-        labelEl.addClass("lina-flex-1");
-        labelEl.addClass("lina-break-word");
+        statusEl.addClass("lina-color-muted");
       }
     }
-    const validTags = result2.tags ? normalizarTags(result2.tags) : [];
+    const tagProposals = result2.tags ? prepareTagProposals(result2.tags, this.getExistingVaultTags()) : [];
     if (result2.yaml && Object.keys(result2.yaml).length > 0) {
       const yamlItems = [];
       let existingFrontmatter = /* @__PURE__ */ new Map();
@@ -25745,72 +26378,73 @@ ${truncatedContent}${truncationNote}
           const content = await this.app.vault.read(analysisFile);
           const { frontmatter } = extrairFrontmatter(content);
           if (frontmatter) {
-            existingFrontmatter = parseFrontmatterLines(frontmatter);
+            existingFrontmatter = parseFrontmatterProperties(frontmatter);
           }
         } catch (error) {
           console.warn("N\xE3o foi poss\xEDvel ler frontmatter existente:", error);
         }
       }
-      for (const [key, value] of Object.entries(result2.yaml)) {
-        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        const existingValue = existingFrontmatter.get(key);
-        if (existingValue) {
-          if (existingValue === valueStr) {
-            yamlItems.push({
-              id: `yaml_${key}`,
-              label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlAlreadyExists}`,
-              kind: "yaml",
-              value: key,
-              disabled: true,
-              reason: "already_exists"
-            });
-          } else {
-            yamlItems.push({
-              id: `yaml_${key}`,
-              label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlConflict}: ${existingValue}`,
-              kind: "yaml",
-              value: key,
-              disabled: true,
-              reason: "conflict"
-            });
-          }
+      for (const proposal of buildYamlProposals(result2.yaml, existingFrontmatter, {
+        keyMatching: "exact",
+        emptyExistingValue: "new"
+      })) {
+        if (proposal.status === "already_exists") {
+          yamlItems.push({
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
+            kind: "yaml",
+            value: proposal.property,
+            disabled: true,
+            reason: "already_exists",
+            statusLabel: this.L.previewYamlAlreadyExists
+          });
+        } else if (proposal.status === "conflict") {
+          yamlItems.push({
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
+            description: proposal.existingValue,
+            kind: "yaml",
+            value: proposal.property,
+            disabled: true,
+            reason: "conflict",
+            statusLabel: this.L.previewYamlConflict
+          });
         } else {
           yamlItems.push({
-            id: `yaml_${key}`,
-            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlNew}`,
+            id: `yaml_${proposal.property}`,
+            label: `${proposal.property}: ${proposal.valueText}`,
             kind: "yaml",
-            value: key,
+            value: proposal.property,
             disabled: false,
-            reason: "new"
+            reason: "new",
+            statusLabel: this.L.previewYamlNew
           });
         }
       }
       this.createStructuredSectionWithStatus(
         this.analysisResultEl,
-        this.L.previewYamlSuggested,
+        this.L.previewSectionYaml,
         "yaml",
         yamlItems,
         this.L.previewYamlDisabled
       );
     }
-    if (validTags.length > 0) {
-      const existingVaultTags = this.getExistingVaultTags();
-      const tagItems = validTags.map((tag) => {
+    if (tagProposals.length > 0) {
+      const tagItems = tagProposals.map((proposal) => {
         var _a2;
-        const existingTag = existingVaultTags.get(tag);
-        const value = (_a2 = existingTag == null ? void 0 : existingTag.normalized) != null ? _a2 : tag;
-        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
+        const statusLabel = proposal.existsInVault ? formatTagUsageLabel((_a2 = proposal.usageCount) != null ? _a2 : 0, this.L.previewTagExisting) : this.L.previewTagNew;
         return {
-          id: `tag_${value}`,
-          label: `${value} \u2014 ${statusLabel}`,
+          id: `tag_${proposal.tag}`,
+          label: proposal.tag,
           kind: "tag",
-          value,
-          reason: existingTag ? "existing-tag" : "new-tag"
+          value: proposal.tag,
+          reason: proposal.existsInVault ? "existing-tag" : "new-tag",
+          statusLabel
         };
       });
       this.createStructuredSection(
         this.analysisResultEl,
-        this.L.previewTagsSuggested,
+        this.L.previewSectionTags,
         "tags",
         tagItems,
         this.L.previewNoTags
@@ -25886,35 +26520,50 @@ ${truncatedContent}${truncationNote}
       );
     }
     if (result2.analysis) {
-      this.createStructuredSection(
-        this.analysisResultEl,
-        this.L.previewAnalysis,
-        "analysis",
-        [{ id: "analysis_text", label: result2.analysis, kind: "analysis", value: result2.analysis }],
-        ""
-      );
+      const analysisSection = this.analysisResultEl.createDiv({ cls: "lina-mt-12" });
+      const analysisHeading = analysisSection.createEl("strong", { text: this.L.previewAnalysis });
+      let hasExistingAnalysis = false;
+      if (analysisFile) {
+        try {
+          hasExistingAnalysis = /^## Análise Lina\s*$/m.test(await this.app.vault.read(analysisFile));
+        } catch (error) {
+          console.warn("N\xE3o foi poss\xEDvel verificar an\xE1lise existente:", error);
+        }
+      }
+      if (hasExistingAnalysis) {
+        analysisHeading.createSpan({ text: this.L.previewAnalysisAlreadyExists, cls: "lina-suggestion-status" });
+      }
+      analysisSection.createDiv({ text: result2.analysis, cls: "lina-fs-085 lina-mt-4" });
+      this.createSelectableItem(analysisSection, "analysis_text", "Gravar an\xE1lise na nota", false, "analysis", result2.analysis);
+      if (hasExistingAnalysis) {
+        analysisSection.createDiv({ text: this.L.previewAnalysisWillAppend, cls: "lina-fs-085 lina-color-muted" });
+      }
     }
-    const infoContainer = this.analysisResultEl.createDiv();
+    const infoContainer = this.analysisResultEl.createDiv({ cls: "lina-analysis-summary" });
     infoContainer.addClass("lina-mt-12");
     infoContainer.addClass("lina-pt-8");
     infoContainer.addClass("lina-border-top");
     infoContainer.addClass("lina-fs-08");
     infoContainer.addClass("lina-color-muted");
     if (result2.summary) {
-      infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result2.summary}` });
+      infoContainer.createEl("strong", { text: this.L.previewSummary });
+      infoContainer.createDiv({ text: result2.summary, cls: "lina-analysis-summary-text" });
     }
     if (result2.confidence) {
-      infoContainer.createDiv({ text: `${this.L.previewConfidence}: ${result2.confidence}` });
+      infoContainer.createSpan({ text: `${this.L.previewConfidence}: ${result2.confidence}`, cls: "lina-suggestion-status" });
     }
     if (result2.limitations) {
-      infoContainer.createDiv({ text: `${this.L.previewLimitations}: ${result2.limitations}` });
+      const limitations = result2.limitations.trim().toLowerCase() === "nenhuma" ? "sem limita\xE7\xF5es" : result2.limitations;
+      infoContainer.createSpan({ text: limitations === "sem limita\xE7\xF5es" ? limitations : `${this.L.previewLimitations}: ${limitations}`, cls: "lina-suggestion-status" });
     }
     const applyBtnContainer = this.analysisResultEl.createDiv();
     applyBtnContainer.addClass("lina-mt-16");
     applyBtnContainer.addClass("lina-text-center");
-    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
+    const applyBtn = applyBtnContainer.createEl("button", { text: `${this.L.previewApplyButton} (0)` });
+    applyBtn.setAttribute("data-lina-apply-selected", "true");
     applyBtn.addClass("lina-p-8-16");
     applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addClass("lina-analysis-apply-button");
     applyBtn.addEventListener("click", () => {
       void this.applySelectedChanges().catch((error) => {
         console.error("Lina: failed to apply selected changes", error);
@@ -25922,20 +26571,68 @@ ${truncatedContent}${truncationNote}
     });
   }
   /**
+   * Calcula o plano taxonómico local para a nota (RuntimeEmbeddingIndex + metadataCache já
+   * existentes). Só leitura: sem embeddings, rede, LLM nem persistência. Em qualquer falha
+   * devolve `null` e a análise segue o caminho histórico.
+   */
+  async computeTaxonomyRuntime(path) {
+    var _a;
+    try {
+      const chunks = await readIndexedChunks(this.app);
+      const runtimeIndex = chunks ? await this.plugin.getRuntimeEmbeddingIndex(this.filterChunksByUserContentRules(chunks)) : null;
+      if (!runtimeIndex) return null;
+      const experiment = runSemanticTaxonomyExperiment(runtimeIndex, (0, import_obsidian28.normalizePath)(path), this.app.metadataCache, this.app.vault, {
+        topK: 10,
+        maxTags: (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8,
+        yamlAllowedProperties: this.plugin.settings.yamlAllowedProperties
+      });
+      return prepareTaxonomyRuntime(experiment, {
+        yamlAllowedProperties: this.plugin.settings.yamlAllowedProperties,
+        yamlEnabled: this.plugin.settings.yamlSuggestionsEnabled
+      });
+    } catch (error) {
+      console.warn("Lina: plano de taxonomia local indispon\xEDvel", error);
+      return null;
+    }
+  }
+  /** Consome o plano da análise normal; nunca é reutilizado por outro fluxo ou nota. */
+  takePendingTaxonomyPlan(path) {
+    const pending = this.pendingTaxonomyPlan;
+    this.pendingTaxonomyPlan = null;
+    if (!pending || this.currentAnalysisScope !== "single-note") return null;
+    return pending.path === (0, import_obsidian28.normalizePath)(path) ? pending.runtime : null;
+  }
+  /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
   async processAIResponse(aiText, currentPath2, allowedPaths, relatedNotesCount, relatedNotes = [], targetFile) {
-    var _a;
+    var _a, _b;
     if (!this.analysisResultEl) return;
     const { json, error } = extrairJsonDaResposta(aiText);
     if (json && !error) {
-      this.prepareStructuredAnalysisResult(json);
+      const taxonomy = this.takePendingTaxonomyPlan(currentPath2);
+      if (taxonomy) {
+        const reconciliation = reconcileTaxonomyRuntime(
+          taxonomy,
+          json.tags,
+          json.yaml,
+          this.plugin.settings.yamlAllowedProperties,
+          (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8
+        );
+        json.tags = (reconciliation == null ? void 0 : reconciliation.tags.length) ? [...reconciliation.tags] : void 0;
+        json.yaml = reconciliation && Object.keys(reconciliation.yaml).length > 0 ? reconciliation.yaml : void 0;
+        this.prepareStructuredAnalysisResult(json, [], [], taxonomy.plan);
+      } else {
+        const contextualTagCandidates = await this.getContextualTagCandidates(relatedNotes);
+        const contextualYamlCandidates = await this.getContextualYamlCandidates(relatedNotes);
+        this.prepareStructuredAnalysisResult(json, contextualTagCandidates, contextualYamlCandidates);
+      }
       if (json.internalLinks && allowedPaths.length > 0) {
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath2, allowedPaths);
       }
       this.applyFolderSuggestionResolution(json, currentPath2);
       if (this.currentAnalysisScope === "single-note") {
-        this.preserveSingleNoteSuggestedMetadata(json.yaml, (_a = json.tags) != null ? _a : []);
+        this.preserveSingleNoteSuggestedMetadata(json.yaml, (_b = json.tags) != null ? _b : []);
       }
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
@@ -26182,7 +26879,7 @@ ${truncatedContent}${truncationNote}
         const content = await this.app.vault.read(targetFile);
         const { frontmatter } = extrairFrontmatter(content);
         if (frontmatter) {
-          existingFrontmatter = parseFrontmatterLines(frontmatter);
+          existingFrontmatter = parseFrontmatterProperties(frontmatter);
         }
       } catch (error) {
         console.warn("N\xE3o foi poss\xEDvel ler frontmatter existente para contagem:", error);
@@ -26192,7 +26889,7 @@ ${truncatedContent}${truncationNote}
         if (!originalKey) continue;
         const value = result2.yaml[originalKey];
         const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        const existingValue = existingFrontmatter.get(originalKey);
+        const existingValue = findYamlExistingProperty(existingFrontmatter, originalKey, "exact");
         if (existingValue === valueStr) {
           existingYamlCount++;
         } else if (existingValue) {
@@ -26208,7 +26905,7 @@ ${truncatedContent}${truncationNote}
     }
     try {
       const currentContent = await this.app.vault.read(targetFile);
-      if (this.hasLinaGeneratedContent(currentContent)) {
+      if (this.hasLinaGeneratedContent(currentContent) && !secaoExiste(currentContent, SECCAO_ANALISE)) {
         const confirmed2 = await this.confirmReinsertAiContent();
         if (!confirmed2) {
           new import_obsidian28.Notice(this.L.operationCancelledNoChange);
@@ -26357,9 +27054,9 @@ ${truncatedContent}${truncationNote}
    */
   applyYamlAndTagsToNote(content, result2, selectedYamlKeys, selectedTags) {
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
-    const existingProps = parseFrontmatterLines(frontmatter);
+    const existingProps = parseFrontmatterProperties(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
-    const normalizedSelectedTags = normalizarTags(selectedTags);
+    const normalizedSelectedTags = preserveTagIdentities(selectedTags);
     const newLines = [];
     if (result2.yaml) {
       for (const key of selectedYamlKeys) {
@@ -26379,7 +27076,7 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (normalizedSelectedTags.length > 0) {
-      const allTags = [.../* @__PURE__ */ new Set([...existingTags, ...normalizedSelectedTags])];
+      const allTags = preserveTagIdentities([...existingTags, ...normalizedSelectedTags]);
       if (allTags.length > 0) {
         newLines.push("tags:");
         for (const tag of allTags) {
@@ -26495,7 +27192,6 @@ ${tasksBlock}
     var _a;
     const analysisLines = [];
     const analysisDetailLines = [];
-    const existingAnalysisSection = getMarkdownSection(content, SECCAO_ANALISE);
     const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
     const linksToWrite = [];
     const seenLinkPaths = /* @__PURE__ */ new Set();
@@ -26518,7 +27214,7 @@ ${this.L.previewConfidence}: ${result2.confidence}`);
       if (result2.limitations && result2.limitations !== "Nenhuma.") analysisDetailLines.push(`${this.L.previewLimitations}: ${result2.limitations}`);
     }
     const analysisDetailsText = analysisDetailLines.join("\n");
-    if (analysisDetailsText.trim().length > 0 && !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))) {
+    if (analysisDetailsText.trim().length > 0) {
       analysisLines.push(analysisDetailsText);
     }
     if (linksToWrite.length > 0) {
@@ -26541,15 +27237,25 @@ ${this.L.previewConfidence}: ${result2.confidence}`);
       const afterSectionEnd = content.substring(sectionEnd);
       return `${beforeSectionEnd}
 
----
-${analysisText}
+${this.createAnalysisCallout(analysisText)}
 ${afterSectionEnd}`;
     }
     return `${content}
 
 ${SECCAO_ANALISE}
-${analysisText}
+
+${this.createAnalysisCallout(analysisText)}
 `;
+  }
+  createAnalysisCallout(analysisText, writtenAt = /* @__PURE__ */ new Date()) {
+    const timestamp = [
+      String(writtenAt.getDate()).padStart(2, "0"),
+      String(writtenAt.getMonth() + 1).padStart(2, "0"),
+      String(writtenAt.getFullYear())
+    ].join("/");
+    const time = `${String(writtenAt.getHours()).padStart(2, "0")}:${String(writtenAt.getMinutes()).padStart(2, "0")}`;
+    const quotedLines = analysisText.split("\n").map((line) => line.length > 0 ? `> ${line}` : ">");
+    return [`> [!info]- ${timestamp} \xB7 ${time}`, ...quotedLines].join("\n");
   }
   // -----------------------------------------------------------------------
   // Métodos de análise
@@ -26586,6 +27292,7 @@ ${analysisText}
     });
   }
   async analyzeMarkdownFile(file, options) {
+    var _a, _b;
     const analysisRunId = this.analysisRunId;
     this.currentAnalysisScope = "single-note";
     this.ensureAnalysisPanel(options.panelTitle, file == null ? void 0 : file.basename);
@@ -26648,7 +27355,10 @@ ${analysisText}
     const initialRelatedNotes = options.withContext ? await this.findRelatedNotesForCurrentNote(title, path, content) : [];
     const relatedFilterResult = await this.filterRelatedNotesByUserContentRules(initialRelatedNotes);
     const relatedNotes = relatedFilterResult.notes;
-    const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) : this.buildCurrentNoteAnalysisPrompt(title, path, content);
+    const taxonomyRuntime = await this.computeTaxonomyRuntime(path);
+    this.pendingTaxonomyPlan = taxonomyRuntime ? { path: (0, import_obsidian28.normalizePath)(path), runtime: taxonomyRuntime } : null;
+    const taxonomyRequest = taxonomyRuntime == null ? void 0 : taxonomyRuntime.request;
+    const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes, taxonomyRequest) : this.buildCurrentNoteAnalysisPrompt(title, path, content, taxonomyRequest);
     const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
     if (analysisRunId !== this.analysisRunId) {
       return;
@@ -26659,6 +27369,27 @@ ${analysisText}
     }
     this.analysisResultEl.empty();
     if (!result2.success) {
+      const fallbackRuntime = this.takePendingTaxonomyPlan(path);
+      const fallback = fallbackTaxonomyRuntime(
+        fallbackRuntime != null ? fallbackRuntime : void 0,
+        this.plugin.settings.yamlAllowedProperties,
+        (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8
+      );
+      if (fallbackRuntime && fallback && (fallback.tags.length > 0 || Object.keys(fallback.yaml).length > 0)) {
+        const localResult = {
+          summary: "",
+          ...fallback.tags.length > 0 ? { tags: [...fallback.tags] } : {},
+          ...Object.keys(fallback.yaml).length > 0 ? { yaml: fallback.yaml } : {}
+        };
+        this.prepareStructuredAnalysisResult(localResult, [], [], fallbackRuntime.plan);
+        this.preserveSingleNoteSuggestedMetadata(localResult.yaml, (_b = localResult.tags) != null ? _b : []);
+        await this.renderStructuredPreview(localResult, relatedNotes.length, relatedNotes, currentFile);
+        this.analysisResultEl.createDiv({
+          text: "A an\xE1lise IA falhou; as sugest\xF5es locais de taxonomia continuam dispon\xEDveis para revis\xE3o.",
+          attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+        });
+        return;
+      }
       if (result2.message.includes("Tempo limite")) {
         this.analysisResultEl.createDiv({
           text: "A an\xE1lise excedeu o tempo limite. Podes aumentar o tempo nas defini\xE7\xF5es ou tentar novamente.",
@@ -27094,8 +27825,8 @@ ${path}
 ${limitedContent}
 <<<FIM_NOTA>>>`;
   }
-  prepareStructuredAnalysisResult(result2) {
-    var _a, _b;
+  prepareStructuredAnalysisResult(result2, contextualTagCandidates = [], contextualYamlCandidates = [], taxonomyPlan) {
+    var _a, _b, _c;
     const yamlTags = (_a = result2.yaml) == null ? void 0 : _a.tags;
     if (yamlTags && (!result2.tags || result2.tags.length === 0)) {
       const recoveredTags = extrairTagsDeValorYaml(yamlTags);
@@ -27103,14 +27834,23 @@ ${limitedContent}
         result2.tags = recoveredTags;
       }
     }
-    if (result2.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
-      result2.yaml = filtrarYamlValido(result2.yaml, this.plugin.settings.yamlAllowedProperties);
+    if (!taxonomyPlan && result2.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
+      result2.yaml = mergeYamlRecommendations(
+        result2.yaml,
+        contextualYamlCandidates,
+        this.plugin.settings.yamlAllowedProperties
+      );
     }
     if (!this.plugin.settings.yamlSuggestionsEnabled) {
       delete result2.yaml;
     }
-    if (result2.tags) {
-      result2.tags = normalizarTags(result2.tags).slice(0, (_b = this.plugin.settings.maxSuggestedTags) != null ? _b : 8);
+    if (!taxonomyPlan && (result2.tags || contextualTagCandidates.length > 0)) {
+      result2.tags = mergeTagRecommendations(
+        (_b = result2.tags) != null ? _b : [],
+        contextualTagCandidates,
+        (_c = this.plugin.settings.maxSuggestedTags) != null ? _c : 8,
+        this.getExistingVaultTags()
+      );
     }
   }
   createInboxCardBlock(container, title) {
@@ -27320,7 +28060,7 @@ ${limitedContent}
     for (const item2 of results) {
       if (!item2.result) continue;
       const yaml = item2.result.yaml ? { ...item2.result.yaml } : {};
-      const tags = normalizarTags((_a = item2.result.tags) != null ? _a : []);
+      const tags = preserveTagIdentities((_a = item2.result.tags) != null ? _a : []);
       if (Object.keys(yaml).length === 0 && tags.length === 0) continue;
       this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item2.file.path), {
         sourcePath: item2.file.path,
@@ -27507,129 +28247,28 @@ ${limitedContent}
    * Para pesquisa semântica, mostra (NN%) Título da nota sem destaque lexical.
    */
   renderHighlightedCard(card, searchMode) {
-    var _a, _b;
     const isSemantic = searchMode === "semantica";
-    const isHybrid = searchMode === "hibrida";
-    const cardEl = this.resultsEl.createDiv();
-    cardEl.addClass("lina-mb-8");
-    cardEl.addClass("lina-p-10");
-    cardEl.addClass("lina-border");
-    cardEl.addClass("lina-radius-4");
-    cardEl.addClass("lina-cursor-pointer");
-    if (isSemantic) {
-      if (card.score > 1 || card.score < 0) {
-        const titleEl2 = cardEl.createEl("strong");
-        titleEl2.textContent = `(?) ${card.basename}`;
-        const pathEl2 = cardEl.createDiv({ text: card.path });
-        pathEl2.addClass("lina-fs-085");
-        pathEl2.addClass("lina-color-muted");
-        pathEl2.addClass("lina-mt-4");
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-        cardEl.addEventListener("click", () => this.openNote(card.path));
-        return;
-      }
-      const pct = Math.round(card.score * 100);
-      const titleEl = cardEl.createEl("strong");
-      titleEl.textContent = `(${pct}%) ${card.basename}`;
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-      if (card.snippet && card.snippet.length > 0) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-      }
-    } else if (isHybrid) {
-      const finalPct = Math.round(card.score);
-      const titleEl = cardEl.createEl("strong");
-      titleEl.textContent = `(${finalPct}%) ${card.basename}`;
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-      const textPct = Math.round((_a = card.textScore) != null ? _a : 0);
-      const semPct = Math.round((_b = card.semanticScore) != null ? _b : 0);
-      const hasText2 = textPct > 0;
-      const hasSem = semPct > 0;
-      let originLabel = this.L.originHybrid;
-      if (hasText2 && hasSem) originLabel = this.L.originHybrid;
-      else if (hasText2) originLabel = this.L.originText;
-      else if (hasSem) originLabel = this.L.originSemantic;
-      const metaEl = cardEl.createDiv();
-      metaEl.addClass("lina-fs-085");
-      metaEl.addClass("lina-color-muted");
-      metaEl.addClass("lina-mt-4");
-      metaEl.textContent = `${this.L.originText}: ${textPct}% \xB7 ${this.L.originSemantic}: ${semPct}% \xB7 ${this.L.originSource}: ${originLabel}`;
-      const snippetInfo = getSearchSnippetDisplay(card);
-      if (snippetInfo && !snippetInfo.isFallback) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        if (snippetInfo.shouldHighlight) {
-          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-        } else {
-          snippetEl.setText(snippetInfo.text);
-        }
-      } else if (card.snippet) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        snippetEl.textContent = card.snippet;
-      }
-    } else {
-      const snippetInfo = getSearchSnippetDisplay(card);
-      const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin, this.L);
-      const titleEl = cardEl.createEl("strong");
-      renderHighlightedText(titleEl, card.basename, card.termsFound);
-      const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.addClass("lina-fs-085");
-      pathEl.addClass("lina-color-muted");
-      pathEl.addClass("lina-mt-4");
-      const metaEl = cardEl.createDiv();
-      metaEl.setText(originLabel);
-      metaEl.addClass("lina-fs-085");
-      metaEl.addClass("lina-color-muted");
-      metaEl.addClass("lina-mt-6");
-      if (snippetInfo && !snippetInfo.isFallback) {
-        const snippetEl = cardEl.createDiv();
-        snippetEl.addClass("lina-fs-085");
-        snippetEl.addClass("lina-mt-8");
-        snippetEl.addClass("lina-p-4-6");
-        snippetEl.addClass("lina-bg-primary-alt");
-        snippetEl.addClass("lina-radius-3");
-        snippetEl.addClass("lina-pre-wrap");
-        snippetEl.addClass("lina-break-word");
-        if (snippetInfo.shouldHighlight) {
-          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-        } else {
-          snippetEl.setText(snippetInfo.text);
-        }
-      }
+    const cardEl = this.resultsEl.createDiv({ cls: "lina-search-result" });
+    const titleRow = cardEl.createDiv({ cls: "lina-search-result-title-row" });
+    const badge = titleRow.createSpan({ cls: "lina-search-result-score" });
+    const score = isSemantic ? card.score * 100 : card.score;
+    badge.setText(Number.isFinite(score) ? `${Math.round(score)}%` : "?");
+    const titleEl = titleRow.createEl("strong", { cls: "lina-search-result-title" });
+    if (isSemantic) titleEl.setText(card.basename);
+    else renderHighlightedText(titleEl, card.basename, card.termsFound);
+    const pathEl = cardEl.createDiv({ cls: "lina-search-result-path" });
+    pathEl.setAttribute("data-note-path", card.path);
+    pathEl.setAttribute("title", card.path);
+    pathEl.setText(card.path.replace(/\/[^/]+$/, "") || card.path);
+    const snippet = getSearchSnippetPresentation(card);
+    if ((snippet == null ? void 0 : snippet.kind) === "metadata") {
+      cardEl.createDiv({ text: snippet.text, cls: "lina-search-result-metadata" });
+    } else if ((snippet == null ? void 0 : snippet.kind) === "image") {
+      cardEl.createSpan({ text: snippet.label, cls: "lina-search-result-image" });
+    } else if ((snippet == null ? void 0 : snippet.kind) === "text") {
+      const snippetEl = cardEl.createDiv({ cls: "lina-search-result-snippet" });
+      if (!isSemantic && snippet.shouldHighlight) renderHighlightedText(snippetEl, snippet.text, card.termsFound);
+      else snippetEl.setText(snippet.text);
     }
     cardEl.addEventListener("click", () => this.openNote(card.path));
   }
@@ -32044,7 +32683,11 @@ Provider calls: 0`);
     const deviceId = this.getDeviceId();
     try {
       return await updateProducerState(this.app.vault.adapter, deviceId, mutator);
-    } catch (e) {
+    } catch (error) {
+      console.warn(
+        "Lina: failed to persist producer state during producer-state update; the primary publication was not reverted.",
+        error
+      );
       return null;
     }
   }
@@ -33005,10 +33648,45 @@ Provider calls: 0`);
         }
       );
       if (success) {
+        const publicationTimestamp = (/* @__PURE__ */ new Date()).toISOString();
+        if (provenance) {
+          await this.updateProducerState((current) => {
+            const textIndex = {
+              lastSuccessfulPublicationAt: publicationTimestamp,
+              ...(policy == null ? void 0 : policy.policyHash) !== void 0 ? { exclusionPolicyHash: policy.policyHash } : {},
+              ...(policy == null ? void 0 : policy.policyRevision) !== void 0 ? { exclusionPolicyRevision: policy.policyRevision } : {}
+            };
+            if (!current) {
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: publicationTimestamp,
+                textIndex,
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: publicationTimestamp
+                }
+              });
+            }
+            return createProducerState({
+              activeProducerId: provenance.producerDeviceId,
+              producerEpoch: provenance.producerEpoch,
+              updatedAt: publicationTimestamp,
+              textIndex: { ...current.textIndex, ...textIndex },
+              embeddings: current.embeddings,
+              maintenance: {
+                status: "idle",
+                lastError: null,
+                lastRunAt: publicationTimestamp
+              }
+            });
+          });
+        }
         this.indexDiagnostic.totalNotes = updatedNotes.length;
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
-        this.indexDiagnostic.lastUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        this.indexDiagnostic.lastUpdatedAt = publicationTimestamp;
         this.markEmbeddingWorkStatusDirty((_f = options.embeddingWorkInvalidationReason) != null ? _f : "text-index-published");
         this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
