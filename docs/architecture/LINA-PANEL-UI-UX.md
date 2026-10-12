@@ -21,3 +21,5 @@ Visual language uses small theme-variable badges, primary content before state a
 The preview distinguishes section, content/action and metadata levels. Its section labels are concise; confidence and limitations are secondary metadata while the summary stays readable. The final apply button fills its container for mobile use. These UI choices do not alter search, generation, parsing or note-writing contracts.
 
 The analysis panel presents only the final reconciled suggestions. Technical taxonomy observability (support counts, semantic neighbours, plan, local/AI origin) is not rendered, and a related-notes row appears only when related notes exist.
+
+Sidebar status keeps search availability, artifact integrity, artifact freshness and Producer activity separate. Text-index freshness and its relative age derive from the same artifact timestamp. A stale Producer heartbeat reports missing Producer activity, never stale artifacts; it is not a primary warning on the active Producer, while a Companion can still see it after integrity, compatibility and real semantic-availability alerts.

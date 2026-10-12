@@ -332,12 +332,12 @@ export function buildSidebarStatusViewModel(
   let textStatus: SidebarFreshnessStatus;
   if (textIndexUsability === "missing" || (!textIndexReady && !effectiveTextUpdated && !companionState?.totalNotes)) {
     textStatus = "missing";
+  } else if (effectiveTextUpdated) {
+    textStatus = computeFreshnessFromTimestamp(effectiveTextUpdated, nowMs);
   } else if (textIndexFreshness) {
     textStatus = textIndexFreshness;
   } else if (companionState?.textIndexFreshness) {
     textStatus = companionState.textIndexFreshness;
-  } else if (effectiveTextUpdated) {
-    textStatus = computeFreshnessFromTimestamp(effectiveTextUpdated, nowMs);
   } else {
     textStatus = textIndexReady ? "fresh" : "unknown";
   }
@@ -484,15 +484,7 @@ export function buildSidebarStatusViewModel(
       message: strings.sidebarDegradedVectorMismatch,
     };
   }
-  // Priority 4: Producer State Stale (> 48h)
-  else if (companionState?.producerFreshness === "stale") {
-    degradedAlert = {
-      kind: "producer-stale",
-      level: "warning",
-      message: strings.sidebarDegradedProducerStale,
-    };
-  }
-  // Priority 5: Semantic search unavailable when user has selected semantic or hybrid mode
+  // Priority 4: Semantic search unavailable when user has selected semantic or hybrid mode
   else if (
     !semanticAvailable &&
     !semanticPreparing &&
@@ -506,8 +498,16 @@ export function buildSidebarStatusViewModel(
       detail: semanticReason ?? strings.sidebarSearchModelUnavailableLocally,
     };
   }
-  // Priority 6: Producer State Aging (> 24h)
-  else if (companionState?.producerFreshness === "aging") {
+  // Priority 5: Remote Producer activity, only when viewing another device.
+  else if (roleKey !== "active-producer" && companionState?.producerFreshness === "stale") {
+    degradedAlert = {
+      kind: "producer-stale",
+      level: "warning",
+      message: strings.sidebarDegradedProducerStale,
+    };
+  }
+  // Priority 6: Aging remote Producer activity (> 24h)
+  else if (roleKey !== "active-producer" && companionState?.producerFreshness === "aging") {
     degradedAlert = {
       kind: "producer-aging",
       level: "info",

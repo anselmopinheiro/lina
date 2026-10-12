@@ -2050,8 +2050,8 @@ const PT_PT: UiStrings = {
   sidebarDegradedGenerationIntegrity: "Os ficheiros sincronizados ainda não estão consistentes. A aguardar nova sincronização.",
   sidebarDegradedPolicyMismatch: "As regras de exclusão foram atualizadas. A aguardar atualização dos artefactos.",
   sidebarDegradedVectorMismatch: "Os embeddings não são compatíveis com a configuração atual.",
-  sidebarDegradedProducerStale: "O Produtor não atualiza os artefactos há mais de 48 h.",
-  sidebarDegradedProducerAging: "O Produtor não atualiza os artefactos há mais de 24 h.",
+  sidebarDegradedProducerStale: "Sem registo de atividade do Produtor há mais de 48 h.",
+  sidebarDegradedProducerAging: "Sem registo de atividade do Produtor há mais de 24 h.",
 
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
   sidebarActionPlaceholder: "IA...",
@@ -3048,8 +3048,8 @@ const EN: UiStrings = {
   sidebarDegradedGenerationIntegrity: "Synchronized files are not yet consistent. Waiting for synchronization to complete.",
   sidebarDegradedPolicyMismatch: "Exclusion rules were updated. Waiting for artifact update.",
   sidebarDegradedVectorMismatch: "Embeddings are not compatible with the current configuration.",
-  sidebarDegradedProducerStale: "The Producer has not updated artifacts in over 48h.",
-  sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
+  sidebarDegradedProducerStale: "No Producer activity has been recorded in over 48h.",
+  sidebarDegradedProducerAging: "No Producer activity has been recorded in over 24h.",
 
   // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
   sidebarActionPlaceholder: "AI...",

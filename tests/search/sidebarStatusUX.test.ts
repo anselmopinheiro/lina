@@ -178,6 +178,28 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(vm.freshness.textIndex.humanText).toBe("Desatualizado (há 3 dias)");
   });
 
+  it("LINA-020: derives recent text-index status from the timestamp displayed to the user", () => {
+    const recentArtifact = new Date(baseNow - 30 * 60 * 1000).toISOString();
+    const vm = buildSidebarVmForScenario(createBaseInput({
+      textIndexUpdatedAt: recentArtifact,
+      companionState: { textIndexFreshness: "stale" } as CompanionArtifactConsumptionState,
+    }));
+
+    expect(vm.freshness.textIndex.status).toBe("fresh");
+    expect(vm.freshness.textIndex.humanText).toBe("Atualizado (há 30 min)");
+  });
+
+  it("LINA-020: derives stale text-index status from the same artifact timestamp", () => {
+    const staleArtifact = new Date(baseNow - 72 * 60 * 60 * 1000).toISOString();
+    const vm = buildSidebarVmForScenario(createBaseInput({
+      textIndexUpdatedAt: staleArtifact,
+      companionState: { textIndexFreshness: "fresh" } as CompanionArtifactConsumptionState,
+    }));
+
+    expect(vm.freshness.textIndex.status).toBe("stale");
+    expect(vm.freshness.textIndex.humanText).toBe("Desatualizado (há 3 dias)");
+  });
+
   // 10. Freshness unknown
   it("10. Freshness unknown when timestamp is missing or unparseable", () => {
     const vm = buildSidebarVmForScenario(createBaseInput({
@@ -354,8 +376,39 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       companionState: mockStaleWin as CompanionArtifactConsumptionState,
       strings: stringsPt,
     }));
-    expect(vmStale.degradedAlert?.kind).toBe("producer-stale");
-    expect(vmStale.degradedAlert?.message).toBe("O Produtor não atualiza os artefactos há mais de 48 h.");
+    const companionVm = buildSidebarVmForScenario(createBaseInput({
+      deviceRole: "companion",
+      isAuthorizedProducer: false,
+      companionState: mockStaleWin as CompanionArtifactConsumptionState,
+      strings: stringsPt,
+    }));
+    expect(companionVm.degradedAlert?.kind).toBe("producer-stale");
+    expect(companionVm.degradedAlert?.message).toBe("Sem registo de atividade do Produtor há mais de 48 h.");
+    expect(companionVm.degradedAlert?.message).not.toContain("artefactos");
+  });
+
+  it("LINA-020: suppresses a stale Producer heartbeat alert on the active Producer without changing availability", () => {
+    const vm = buildSidebarVmForScenario(createBaseInput({
+      currentSearchMode: "hibrida",
+      companionState: { producerFreshness: "stale" } as CompanionArtifactConsumptionState,
+    }));
+
+    expect(vm.role.roleKey).toBe("active-producer");
+    expect(vm.degradedAlert).toBeUndefined();
+    expect(vm.searchAvailability.currentModeHeadline).toBe("Pesquisa híbrida disponível");
+    expect(vm.searchAvailability.semanticAvailable).toBe(true);
+  });
+
+  it("LINA-020: keeps real semantic unavailability ahead of a stale remote Producer heartbeat", () => {
+    const vm = buildSidebarVmForScenario(createBaseInput({
+      deviceRole: "companion",
+      isAuthorizedProducer: false,
+      currentSearchMode: "hibrida",
+      semanticAvailable: false,
+      companionState: { producerFreshness: "stale" } as CompanionArtifactConsumptionState,
+    }));
+
+    expect(vm.degradedAlert?.kind).toBe("semantic-unavailable");
   });
 
   // 18. Absence of Producer State does not crash UI
