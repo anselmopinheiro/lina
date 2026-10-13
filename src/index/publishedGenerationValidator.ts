@@ -7,13 +7,12 @@ function result(errors: readonly PublishedGenerationValidationError[], formatVer
   const integrityValid = errors.length === 0;
   return { valid: integrityValid, integrityValid, cutoverEligible: integrityValid && formatVersion === PUBLISHED_GENERATION_FORMAT_VERSION, legacyFormat: formatVersion === 1 || formatVersion === 2 || formatVersion === 3 || formatVersion === 4, formatVersion, errors };
 }
-interface HashLike { update(value: Uint8Array | string): HashLike; digest(encoding: "hex"): string; }
-interface CryptoLike { createHash(algorithm: "sha256"): HashLike; }
+import { getOptionalNodeCrypto } from "../platform/desktopNodeModules";
+
 const digest = (value: Uint8Array | string): string => {
-  // eslint-disable-next-line no-undef -- Validator runs only in the desktop Producer publication path.
-  const req = typeof require === "function" ? require : null;
-  if (!req) throw new Error("SHA-256 requires desktop Node runtime.");
-  return (req("node:crypto") as CryptoLike).createHash("sha256").update(value).digest("hex");
+  const crypto = getOptionalNodeCrypto();
+  if (!crypto) throw new Error("SHA-256 requires desktop Node runtime.");
+  return crypto.createHash("sha256").update(value).digest("hex");
 };
 
 /** Validates read artefacts only; it has no publish or CURRENT side effects. */

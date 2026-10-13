@@ -24,6 +24,7 @@ import {
   getDeviceRole,
 } from "./src/settings";
 import { DefaultProducerLocalStorePathResolver } from "./src/index/producerLocalStorePathResolver";
+import { getOptionalNodeRequire } from "./src/platform/desktopNodeModules";
 import { SqliteProducerLocalStore } from "./src/index/sqliteProducerLocalStore";
 import { performProducerSqliteShadowWrite } from "./src/index/sqliteProducerShadowWriter";
 import { auditStoreEquivalence, type StoreEquivalenceReport } from "./src/index/producerStoreEquivalenceAuditor";
@@ -4415,8 +4416,7 @@ export default class LinaPlugin extends Plugin {
 
     if (isDesktop) {
       try {
-        // eslint-disable-next-line no-undef -- Safely probe for Node require in Electron desktop environment
-        const req = typeof require === "function" ? require : null;
+        const req = getOptionalNodeRequire();
         let sqliteModule: unknown = null;
         if (req) {
           try {

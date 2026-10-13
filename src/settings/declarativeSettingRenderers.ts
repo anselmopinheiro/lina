@@ -218,14 +218,13 @@ export function createDetachedStaticTextRenderer(name: string, description: stri
 }
 
 export function createSettingsIntroductionRenderer(
-  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild">,
+  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion">,
   version: string,
-  buildTimestamp: string,
 ) {
   return (setting: Setting, _group: SettingGroup): void => {
     setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
     setting.descEl.createDiv({
-      text: `${strings.settingsVersion}: ${version} · ${strings.settingsBuild}: ${buildTimestamp}`,
+      text: `${strings.settingsVersion}: ${version}`,
       cls: "lina-mt-8",
     });
   };

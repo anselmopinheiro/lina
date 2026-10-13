@@ -188,7 +188,7 @@ describe("detached declarative setting renderers", () => {
   it("keeps the landing introduction limited to product metadata", () => {
     const { calls, setting } = createButtonSettingDouble();
     const strings = getStrings("en");
-    createSettingsIntroductionRenderer(strings, "0.2.1", "2026-08-21T12:00:00.000Z")(setting as never, {} as never);
+    createSettingsIntroductionRenderer(strings, "0.2.1")(setting as never, {} as never);
 
     expect(calls).toMatchObject({
       name: "Lina",
@@ -196,7 +196,7 @@ describe("detached declarative setting renderers", () => {
       elements: [
         {
           tag: "div",
-          options: { text: "Version: 0.2.1 · Build: 2026-08-21T12:00:00.000Z", cls: "lina-mt-8" },
+          options: { text: "Version: 0.2.1", cls: "lina-mt-8" },
         },
       ],
       buttons: [],

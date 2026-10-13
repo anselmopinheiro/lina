@@ -1,6 +1,5 @@
 import { App, ConfirmationModal, Notice, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem, type SettingDefinitionPage } from "obsidian";
 import LinaPlugin from "../main";
-import { LINA_DEVELOPMENT_BUILD_TIMESTAMP } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateProviderText } from "./ai/textProvider";
 import { generateProviderEmbedding } from "./ai/embeddingProvider";
@@ -873,7 +872,6 @@ export class LinaSettingTab extends PluginSettingTab {
       introductionRenderer = createSettingsIntroductionRenderer(
         strings,
         this.plugin.manifest.version,
-        LINA_DEVELOPMENT_BUILD_TIMESTAMP,
       );
       this.introductionRenderers.set(language, introductionRenderer);
     }

@@ -26,13 +26,11 @@ export interface PublishedGenerationRecord {
 }
 export interface BuiltGeneration { readonly manifest: PublishedGenerationManifest; readonly records: readonly PublishedGenerationRecord[]; readonly vectors: Uint8Array; readonly recordsJson: string; }
 
-interface HashLike { update(value: Uint8Array | string): HashLike; digest(encoding: "hex"): string; }
-interface NodeCryptoLike { createHash(algorithm: "sha256"): HashLike; }
+import { getOptionalNodeCrypto } from "../platform/desktopNodeModules";
+
 function sha256(value: Uint8Array | string): string {
-  // eslint-disable-next-line no-undef -- The M4 Producer-only builder runs behind a desktop feature flag.
-  const req = typeof require === "function" ? require : null;
-  if (!req) throw new Error("SHA-256 requires the desktop Node runtime.");
-  const crypto = req("node:crypto") as NodeCryptoLike;
+  const crypto = getOptionalNodeCrypto();
+  if (!crypto) throw new Error("SHA-256 requires the desktop Node runtime.");
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 function vectorOf(record: ProducerEmbeddingRecord): Float32Array {

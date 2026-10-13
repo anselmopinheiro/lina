@@ -202,7 +202,7 @@ export interface BuildDeviceDiagnosticsInput {
 
 function parseJsonSafely(content: string): unknown {
   try {
-    return JSON.parse(content);
+    return JSON.parse(content) as unknown;
   } catch {
     return null;
   }

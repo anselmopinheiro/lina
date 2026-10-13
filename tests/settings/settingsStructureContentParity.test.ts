@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import LinaPlugin from "../../main.ts";
 import { DEFAULT_SETTINGS, LinaSettingTab, setDeviceSettingsContext } from "../../src/settings";
 import { getStrings } from "../../src/i18n/strings";
-import { LINA_DEVELOPMENT_BUILD_TIMESTAMP } from "../../src/buildInfo";
 
 function createStaticRendererDouble() {
   const calls: {
@@ -55,7 +54,7 @@ describe("C2 active settings structure and content", () => {
     tab.hide();
   });
 
-  it("renders the Lina identity, spaced version/build metadata, inline support link, and a description-only device row", () => {
+  it("renders the Lina identity, version metadata, and a description-only device row", () => {
     const app = new App();
     const plugin = new LinaPlugin(app);
     plugin.settings = { ...DEFAULT_SETTINGS, deviceSettingsById: { current: {} } };
@@ -72,12 +71,11 @@ describe("C2 active settings structure and content", () => {
       name: strings.settingsTitle,
       description: strings.settingsDescription,
       elements: [{
-        text: `${strings.settingsVersion}: ${plugin.manifest.version} · ${strings.settingsBuild}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`,
+        text: `${strings.settingsVersion}: ${plugin.manifest.version}`,
         cls: "lina-mt-8",
       }],
     });
     expect(JSON.stringify(plugin.settings)).not.toContain(plugin.manifest.version);
-    expect(JSON.stringify(plugin.settings)).not.toContain(LINA_DEVELOPMENT_BUILD_TIMESTAMP);
 
     const deviceGroup = groups.find((group) => group.heading === strings.settingsGroupGeneral);
     const deviceDescription = deviceGroup?.items.find((item) => (item as { id?: string }).id === "device-description") as {

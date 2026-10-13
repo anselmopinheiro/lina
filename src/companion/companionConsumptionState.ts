@@ -194,7 +194,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseJsonSafely(content: string): unknown {
   try {
-    return JSON.parse(content);
+    return JSON.parse(content) as unknown;
   } catch {
     return null;
   }

@@ -32,9 +32,6 @@ var import_obsidian30 = require("obsidian");
 // src/settings.ts
 var import_obsidian6 = require("obsidian");
 
-// src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-13T14:32:40.486Z" : "development source (bundle not built)";
-
 // src/i18n/strings.ts
 var PT_PT = {
   pluginName: "Lina",
@@ -475,7 +472,6 @@ var PT_PT = {
   settingsTitle: "Lina",
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organiza\xE7\xE3o e enriquecimento de notas Markdown.",
   settingsVersion: "Vers\xE3o",
-  settingsBuild: "Build",
   settingsSupportText: "Se gosta do Lina, apoie o projeto:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "Geral e Dispositivo",
@@ -1479,7 +1475,6 @@ var EN = {
   settingsTitle: "Lina",
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
   settingsVersion: "Version",
-  settingsBuild: "Build",
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General & Device",
@@ -4321,11 +4316,11 @@ function createDetachedStaticTextRenderer(name, description) {
     setting.setName(name).setDesc(description);
   };
 }
-function createSettingsIntroductionRenderer(strings, version, buildTimestamp) {
+function createSettingsIntroductionRenderer(strings, version) {
   return (setting, _group) => {
     setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
     setting.descEl.createDiv({
-      text: `${strings.settingsVersion}: ${version} \xB7 ${strings.settingsBuild}: ${buildTimestamp}`,
+      text: `${strings.settingsVersion}: ${version}`,
       cls: "lina-mt-8"
     });
   };
@@ -7151,8 +7146,7 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     if (!introductionRenderer) {
       introductionRenderer = createSettingsIntroductionRenderer(
         strings,
-        this.plugin.manifest.version,
-        LINA_DEVELOPMENT_BUILD_TIMESTAMP
+        this.plugin.manifest.version
       );
       this.introductionRenderers.set(language, introductionRenderer);
     }
@@ -7715,19 +7709,69 @@ var DefaultProducerLocalStorePathResolver = class {
   }
 };
 
-// src/index/sqliteProducerLocalStore.ts
+// src/platform/desktopNodeModules.ts
+function getOptionalNodeRequire() {
+  if (typeof window !== "undefined") {
+    const win = window;
+    if (typeof win.require === "function") {
+      return win.require;
+    }
+  }
+  if (typeof require === "function") {
+    return require;
+  }
+  return null;
+}
+function getOptionalNodeCrypto() {
+  const req = getOptionalNodeRequire();
+  if (!req) return null;
+  try {
+    const mod = req("node:crypto");
+    if (mod && typeof mod === "object" && "createHash" in mod && typeof mod.createHash === "function") {
+      return mod;
+    }
+  } catch (e) {
+  }
+  return null;
+}
+function resolveNodeSqliteConstructor() {
+  const req = getOptionalNodeRequire();
+  if (!req) return null;
+  let mod = null;
+  try {
+    mod = req("node:sqlite");
+  } catch (e) {
+    try {
+      mod = req("sqlite");
+    } catch (e2) {
+      return null;
+    }
+  }
+  if (mod && typeof mod === "object") {
+    const dbSync = mod.DatabaseSync;
+    if (typeof dbSync === "function") {
+      return dbSync;
+    }
+  }
+  return null;
+}
 function getFsAndPathHelpers() {
   try {
-    const req = typeof require === "function" ? require : null;
+    const req = getOptionalNodeRequire();
     if (req) {
       const fsMod = req("fs");
       const pathMod = req("path");
+      const fsObj = fsMod && typeof fsMod === "object" ? fsMod : null;
+      const pathObj = pathMod && typeof pathMod === "object" ? pathMod : null;
+      const existsFn = fsObj && typeof fsObj.existsSync === "function" ? fsObj.existsSync : null;
+      const mkdirFn = fsObj && typeof fsObj.mkdirSync === "function" ? fsObj.mkdirSync : null;
+      const dirnameFn = pathObj && typeof pathObj.dirname === "function" ? pathObj.dirname : null;
       return {
-        existsSync: (p) => fsMod.existsSync ? fsMod.existsSync(p) : false,
+        existsSync: (p) => existsFn ? existsFn(p) : false,
         mkdirSync: (p, opts) => {
-          if (fsMod.mkdirSync) fsMod.mkdirSync(p, opts);
+          if (mkdirFn) mkdirFn(p, opts);
         },
-        dirname: (p) => pathMod.dirname ? pathMod.dirname(p) : p.split("/").slice(0, -1).join("/")
+        dirname: (p) => dirnameFn ? dirnameFn(p) : p.split("/").slice(0, -1).join("/")
       };
     }
   } catch (e) {
@@ -7739,31 +7783,8 @@ function getFsAndPathHelpers() {
     dirname: (p) => p.split("/").slice(0, -1).join("/") || "."
   };
 }
-function resolveNodeSqliteConstructor() {
-  try {
-    const req = typeof require === "function" ? require : null;
-    if (!req) return null;
-    let mod = null;
-    try {
-      mod = req("node:sqlite");
-    } catch (e) {
-      try {
-        mod = req("sqlite");
-      } catch (e2) {
-        return null;
-      }
-    }
-    if (mod && typeof mod === "object") {
-      const dbSync = mod.DatabaseSync;
-      if (typeof dbSync === "function") {
-        return dbSync;
-      }
-    }
-  } catch (e) {
-    return null;
-  }
-  return null;
-}
+
+// src/index/sqliteProducerLocalStore.ts
 var SqliteProducerLocalStore = class {
   constructor(options) {
     this.db = null;
@@ -11319,9 +11340,8 @@ var PUBLISHED_GENERATION_FORMAT_VERSION = 5;
 var PUBLISHED_GENERATION_SUPPORTED_INPUT_VERSIONS = [1];
 var PUBLISHED_GENERATION_PREFIX_MODES = ["none", "nomic-search-query-document"];
 function sha256(value) {
-  const req = typeof require === "function" ? require : null;
-  if (!req) throw new Error("SHA-256 requires the desktop Node runtime.");
-  const crypto2 = req("node:crypto");
+  const crypto2 = getOptionalNodeCrypto();
+  if (!crypto2) throw new Error("SHA-256 requires the desktop Node runtime.");
   return crypto2.createHash("sha256").update(value).digest("hex");
 }
 function vectorOf(record) {
@@ -11372,9 +11392,9 @@ function result(errors, formatVersion) {
   return { valid: integrityValid, integrityValid, cutoverEligible: integrityValid && formatVersion === PUBLISHED_GENERATION_FORMAT_VERSION, legacyFormat: formatVersion === 1 || formatVersion === 2 || formatVersion === 3 || formatVersion === 4, formatVersion, errors };
 }
 var digest = (value) => {
-  const req = typeof require === "function" ? require : null;
-  if (!req) throw new Error("SHA-256 requires desktop Node runtime.");
-  return req("node:crypto").createHash("sha256").update(value).digest("hex");
+  const crypto2 = getOptionalNodeCrypto();
+  if (!crypto2) throw new Error("SHA-256 requires desktop Node runtime.");
+  return crypto2.createHash("sha256").update(value).digest("hex");
 };
 function validatePublishedGenerationFiles(files) {
   var _a;
@@ -34098,7 +34118,7 @@ Provider calls: 0`);
     let errorStack = null;
     if (isDesktop) {
       try {
-        const req = typeof require === "function" ? require : null;
+        const req = getOptionalNodeRequire();
         let sqliteModule = null;
         if (req) {
           try {

@@ -1,6 +1,15 @@
 # Changelog
 
-## [0.3.2] - Alpha (unreleased)
+## [0.3.3] - 2026-10-13
+
+0.3.3 is a technical compliance and release hygiene patch release. It introduces no new functional features or user-facing workflow changes.
+
+### Fixed
+- **Reproducible builds:** production builds no longer embed a build timestamp; release output depends only on source, lockfile and toolchain.
+- **Reviewer lint parity:** align ESLint configuration with `eslint-plugin-obsidianmd` recommended standards using `projectService` and repository-level boundaries.
+- **Strict type safety at Node/Electron boundary:** resolve desktop-optional Node modules through a typed platform boundary (`getOptionalNodeRequire`, `getOptionalNodeCrypto`, `resolveNodeSqliteConstructor`) with zero `any` types, eliminating `@typescript-eslint/no-unsafe-assignment` and `no-unsafe-call` warnings.
+
+## [0.3.2] - 2026-10-13
 
 0.3.2 is a consolidation, robustness and coherence release. It does not change the Producer + Companion model.
 

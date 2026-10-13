@@ -16,7 +16,6 @@ if (profile !== "dev" && profile !== "test") {
   throw new Error(`Unknown Lina build profile: ${profile}`);
 }
 const outputDirectory = resolve("dist", profile);
-const buildTimestamp = new Date().toISOString();
 
 try {
   const context = await esbuild.context({
@@ -26,7 +25,6 @@ try {
     entryPoints: ["main.ts"],
     bundle: true,
     define: {
-      __LINA_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
       __LINA_BUILD_PROFILE__: JSON.stringify(profile),
     },
     plugins: profile === "dev" ? [{

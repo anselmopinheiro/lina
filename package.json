@@ -1,6 +1,6 @@
 {
   "name": "lina",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Assistente para pesquisa semântica, organização e enriquecimento de notas Markdown.",
   "main": "main.js",
   "scripts": {
@@ -9,8 +9,9 @@
     "build:dev": "npm run typecheck && node esbuild.config.mjs production dev && node scripts/copy-build-to-vault.mjs dev",
     "build:test": "npm run typecheck && node esbuild.config.mjs production test && node scripts/copy-build-to-vault.mjs test",
     "lint": "npm run lint:obsidian:strict",
-    "lint:obsidian": "eslint main.ts \"src/**/*.ts\"",
-    "lint:obsidian:strict": "eslint main.ts \"src/**/*.ts\" --max-warnings=0",
+    "lint:obsidian": "eslint .",
+    "lint:obsidian:strict": "eslint . --max-warnings=0",
+    "lint:review": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "release-check": "node scripts/release-check.js",
     "release:bump": "node scripts/bump-version.js",

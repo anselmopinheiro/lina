@@ -18,17 +18,16 @@ import {
   type ProducerLocalStore,
 } from "./producerLocalStoreTypes";
 
-export interface DatabaseSyncStatementLike {
-  run(...params: unknown[]): { changes?: number | bigint; lastInsertRowid?: number | bigint };
-  get(...params: unknown[]): unknown;
-  all(...params: unknown[]): unknown[];
-}
+import {
+  type DatabaseSyncStatementLike,
+  type DatabaseSyncLike,
+  type DatabaseSyncConstructor,
+  getFsAndPathHelpers,
+  resolveNodeSqliteConstructor,
+} from "../platform/desktopNodeModules";
 
-export interface DatabaseSyncLike {
-  exec(sql: string): void;
-  prepare(sql: string): DatabaseSyncStatementLike;
-  close(): void;
-}
+export type { DatabaseSyncStatementLike, DatabaseSyncLike, DatabaseSyncConstructor };
+export { resolveNodeSqliteConstructor };
 
 interface SqliteRecordRow {
   chunk_id: string;
@@ -59,8 +58,6 @@ interface SqliteSpaceRow {
   source_record_count?: number | null;
 }
 
-export type DatabaseSyncConstructor = new (databasePath: string) => DatabaseSyncLike;
-
 /**
  * Diagnostic status object returned when auditing SQLite store availability.
  */
@@ -77,60 +74,6 @@ export interface SqliteProducerLocalStoreOptions {
   readonly databasePath: string;
   readonly dbConstructor?: DatabaseSyncConstructor;
   readonly customDbInstance?: DatabaseSyncLike;
-}
-
-function getFsAndPathHelpers(): {
-  existsSync: (targetPath: string) => boolean;
-  mkdirSync: (targetPath: string, options?: { recursive?: boolean }) => void;
-  dirname: (targetPath: string) => string;
-} {
-  try {
-    // eslint-disable-next-line no-undef -- Safely probe for Node require in desktop environment
-    const req = typeof require === "function" ? require : null;
-    if (req) {
-      const fsMod = req("fs") as { existsSync?: (p: string) => boolean; mkdirSync?: (p: string, opts?: { recursive?: boolean }) => void };
-      const pathMod = req("path") as { dirname?: (p: string) => string };
-      return {
-        existsSync: (p: string) => (fsMod.existsSync ? fsMod.existsSync(p) : false),
-        mkdirSync: (p: string, opts?: { recursive?: boolean }) => { if (fsMod.mkdirSync) fsMod.mkdirSync(p, opts); },
-        dirname: (p: string) => (pathMod.dirname ? pathMod.dirname(p) : p.split("/").slice(0, -1).join("/")),
-      };
-    }
-  } catch {
-    // Fallback if not in desktop Node environment
-  }
-  return {
-    existsSync: () => false,
-    mkdirSync: () => {},
-    dirname: (p: string) => p.split("/").slice(0, -1).join("/") || ".",
-  };
-}
-
-function resolveNodeSqliteConstructor(): DatabaseSyncConstructor | null {
-  try {
-    // eslint-disable-next-line no-undef -- Safely probe for Node require in desktop environment
-    const req = typeof require === "function" ? require : null;
-    if (!req) return null;
-    let mod: unknown = null;
-    try {
-      mod = req("node:sqlite");
-    } catch {
-      try {
-        mod = req("sqlite");
-      } catch {
-        return null;
-      }
-    }
-    if (mod && typeof mod === "object") {
-      const dbSync = (mod as Record<string, unknown>).DatabaseSync;
-      if (typeof dbSync === "function") {
-        return dbSync as DatabaseSyncConstructor;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 export class SqliteProducerLocalStore implements ProducerLocalStore {

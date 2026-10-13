@@ -502,7 +502,6 @@ export interface UiStrings {
   settingsTitle: string;
   settingsDescription: string;
   settingsVersion: string;
-  settingsBuild: string;
   settingsSupportText: string;
   settingsSupportCoffeeButton: string;
   settingsGroupGeneral: string;
@@ -1552,7 +1551,6 @@ const PT_PT: UiStrings = {
   settingsTitle: "Lina",
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown.",
   settingsVersion: "Versão",
-  settingsBuild: "Build",
   settingsSupportText: "Se gosta do Lina, apoie o projeto:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "Geral e Dispositivo",
@@ -2561,7 +2559,6 @@ const EN: UiStrings = {
   settingsTitle: "Lina",
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
   settingsVersion: "Version",
-  settingsBuild: "Build",
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General & Device",
