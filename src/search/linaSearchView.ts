@@ -1521,7 +1521,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private formatExistingFoldersForPrompt(currentPath: string, title: string, content: string): string {
-    const existingFolders = this.getExistingVaultFolders();
+    // Folder names are sent to the provider; never disclose excluded folders.
+    const existingFolders = this.getFolderAnalysisChoices();
     const currentFolder = getFolderPathFromPath(currentPath);
     const rootFolders = this.getExistingRootFolders(existingFolders);
     const haystack = normalizeFolderNameForMatching(`${title} ${currentPath} ${content.substring(0, 1200)}`);
@@ -1741,7 +1742,19 @@ export class LinaSearchView extends ItemView {
     prompt: string,
     privacyContext: AiPrivacyGateInput,
   ): Promise<{ success: boolean; message: string; text?: string }> {
-    const privacyDecision = evaluateAiPrivacyGate(privacyContext);
+    // The exclusion policy is synchronized from the Producer and loaded once at
+    // startup: re-read it at the provider boundary so a long-lived session never
+    // sends content with rules that have since been tightened. Fail closed.
+    try {
+      await this.plugin.reloadExclusionPolicy();
+    } catch {
+      return { success: false, message: this.L.aiPrivacyPolicyUnavailable };
+    }
+    const privacyDecision = evaluateAiPrivacyGate({
+      ...privacyContext,
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+    });
     if (!privacyDecision.allowed) {
       return { success: false, message: this.getAiPrivacyGateMessage(privacyDecision) };
     }

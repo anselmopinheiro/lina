@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-13T09:43:29.045Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-13T10:45:27.130Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -99,6 +99,7 @@ var PT_PT = {
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conte\xFAdo corresponde \xE0s exclus\xF5es configuradas e n\xE3o ser\xE1 enviado \xE0 IA.",
   aiPrivacyPolicyUnavailable: "N\xE3o foi poss\xEDvel validar as regras de exclus\xE3o. O conte\xFAdo n\xE3o foi enviado para a IA.",
+  embeddingPolicyUnavailable: "N\xE3o foi poss\xEDvel validar as regras de exclus\xE3o. Os embeddings n\xE3o foram gerados.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta \xE0 IA...",
   askContextSelection: "sele\xE7\xE3o",
@@ -1102,6 +1103,7 @@ var EN = {
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   aiPrivacyPolicyUnavailable: "The exclusion rules could not be validated. Content was not sent to AI.",
+  embeddingPolicyUnavailable: "The exclusion rules could not be validated. Embeddings were not generated.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
@@ -23084,7 +23086,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return existingFolders.filter((folder) => !folder.includes("/") && !this.isInboxFolderPath(folder));
   }
   formatExistingFoldersForPrompt(currentPath2, title, content) {
-    const existingFolders = this.getExistingVaultFolders();
+    const existingFolders = this.getFolderAnalysisChoices();
     const currentFolder = getFolderPathFromPath(currentPath2);
     const rootFolders = this.getExistingRootFolders(existingFolders);
     const haystack = normalizeFolderNameForMatching(`${title} ${currentPath2} ${content.substring(0, 1200)}`);
@@ -23242,7 +23244,16 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return { provider, model, baseUrl, isLocal };
   }
   async generateTextWithActiveAiProfile(profile, prompt, privacyContext) {
-    const privacyDecision = evaluateAiPrivacyGate(privacyContext);
+    try {
+      await this.plugin.reloadExclusionPolicy();
+    } catch (e) {
+      return { success: false, message: this.L.aiPrivacyPolicyUnavailable };
+    }
+    const privacyDecision = evaluateAiPrivacyGate({
+      ...privacyContext,
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules()
+    });
     if (!privacyDecision.allowed) {
       return { success: false, message: this.getAiPrivacyGateMessage(privacyDecision) };
     }
@@ -33108,6 +33119,12 @@ Provider calls: 0`);
         success: false,
         message: this.L.statusEmbeddingGenerationCancelled,
         cancelled: true
+      };
+    }
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        message: this.L.embeddingPolicyUnavailable
       };
     }
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;

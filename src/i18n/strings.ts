@@ -85,6 +85,7 @@ export interface UiStrings {
   askEmptyPrompt: string;
   askExcludedByUserRules: string;
   aiPrivacyPolicyUnavailable: string;
+  embeddingPolicyUnavailable: string;
   askResponseTitle: string;
   askRunning: string;
   askContextSelection: string;
@@ -1154,6 +1155,7 @@ const PT_PT: UiStrings = {
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conteúdo corresponde às exclusões configuradas e não será enviado à IA.",
   aiPrivacyPolicyUnavailable: "Não foi possível validar as regras de exclusão. O conteúdo não foi enviado para a IA.",
+  embeddingPolicyUnavailable: "Não foi possível validar as regras de exclusão. Os embeddings não foram gerados.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta à IA...",
   askContextSelection: "seleção",
@@ -2162,6 +2164,7 @@ const EN: UiStrings = {
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   aiPrivacyPolicyUnavailable: "The exclusion rules could not be validated. Content was not sent to AI.",
+  embeddingPolicyUnavailable: "The exclusion rules could not be validated. Embeddings were not generated.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",

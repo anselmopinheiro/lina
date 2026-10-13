@@ -15,7 +15,11 @@ describe("AI privacy gate integration", () => {
   it("enforces the central gate again at the provider boundary", () => {
     const providerBoundary = between("private async generateTextWithActiveAiProfile(", "  getViewType(): string");
     expect(providerBoundary).toContain("privacyContext: AiPrivacyGateInput");
-    expect(providerBoundary).toContain("const privacyDecision = evaluateAiPrivacyGate(privacyContext);");
+    expect(providerBoundary).toContain("await this.plugin.reloadExclusionPolicy();");
+    expect(providerBoundary).toContain("const privacyDecision = evaluateAiPrivacyGate({");
+    expect(providerBoundary).toContain("policyStatus: this.plugin.getCanonicalExclusionPolicyStatus()");
+    expect(providerBoundary.indexOf("reloadExclusionPolicy"))
+      .toBeLessThan(providerBoundary.indexOf("evaluateAiPrivacyGate({"));
     expect(providerBoundary.indexOf("!privacyDecision.allowed"))
       .toBeLessThan(providerBoundary.indexOf("return generateProviderText("));
   });
@@ -39,5 +43,28 @@ describe("AI privacy gate integration", () => {
     const related = between("private async filterRelatedNotesByUserContentRules(", "private getExistingVaultTags(");
     expect(related).toContain("this.evaluateAiPrivacyGate(note.path, content)");
     expect(related).not.toContain("isIndexPathExcludedByUserRules");
+  });
+});
+
+describe("AI privacy gate — structural metadata and embedding generation (0.3.2 audit)", () => {
+  const view = readFileSync(resolve(process.cwd(), "src/search/linaSearchView.ts"), "utf8");
+  const main = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
+
+  it("does not disclose excluded folder names in the folder list sent to providers", () => {
+    const start = view.indexOf("private formatExistingFoldersForPrompt(");
+    const end = view.indexOf("private applyFolderSuggestionResolution(", start);
+    const body = view.slice(start, end);
+    expect(body).toContain("this.getFolderAnalysisChoices()");
+    expect(body).not.toContain("this.getExistingVaultFolders()");
+  });
+
+  it("refuses embedding generation when the canonical exclusion policy is invalid", () => {
+    const start = main.indexOf("private async runGenerateLocalEmbeddings(");
+    const end = main.indexOf("generateEmbeddingsForChunks(", start);
+    const body = main.slice(start, end);
+    const gate = body.indexOf('this.canonicalPolicyStatus === "invalid"');
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(body.indexOf("this.filterChunksByUserContentRules(chunks)"));
+    expect(gate).toBeLessThan(body.indexOf("const embeddingConfig"));
   });
 });

@@ -20,6 +20,7 @@
 - **Producer freshness:** the "no Producer activity" alert is no longer shown on the active Producer itself. After a successful incremental text-index publication the Producer now records `updatedAt` and the publication time in `producer-state.json`, and a Companion re-reads the synchronized `producer-state.json` when it changes (observed by file metadata about every 30 s while the panel is visible, when the panel becomes active, and by vault events) instead of keeping an outdated "no Producer activity for more than 48 h" warning until the panel is reopened.
 - Embedding and manifest persistence hardened: crash-safe shared-manifest publication, ownership-epoch fencing of durable writes, validation and recovery of the canonical embeddings/manifest pair, and coordinated purge and publication.
 - Large canonical embedding files are no longer treated as corruption; they require a confirmed rebuild instead of blocking the Producer.
+- **Privacy audit fixes:** embedding generation now refuses to run while the exclusion policy is invalid (it previously relied on an empty rule set); folder names sent to the AI provider for folder suggestions no longer include excluded folders; and the exclusion policy is re-read at the AI provider boundary so a long-lived session (for example a Companion) never uses rules older than the synchronised ones.
 
 ### Internal
 - Producer-local SQLite store and immutable published-generation publication groundwork (M0–M6). Disabled by default and not part of the normal user workflow in this release.

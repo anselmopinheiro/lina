@@ -3285,6 +3285,15 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
+    // Fail closed: with an invalid policy the effective rules are empty, which
+    // would disable the content filter applied before sending chunks to a provider.
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        message: this.L.embeddingPolicyUnavailable,
+      };
+    }
+
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
     if (!safeChunks || safeChunks.length === 0) {
       return {
