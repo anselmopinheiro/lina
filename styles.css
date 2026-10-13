@@ -620,15 +620,15 @@ Lina — Assistente para Obsidian
   box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.lina-search-input {
+.lina-search-composer input.lina-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
   width: 100%;
-  padding: 8px 4px 8px 0 !important;
+  padding: 8px 4px 8px 0;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
 }
@@ -672,22 +672,22 @@ Lina — Assistente para Obsidian
   flex-shrink: 0;
 }
 
-.lina-search-mode-select {
+.lina-search-mode-wrapper select.lina-search-mode-select {
   flex: 1 1 auto;
   min-width: 0;
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
   width: auto;
   min-height: 42px;
-  padding: 6px 20px 6px 0 !important;
+  padding: 6px 20px 6px 0;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
   cursor: pointer;
 }
 
-.lina-search-submit-btn {
+.lina-search-composer button.lina-search-submit-btn {
   flex: 0 0 44px;
   width: 44px;
   min-height: 44px;
@@ -695,51 +695,51 @@ Lina — Assistente para Obsidian
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  background: transparent !important;
-  color: var(--interactive-accent) !important;
-  border: 0 !important;
+  background: transparent;
+  color: var(--interactive-accent);
+  border: 0;
   cursor: pointer;
-  padding: 0 !important;
+  padding: 0;
   font-size: 1.1em;
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
-.lina-search-clear-btn {
+.lina-search-composer button.lina-search-clear-btn {
   flex: 0 0 44px;
   width: 44px;
   min-height: 44px;
-  padding: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 1.35em;
 }
 
-.lina-search-clear-btn:hover {
-  background: var(--background-modifier-hover) !important;
+.lina-search-composer button.lina-search-clear-btn:hover {
+  background: var(--background-modifier-hover);
 }
 
-.lina-search-clear-btn:focus-visible {
+.lina-search-composer button.lina-search-clear-btn:focus-visible {
   outline: 1px solid var(--interactive-accent);
   outline-offset: -3px;
-  background: var(--background-modifier-hover) !important;
+  background: var(--background-modifier-hover);
 }
 
-.lina-search-clear-btn:active {
+.lina-search-composer button.lina-search-clear-btn:active {
   opacity: 0.8;
 }
 
-.lina-search-submit-btn:focus-visible {
+.lina-search-composer button.lina-search-submit-btn:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: -2px;
 }
 
-.lina-search-submit-btn:hover {
-  background: var(--background-modifier-hover) !important;
+.lina-search-composer button.lina-search-submit-btn:hover {
+  background: var(--background-modifier-hover);
 }
 
-.lina-search-submit-btn:active {
+.lina-search-composer button.lina-search-submit-btn:active {
   transform: scale(0.96);
 }
 
@@ -765,16 +765,16 @@ Lina — Assistente para Obsidian
   box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.lina-actions-select {
+.lina-actions-wrapper select.lina-actions-select {
   flex: 1 1 auto;
   min-width: 0;
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
   width: auto;
   min-height: 42px;
-  padding: 6px 20px 6px 0 !important;
+  padding: 6px 20px 6px 0;
   font-size: var(--font-ui-small);
   color: var(--text-normal);
   cursor: pointer;
@@ -915,12 +915,12 @@ Lina — Assistente para Obsidian
   margin-top: 2px;
 }
 
-.lina-sidebar-state-info-btn {
+.lina-sidebar-state-card button.lina-sidebar-state-info-btn {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  background: none !important;
-  border: none !important;
+  background: none;
+  border: none;
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
@@ -932,9 +932,9 @@ Lina — Assistente para Obsidian
   justify-content: center;
 }
 
-.lina-sidebar-state-info-btn:hover {
+.lina-sidebar-state-card button.lina-sidebar-state-info-btn:hover {
   color: var(--text-accent);
-  background-color: var(--background-modifier-hover) !important;
+  background-color: var(--background-modifier-hover);
 }
 
 .lina-sidebar-update-btn {
