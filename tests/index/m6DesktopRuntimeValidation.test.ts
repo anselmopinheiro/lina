@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
+import { populateM6ValidationFixtureVault } from "../fixtures/m6ValidationFixtures";
 import { PublishedGenerationReader, evaluatePublishedGenerationSemanticContract } from "../../src/index/publishedGenerationReader";
 import { evaluatePublishedGenerationForConsumer } from "../../src/index/consumerPublishedGenerationEligibility";
 import { PublishedRuntimeEmbeddingIndexCache } from "../../src/search/publishedRuntimeEmbeddingIndexCache";
@@ -14,11 +16,20 @@ import { searchRuntimeSemanticIndex } from "../../src/search/semanticSearch";
 import { readIndexedChunks } from "../../src/index/indexStore";
 
 describe("PROMPT-LINA-M6-RUNTIME-VALIDATION-DESKTOP-001", () => {
-  it("validates M6 desktop cutover runtime on real zettel vault", async () => {
-    const vaultPath = "D:/anselmo/__obsidian__/zettel";
+  it("validates M6 desktop cutover runtime with deterministic fixture or real vault", async () => {
+    const isManualVault = Boolean(process.env.LINA_REAL_VAULT_PATH);
+    let vaultPath = process.env.LINA_REAL_VAULT_PATH;
+    let tempVaultDir: string | null = null;
 
-    // Check files exist
-    const currentPath = path.join(vaultPath, ".lina/published/CURRENT");
+    if (!vaultPath) {
+      tempVaultDir = await fs.mkdtemp(path.join(os.tmpdir(), "lina-m6-vault-"));
+      vaultPath = tempVaultDir;
+      await populateM6ValidationFixtureVault(vaultPath);
+    }
+
+    try {
+      // Check files exist
+      const currentPath = path.join(vaultPath, ".lina/published/CURRENT");
     const ownershipPath = path.join(vaultPath, ".lina/ownership.json");
     const dataJsonPath = path.join(vaultPath, ".obsidian/plugins/lina/data.json");
 
@@ -99,7 +110,8 @@ describe("PROMPT-LINA-M6-RUNTIME-VALIDATION-DESKTOP-001", () => {
     const chunks = (await readIndexedChunks(app as any)) ?? [];
     const legacyIndex = await legacyIndexCache.getOrLoad(chunks);
     expect(legacyIndex).not.toBeNull();
-    expect(legacyIndex?.count).toBe(2303);
+    expect(legacyIndex?.count).toBe(chunks.length);
+    expect(legacyIndex?.count).toBeGreaterThan(0);
 
     // M6 Cutover Selector Implementation (mirroring main.ts getRuntimeEmbeddingIndex)
     class TestLinaPlugin {
@@ -379,44 +391,51 @@ describe("PROMPT-LINA-M6-RUNTIME-VALIDATION-DESKTOP-001", () => {
       timestamp: new Date().toISOString(),
     };
 
-    const evidenceDir = path.resolve("docs/architecture/evidence");
-    await fs.mkdir(evidenceDir, { recursive: true });
+      if (process.env.LINA_UPDATE_EVIDENCE === "true" || isManualVault) {
+        const evidenceDir = path.resolve("docs/architecture/evidence");
+        await fs.mkdir(evidenceDir, { recursive: true });
 
-    await fs.writeFile(
-      path.join(evidenceDir, "M6-RUNTIME-DESKTOP-VALIDATION-001.json"),
-      JSON.stringify(evidenceReport, null, 2) + "\n",
-      "utf-8"
-    );
+        await fs.writeFile(
+          path.join(evidenceDir, "M6-RUNTIME-DESKTOP-VALIDATION-001.json"),
+          JSON.stringify(evidenceReport, null, 2) + "\n",
+          "utf-8"
+        );
 
-    const updatedM6ImplementationEvidence = {
-      cutoverFlag: "companionPublishedGenerationCutoverEnabled",
-      defaultValue: false,
-      selectedSourceOff: "LEGACY",
-      selectedSourceOn: "PUBLISHED when reader, semantic contract and provenance gate all pass",
-      publishedGeneration: "CURRENT read on each runtime request (generation-000015)",
-      consumerEligibility: "evaluatePublishedGenerationForConsumer (eligible)",
-      fallbackPolicy: "explicit legacy fallback only for published unavailability; integrity/contract/provenance mismatch blocks",
-      fallbackEvents: "diagnostic selectedSource/fallback fields",
-      runtimeCacheIdentity: "published-v5 + generation + contract + source provenance + producer provenance",
-      currentInvalidation: "reader is re-run on every selector call",
-      rollbackProof: "flag false invalidates published cache and selects legacy",
-      semanticCapabilityAlignment: "runtime source identity carries published generation contract",
-      desktopProducerRuntime: "PASS (validated on vault zettel with generation-000015)",
-      desktopCompanionRuntime: "NÃO_EXECUTADO",
-      androidRuntime: "NÃO_EXECUTADO",
-      iosRuntime: "NÃO_EXECUTADO",
-      providerCalls: 0,
-      reembedding: 0,
-      m6Status: "PASS",
-      cutoverActivationStatus: "READY_FOR_DEVICE_SCOPED_ENABLEMENT",
-    };
+        const updatedM6ImplementationEvidence = {
+          cutoverFlag: "companionPublishedGenerationCutoverEnabled",
+          defaultValue: false,
+          selectedSourceOff: "LEGACY",
+          selectedSourceOn: "PUBLISHED when reader, semantic contract and provenance gate all pass",
+          publishedGeneration: `CURRENT read on each runtime request (${currentContent})`,
+          consumerEligibility: "evaluatePublishedGenerationForConsumer (eligible)",
+          fallbackPolicy: "explicit legacy fallback only for published unavailability; integrity/contract/provenance mismatch blocks",
+          fallbackEvents: "diagnostic selectedSource/fallback fields",
+          runtimeCacheIdentity: "published-v5 + generation + contract + source provenance + producer provenance",
+          currentInvalidation: "reader is re-run on every selector call",
+          rollbackProof: "flag false invalidates published cache and selects legacy",
+          semanticCapabilityAlignment: "runtime source identity carries published generation contract",
+          desktopProducerRuntime: `PASS (validated with ${currentContent})`,
+          desktopCompanionRuntime: "NÃO_EXECUTADO",
+          androidRuntime: "NÃO_EXECUTADO",
+          iosRuntime: "NÃO_EXECUTADO",
+          providerCalls: 0,
+          reembedding: 0,
+          m6Status: "PASS",
+          cutoverActivationStatus: "READY_FOR_DEVICE_SCOPED_ENABLEMENT",
+        };
 
-    await fs.writeFile(
-      path.join(evidenceDir, "M6-CUTOVER-IMPLEMENTATION-001.json"),
-      JSON.stringify(updatedM6ImplementationEvidence, null, 2) + "\n",
-      "utf-8"
-    );
+        await fs.writeFile(
+          path.join(evidenceDir, "M6-CUTOVER-IMPLEMENTATION-001.json"),
+          JSON.stringify(updatedM6ImplementationEvidence, null, 2) + "\n",
+          "utf-8"
+        );
+      }
 
-    console.log("M6 Desktop Runtime Validation completed successfully!");
+      console.log("M6 Desktop Runtime Validation completed successfully!");
+    } finally {
+      if (tempVaultDir) {
+        await fs.rm(tempVaultDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
   }, 30000);
 });

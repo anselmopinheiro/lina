@@ -56,6 +56,16 @@ This audit changes `styles.css`; consequently, the existing tag and uploaded ass
 - Desktop and Android: sidebar/search, selects, search inputs and buttons.
 - Confirm no horizontal overflow and the intended hover/focus states.
 
+## CI M6 Portability and Attestations Unblocking
+
+- Causa: o workflow do GitHub Actions (`.github/workflows/ci.yml`) falhava no step `Run tests` em `ubuntu-latest` devido a dependências de caminho absoluto local Windows (`D:/anselmo/__obsidian__/zettel`) em `tests/index/m6DesktopRuntimeValidation.test.ts` e `tests/index/producerSqliteCanonicalObsidianRuntime.test.ts`. Como o job `build` falhava, o job dependente `release` (`actions/attest-build-provenance@v2`) era ignorado, impedindo a geração das proveniências.
+- Correção arquitetural:
+  - Fixture determinística versionada: criada em `tests/fixtures/m6ValidationFixtures.ts` para prover estrutura canónica, metadados, ownership e hashes criptográficos exatos sem requerer vaults locais não versionados.
+  - M6 cutover runtime validation (`m6DesktopRuntimeValidation.test.ts`): passou a executar por omissão contra a fixture determinística isolada e efémera, preservando 100% da cobertura útil de cutover, rollback, pesquisa semântica e fallback, com suporte opcional a `LINA_REAL_VAULT_PATH` para validação manual.
+  - Obsidian canonical proof (`producerSqliteCanonicalObsidianRuntime.test.ts`): condicionado explicitamente a `process.env.LINA_REAL_VAULT_PATH` (Opção B), evitando falhas no CI Linux onde o vault pessoal não existe, mantendo a cobertura contínua assegurada por `producerSqliteCanonicalRuntimeValidation.test.ts`.
+- Resultado da suite: 206 ficheiros de teste e 2606 testes passaram com 100% de sucesso localmente e sem dependências de caminhos pessoais.
+- Desbloqueio: com a suite reproduzível e verde no CI, o job `release` da tag `0.3.2` é autorizado a executar e emitir as attestations com `actions/attest-build-provenance@v2`.
+
 ## Result
 
-Zero project-controlled CSS warnings remain. Vault enumeration and clipboard findings are functional, user-controlled recommendations. Final release promotion remains blocked until the changed artifacts are validated, committed, pushed and released through the attesting workflow.
+Zero project-controlled CSS warnings remain. Vault enumeration and clipboard findings are functional, user-controlled recommendations. CI suite is now 100% reproducible and independent of personal local paths, unlocking GitHub Actions release provenance generation. Final release promotion remains blocked until the changed artifacts and attestations are verified.

@@ -25,8 +25,15 @@ describe("Phase M3B — Obsidian Runtime Canonical Proof", () => {
       return;
     }
 
-    const vaultPath = "D:/anselmo/__obsidian__/zettel";
-    const pathResolver = new DefaultProducerLocalStorePathResolver(vaultPath, { platform: "win32" });
+    const vaultPath = process.env.LINA_REAL_VAULT_PATH;
+    if (!vaultPath) {
+      console.log("Skipping Phase M3B Obsidian Runtime Canonical Proof on CI/default: requires LINA_REAL_VAULT_PATH manual validation environment variable.");
+      return;
+    }
+
+    const pathResolver = new DefaultProducerLocalStorePathResolver(vaultPath, {
+      platform: process.platform === "win32" ? "win32" : "posix",
+    });
     const pathResolution = pathResolver.resolveStorePath();
 
     const timeline: Array<{ step: string; timestamp: string }> = [];
