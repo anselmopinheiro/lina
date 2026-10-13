@@ -39,7 +39,7 @@ describe("LINA-04 intent-based native settings pages", () => {
     const { tab } = createTestSetup();
     const definitions = tab.getSettingDefinitions();
     expect(pages(tab).map((page) => page.id)).toEqual([
-      "general", "search", "ai-analysis", "producer", "diagnostics",
+      "general", "search", "ai-analysis", "privacy", "diagnostics",
     ]);
     expect(definitions.at(-1)?.type).toBe("group");
     expect(definitions.at(-1)?.heading).toBe(getStrings("pt-PT").settingsSupportSection);
@@ -53,28 +53,18 @@ describe("LINA-04 intent-based native settings pages", () => {
     expect(new Set(ids).size).toBe(50);
     expect(ids).toContain("create-or-update-binary-copy");
     expect(ids).toContain("embeddings-credential");
-    expect(ids).toContain("development-build-info");
+    expect(ids).toContain("support-introduction");
     tab.hide();
   });
 
-  it("shows Producer page only for a Producer device and hides it for a Companion device", () => {
-    const { tab: producerTab } = createTestSetup("producer");
-    const producerPages = new Map(pages(producerTab).map((page) => [page.id, page]));
-    expect(producerPages.get("producer")?.visible).toBe(true);
-    expect(producerPages.get("producer")?.items?.map((item) => (item as { id: string }).id)).toContain("embedding-update-mode");
-    producerTab.hide();
-
-    const { tab: companionTab } = createTestSetup("companion");
-    const companionPages = new Map(pages(companionTab).map((page) => [page.id, page]));
-    expect(companionPages.get("producer")?.visible).toBe(false);
-    companionTab.hide();
-  });
-
-  it("preserves search settings on Companion device and keeps exclusions note in general", () => {
+  it("preserves search settings on Companion device and keeps exclusions out of general", () => {
     const { tab } = createTestSetup("companion");
     const byId = new Map(pages(tab).map((page) => [page.id, page]));
-    expect(byId.get("producer")?.visible).toBe(false);
-    expect(byId.get("general")?.items?.map((item) => (item as { id: string }).id)).toContain("exclusions-note");
+    const generalIds = byId.get("general")?.items?.map((item) => (item as { id: string }).id) ?? [];
+    expect(generalIds).toContain("device-name");
+    expect(generalIds).not.toContain("exclusions-note");
+    expect(generalIds).not.toContain("excluded-folders");
+    expect(byId.get("privacy")?.items?.map((item) => (item as { id: string }).id)).toContain("exclusions-note");
     expect(byId.get("search")?.items?.map((item) => (item as { id: string }).id)).toEqual([
       "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential",
       "test-embeddings-connection", "embeddings-test-feedback", "embeddings-timeout", "embedding-language", "hybrid-text-weight", "hybrid-semantic-weight",
@@ -82,13 +72,56 @@ describe("LINA-04 intent-based native settings pages", () => {
     tab.hide();
   });
 
+  it("keeps Producer exclusion controls editable on the privacy page", () => {
+    const { tab } = createTestSetup("producer");
+    const privacy = new Map(pages(tab).find((page) => page.id === "privacy")?.items?.map((item) => [
+      (item as { id: string }).id,
+      item as { control?: { disabled?: boolean }; visible?: unknown },
+    ]) ?? []);
+    for (const id of ["excluded-folders", "excluded-path-terms", "excluded-content-terms"]) {
+      expect(privacy.get(id)?.control?.disabled).toBe(false);
+      expect((privacy.get(id)?.visible as (() => boolean))()).toBe(true);
+    }
+    const diagnosticsIds = pages(tab).find((page) => page.id === "diagnostics")?.items?.map((item) => (item as { id: string }).id) ?? [];
+    expect(diagnosticsIds).not.toContain("excluded-folders");
+    tab.hide();
+  });
+
+  it("shows the exclusions area on a Companion as a single read-only note without editable controls", () => {
+    const { tab } = createTestSetup("companion");
+    const privacyPage = pages(tab).find((page) => page.id === "privacy");
+    expect(privacyPage?.visible).not.toBe(false);
+    const items = new Map((privacyPage?.items ?? []).map((item) => [
+      (item as { id: string }).id,
+      item as { visible?: unknown },
+    ]));
+    expect(items.has("exclusions-note")).toBe(true);
+    for (const id of ["excluded-folders", "excluded-path-terms", "excluded-content-terms"]) {
+      expect((items.get(id)?.visible as (() => boolean))()).toBe(false);
+    }
+    tab.hide();
+  });
+
+  it("keeps the device name editable on every role, independently of exclusion permissions", () => {
+    for (const role of ["producer", "companion"] as const) {
+      const { tab } = createTestSetup(role);
+      const general = pages(tab).find((page) => page.id === "general");
+      const deviceName = general?.items?.find((item) => (item as { id: string }).id === "device-name") as
+        { control?: { disabled?: boolean; key?: string } } | undefined;
+      expect(deviceName?.control?.key).toBe("deviceName");
+      expect(deviceName?.control?.disabled).toBe(false);
+      tab.hide();
+    }
+  });
+
   it("consolidates synchronization, diagnostics, and debug settings in diagnostics page", () => {
     const { tab } = createTestSetup();
     const byId = new Map(pages(tab).map((page) => [page.id, page]));
     expect(byId.get("diagnostics")?.items?.map((item) => (item as { id: string }).id)).toEqual([
-      "check-sync-on-startup", "binary-warning", "binary-status", "check-binary-copy", "binary-preference", "debug-index-updates",
+      "check-sync-on-startup", "embedding-update-mode", "embeddings-batch-size", "auto-update-index-on-file-changes",
+      "update-index-on-startup", "binary-maintenance", "create-or-update-binary-copy", "remove-binary-copy",
+      "binary-warning", "binary-status", "check-binary-copy", "binary-preference", "debug-index-updates",
     ]);
-    expect(byId.get("diagnostics")?.items?.map((item) => (item as { id: string }).id)).not.toContain("remove-binary-copy");
     tab.hide();
   });
 

@@ -22,7 +22,7 @@ describe("active declarative settings harness", () => {
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupGeneral)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupAnalysis)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupSearch)).toBe(true);
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupProducer)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupExclusions)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsSupportSection)).toBe(true);
     expect(saveSettings).not.toHaveBeenCalled();

@@ -14,6 +14,12 @@ import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
+import {
+  createProducerStateChangeDetector,
+  isProducerStateVaultChange,
+  PRODUCER_STATE_FILE_PATH,
+  PRODUCER_STATE_STAT_POLL_INTERVAL_MS,
+} from "../companion/producerStateRefresh";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { isProviderEndpointLocal } from "../ai/providerCapabilities";
@@ -30,6 +36,11 @@ import {
 import type { TaxonomyAiRequest } from "./taxonomyReconciliation";
 import { generateProviderText } from "../ai/textProvider";
 import {
+  evaluateAiPrivacyGate,
+  type AiPrivacyGateDecision,
+  type AiPrivacyGateInput,
+} from "../ai/privacyGate";
+import {
   getLocalAnalysisProvider,
   getLocalAnalysisModel,
   getLocalAnalysisBaseUrl,
@@ -42,6 +53,7 @@ import {
 import { getStrings, UiStrings } from "../i18n/strings";
 import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 import { normalizeSearchQuery } from "./queryNormalization";
+import { createPathScopedDebouncer, type PathScopedDebouncer } from "../index/automaticUpdateEvents";
 import {
   buildTagInventory,
   buildContextualTagCandidates,
@@ -63,6 +75,8 @@ import {
 } from "./yamlRecommendation";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
+
+const PRODUCER_STATE_REFRESH_DEBOUNCE_MS = 100;
 
 /**
  * Interface para notas relacionadas usadas no contexto de análise.
@@ -90,6 +104,13 @@ interface RelatedNote {
 interface StructuredInternalLink {
   path: string;
   reason: string;
+}
+
+type TaxonomyCommandKind = "tags" | "yaml";
+
+interface TaxonomyCommandAiResponse {
+  readonly tags: readonly string[];
+  readonly yaml: SuggestedYaml;
 }
 
 /**
@@ -1067,6 +1088,7 @@ export class LinaSearchView extends ItemView {
   private viewOpen = false;
   private viewGeneration = 0;
   private stateRefreshGeneration = 0;
+  private producerStateRefreshDebouncer?: PathScopedDebouncer<boolean>;
   private unsubscribeTextIndexRebuildProgress?: () => void;
   private unsubscribeEmbeddingOperationState?: () => void;
   private unsubscribeEmbeddingWorkStatus?: () => void;
@@ -1124,23 +1146,32 @@ export class LinaSearchView extends ItemView {
     return shouldExcludeContent(content, excludedContentContains).excluded;
   }
 
-  private isAskContextAllowedForAi(contextText: string): boolean {
-    if (!contextText.trim()) {
-      return true;
-    }
-
-    return !this.contentMatchesUserExclusion(contextText);
+  private evaluateAiPrivacyGate(path: string, content: string): AiPrivacyGateDecision {
+    return evaluateAiPrivacyGate({
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path,
+      content,
+      configDir: this.app.vault.configDir,
+    });
   }
 
-  private renderAskContextBlockedByUserExclusions(): void {
+  private getAiPrivacyGateMessage(decision: AiPrivacyGateDecision): string {
+    return decision.allowed || decision.reason !== "policy-unavailable"
+      ? this.L.askExcludedByUserRules
+      : this.L.aiPrivacyPolicyUnavailable;
+  }
+
+  private renderAiPrivacyGateBlocked(decision: AiPrivacyGateDecision): void {
+    const message = this.getAiPrivacyGateMessage(decision);
     if (this.analysisResultEl) {
       this.analysisResultEl.createDiv({
-        text: this.L.askExcludedByUserRules,
+        text: message,
         attr: { style: "color: var(--text-error); padding: 8px 0;" }
       });
     }
-    this.setStatus(this.L.askExcludedByUserRules);
-    new Notice(this.L.askExcludedByUserRules);
+    this.setStatus(message);
+    new Notice(message);
   }
 
   private getNormalizedContextPath(file: TFile): string {
@@ -1345,18 +1376,10 @@ export class LinaSearchView extends ItemView {
   }
 
   private async filterRelatedNotesByUserContentRules(relatedNotes: RelatedNote[]): Promise<{ notes: RelatedNote[]; excludedCount: number }> {
-    if (this.getExcludedContentTerms().length === 0) {
-      return { notes: relatedNotes, excludedCount: 0 };
-    }
-
     const safeNotes: RelatedNote[] = [];
     let excludedCount = 0;
 
     for (const note of relatedNotes) {
-      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
-        excludedCount++;
-        continue;
-      }
       const file = this.app.vault.getAbstractFileByPath(note.path);
       if (!(file instanceof TFile)) {
         excludedCount++;
@@ -1365,7 +1388,7 @@ export class LinaSearchView extends ItemView {
 
       try {
         const content = await this.app.vault.read(file);
-        if (this.contentMatchesUserExclusion(content)) {
+        if (!this.evaluateAiPrivacyGate(note.path, content).allowed) {
           excludedCount++;
           continue;
         }
@@ -1698,15 +1721,6 @@ export class LinaSearchView extends ItemView {
     warning.addClass("lina-fs-085");
   }
 
-  private renderUserContentExcludedBlock(): void {
-    if (!this.analysisResultEl) return;
-
-    this.analysisResultEl.createDiv({
-      text: this.L.analysisExcludedByUserRules,
-      attr: { style: "color: var(--text-error); padding: 8px 0;" }
-    });
-  }
-
   private getActiveTextAiProfile(): { provider: string; model: string; baseUrl: string; isLocal: boolean } {
     // LINA-15G: single source shared with the Settings UI (device-local → legacy global → provider default).
     const { provider, model, baseUrl } = resolveEffectiveAnalysisConfig(
@@ -1724,8 +1738,13 @@ export class LinaSearchView extends ItemView {
 
   private async generateTextWithActiveAiProfile(
     profile: { provider: string; model: string; baseUrl: string; isLocal: boolean },
-    prompt: string
+    prompt: string,
+    privacyContext: AiPrivacyGateInput,
   ): Promise<{ success: boolean; message: string; text?: string }> {
+    const privacyDecision = evaluateAiPrivacyGate(privacyContext);
+    if (!privacyDecision.allowed) {
+      return { success: false, message: this.getAiPrivacyGateMessage(privacyDecision) };
+    }
     const timeoutStr = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     const timeoutMs = parseInt(timeoutStr) * 1000;
     return generateProviderText({
@@ -1959,6 +1978,45 @@ export class LinaSearchView extends ItemView {
       this.applyEmbeddingWorkStatus(state);
     });
 
+    const viewGeneration = this.viewGeneration;
+    this.producerStateRefreshDebouncer = createPathScopedDebouncer(
+      () => {
+        if (!this.viewOpen || viewGeneration !== this.viewGeneration) return;
+        void this.refreshState({ refreshSemanticAvailability: false });
+      },
+      PRODUCER_STATE_REFRESH_DEBOUNCE_MS,
+      {
+        setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+        clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
+      }
+    );
+    const requestProducerStateRefresh = (file: unknown, oldPath?: unknown) => {
+      if (!isProducerStateVaultChange(file, oldPath)) return;
+      this.producerStateRefreshDebouncer?.schedule(PRODUCER_STATE_FILE_PATH, true);
+    };
+    this.registerEvent(this.app.vault.on("create", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("modify", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("delete", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("rename", requestProducerStateRefresh));
+
+    // Vault events are not guaranteed for the hidden `.lina` folder: also observe the
+    // artifact's metadata while the panel is visible, and when it becomes active.
+    const producerStateDetector = createProducerStateChangeDetector(this.app.vault.adapter);
+    await producerStateDetector.check();
+    const checkProducerStateByStat = (): void => {
+      if (!this.viewOpen || viewGeneration !== this.viewGeneration) return;
+      if (!this.containerEl.isShown()) return;
+      producerStateDetector.check()
+        .then((changed) => {
+          if (changed) this.producerStateRefreshDebouncer?.schedule(PRODUCER_STATE_FILE_PATH, true);
+        })
+        .catch(() => undefined);
+    };
+    this.registerInterval(window.setInterval(checkProducerStateByStat, PRODUCER_STATE_STAT_POLL_INTERVAL_MS));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+      if (leaf?.view === this) checkProducerStateByStat();
+    }));
+
     await this.refreshState();
 
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
@@ -1977,6 +2035,8 @@ export class LinaSearchView extends ItemView {
     this.unsubscribeEmbeddingWorkStatus = undefined;
     this.unsubscribeTextIndexRebuildProgress?.();
     this.unsubscribeTextIndexRebuildProgress = undefined;
+    this.producerStateRefreshDebouncer?.cancelAll();
+    this.producerStateRefreshDebouncer = undefined;
     this.lastContextSelection = undefined;
     this.contentEl.empty();
   }
@@ -3173,9 +3233,10 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    if (!this.isAskContextAllowedForAi(askContext.text)) {
+    const privacyDecision = this.evaluateAiPrivacyGate(activeFile.path, askContext.text);
+    if (!privacyDecision.allowed) {
       this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
-      this.renderAskContextBlockedByUserExclusions();
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
 
@@ -3186,7 +3247,13 @@ export class LinaSearchView extends ItemView {
 
     const activeProfile = this.getActiveTextAiProfile();
     const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, askContext.sourceLabel, askContext.text);
-    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path: activeFile.path,
+      content: askContext.text,
+      configDir: this.app.vault.configDir,
+    });
 
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
       return;
@@ -3274,79 +3341,18 @@ export class LinaSearchView extends ItemView {
   }
 
   private async runTagsCommand(): Promise<void> {
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof TFile)) {
-      new Notice(this.L.askNoActiveNote);
-      this.setStatus(this.L.askNoActiveNote);
-      return;
-    }
-
-    if (activeFile.extension !== "md") {
-      new Notice(this.L.analysisNonMarkdown);
-      this.setStatus(this.L.analysisNonMarkdown);
-      return;
-    }
-
-    const commandContext = await this.resolveCommandContext(activeFile);
-
-    this.prepareAnalysisArea();
-    const analysisRunId = this.analysisRunId;
-    this.ensureAnalysisPanel(this.L.tagsResponseTitle, activeFile.basename);
-    if (!this.analysisResultEl) return;
-
-    this.analysisResultEl.empty();
-    this.analysisResultEl.addClass("lina-display-block");
-    this.currentAnalysisSourcePath = activeFile.path;
-    this.currentAnalysisScope = "single-note";
-    this.currentActiveFilePath = activeFile.path;
-
-    if (!commandContext.text) {
-      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
-      this.setStatus(this.L.analysisEmptyNote);
-      return;
-    }
-
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
-
-    if (!this.isAskContextAllowedForAi(commandContext.text)) {
-      this.renderAskContextBlockedByUserExclusions();
-      return;
-    }
-
-    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.tagsRunning });
-    loadingEl.addClass("lina-color-muted");
-    loadingEl.addClass("lina-fs-085");
-
-    const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildTagsCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
-    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
-
-    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
-      return;
-    }
-
-    this.analysisResultEl.empty();
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
-
-    if (!result.success) {
-      const message = `${this.L.analysisGenericError}: ${result.message}`;
-      this.analysisResultEl.createDiv({ text: message });
-      this.setStatus(message);
-      return;
-    }
-
-    const suggestedTags = this.parseTagsCommandResponse(result.text ?? "");
-    if (suggestedTags.length === 0) {
-      this.analysisResultEl.createDiv({ text: this.L.tagsNoSuggestions });
-      this.setStatus(this.L.tagsNoSuggestions);
-      return;
-    }
-
-    await this.renderTagsCommandSuggestions(this.analysisResultEl, suggestedTags, commandContext.applyTarget);
-    this.setStatus(this.L.tagsSuggestionsReady);
+    await this.runTaxonomyCommand("tags");
   }
 
   private async runYamlCommand(): Promise<void> {
+    await this.runTaxonomyCommand("yaml");
+  }
+
+  /**
+   * Uses the same local-first taxonomy runtime as single-note analysis while
+   * retaining the command's one-component presentation and apply flow.
+   */
+  private async runTaxonomyCommand(kind: TaxonomyCommandKind): Promise<void> {
     const activeFile = this.app.workspace.getActiveFile();
     if (!(activeFile instanceof TFile)) {
       new Notice(this.L.askNoActiveNote);
@@ -3361,10 +3367,15 @@ export class LinaSearchView extends ItemView {
     }
 
     const commandContext = await this.resolveCommandContext(activeFile);
+    const commandTitle = kind === "tags" ? this.L.tagsResponseTitle : this.L.yamlResponseTitle;
+    const contextSummaryTitle = kind === "tags" ? this.L.tagsContextSummaryTitle : this.L.yamlContextSummaryTitle;
+    const runningText = kind === "tags" ? this.L.tagsRunning : this.L.yamlRunning;
+    const noSuggestionsText = kind === "tags" ? this.L.tagsNoSuggestions : this.L.yamlNoSuggestions;
+    const readyText = kind === "tags" ? this.L.tagsSuggestionsReady : this.L.yamlSuggestionsReady;
 
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
-    this.ensureAnalysisPanel(this.L.yamlResponseTitle, activeFile.basename);
+    this.ensureAnalysisPanel(commandTitle, activeFile.basename);
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
@@ -3379,44 +3390,104 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, contextSummaryTitle);
 
-    if (!this.isAskContextAllowedForAi(commandContext.text)) {
-      this.renderAskContextBlockedByUserExclusions();
+    const privacyDecision = this.evaluateAiPrivacyGate(activeFile.path, commandContext.text);
+    if (!privacyDecision.allowed) {
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
 
-    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.yamlRunning });
+    const taxonomyRuntime = await this.computeTaxonomyRuntime(activeFile.path);
+    const needsAi = kind === "tags"
+      ? (taxonomyRuntime?.request.requestTags ?? true)
+      : (taxonomyRuntime?.request.requestedYamlProperties.length ?? 1) > 0;
+    const localResult = reconcileTaxonomyRuntime(
+      taxonomyRuntime ?? undefined,
+      [],
+      {},
+      this.plugin.settings.yamlAllowedProperties,
+      this.plugin.settings.maxSuggestedTags ?? 8,
+    );
+
+    if (!needsAi) {
+      if (!this.hasTaxonomyCommandSuggestions(kind, localResult)) {
+        this.analysisResultEl.createDiv({ text: noSuggestionsText });
+        this.setStatus(noSuggestionsText);
+        return;
+      }
+
+      await this.renderTaxonomyCommandSuggestions(kind, localResult, commandContext.applyTarget);
+      return;
+    }
+
+    const loadingEl = this.analysisResultEl.createDiv({ text: runningText });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
 
     const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildYamlCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
-    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const prompt = this.buildTaxonomyCommandPrompt(
+      kind,
+      activeFile.basename,
+      commandContext.sourceLabel,
+      commandContext.text,
+      taxonomyRuntime?.request,
+    );
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path: activeFile.path,
+      content: commandContext.text,
+      configDir: this.app.vault.configDir,
+    });
 
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
       return;
     }
 
     this.analysisResultEl.empty();
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, contextSummaryTitle);
 
     if (!result.success) {
+      const fallback = fallbackTaxonomyRuntime(
+        taxonomyRuntime ?? undefined,
+        this.plugin.settings.yamlAllowedProperties,
+        this.plugin.settings.maxSuggestedTags ?? 8,
+      );
+      if (this.hasTaxonomyCommandSuggestions(kind, fallback)) {
+        await this.renderTaxonomyCommandSuggestions(kind, fallback, commandContext.applyTarget);
+        this.analysisResultEl.createDiv({
+          text: "A IA falhou; as sugestões locais de taxonomia continuam disponíveis para revisão.",
+          attr: { style: "color: var(--text-warning); padding: 8px 0;" },
+        });
+        return;
+      }
       const message = `${this.L.analysisGenericError}: ${result.message}`;
       this.analysisResultEl.createDiv({ text: message });
       this.setStatus(message);
       return;
     }
 
-    const suggestedYaml = this.parseYamlCommandResponse(result.text ?? "");
-    if (Object.keys(suggestedYaml).length === 0) {
-      this.analysisResultEl.createDiv({ text: this.L.yamlNoSuggestions });
-      this.setStatus(this.L.yamlNoSuggestions);
+    const ai = this.parseTaxonomyCommandResponse(result.text ?? "");
+    const reconciliation = reconcileTaxonomyRuntime(
+      taxonomyRuntime ?? undefined,
+      kind === "tags" ? ai.tags : [],
+      kind === "yaml" ? ai.yaml : {},
+      this.plugin.settings.yamlAllowedProperties,
+      this.plugin.settings.maxSuggestedTags ?? 8,
+    );
+    const commandResult = reconciliation ?? {
+      tags: ai.tags,
+      yaml: ai.yaml,
+    };
+    if (!this.hasTaxonomyCommandSuggestions(kind, commandResult)) {
+      this.analysisResultEl.createDiv({ text: noSuggestionsText });
+      this.setStatus(noSuggestionsText);
       return;
     }
 
-    await this.renderYamlCommandSuggestions(this.analysisResultEl, suggestedYaml, commandContext.applyTarget);
-    this.setStatus(this.L.yamlSuggestionsReady);
+    await this.renderTaxonomyCommandSuggestions(kind, commandResult, commandContext.applyTarget);
+    this.setStatus(readyText);
   }
 
   private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
@@ -3451,74 +3522,59 @@ export class LinaSearchView extends ItemView {
     ].join("\n");
   }
 
-  private buildTagsCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
+  private buildTaxonomyCommandPrompt(
+    kind: TaxonomyCommandKind,
+    noteTitle: string,
+    contextSource: string,
+    contextText: string,
+    taxonomyRequest?: TaxonomyAiRequest,
+  ): string {
     const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
       ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
       : contextText;
     const truncationNotice = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
       ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres."
       : "";
-    const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
-
-    return [
+    const tagsPrompt = [
       "Sugere apenas tags para o contexto abaixo.",
       "",
       "Responde APENAS com JSON válido, sem texto extra, sem blocos de código.",
       "Não sugiras YAML, links, tarefas, pasta, título nem análise geral.",
-      `Sugere no máximo ${maxTags} tags.`,
+      `Sugere no máximo ${this.plugin.settings.maxSuggestedTags ?? 8} tags.`,
       "Usa tags curtas e úteis para organização em Obsidian.",
       "Usa minúsculas, sem acentos, sem #, com espaços convertidos para underscore.",
       "Evita tags genéricas como projeto, sistema, nota, geral, texto ou conteudo.",
       "Se não houver tags úteis, devolve uma lista vazia.",
-      truncationNotice,
-      "",
+      `A taxonomia local ainda precisa de tags: ${taxonomyRequest?.requestTags ?? true}.`,
       "Estrutura JSON obrigatória:",
       "{",
       "  \"tags\": [\"tag1\", \"tag2\"]",
       "}",
-      "",
-      `Origem do contexto: ${contextSource}`,
-      `Título da nota: ${noteTitle}`,
-      "",
-      "Contexto:",
-      "<<<CONTEXTO>>>",
-      truncatedContext,
-      "<<<FIM_CONTEXTO>>>",
-    ].join("\n");
-  }
-
-  private parseTagsCommandResponse(aiText: string): string[] {
-    const { json } = extrairJsonDaResposta(aiText);
-    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
-    const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
-    return preserveTagIdentities(rawTags).slice(0, maxTags);
-  }
-
-  private buildYamlCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
-    const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
-      ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
-      : contextText;
-    const truncationNotice = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
-      ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres."
-      : "";
-
-    return [
+    ];
+    const yamlProperties = taxonomyRequest
+      ? taxonomyRequest.requestedYamlProperties.join(", ")
+      : this.plugin.settings.yamlAllowedProperties;
+    const yamlPrompt = [
       "Sugere apenas YAML/frontmatter para o contexto abaixo.",
       "",
       "Responde APENAS com JSON válido, sem texto extra, sem blocos de código.",
       "Não sugiras tags, links, tarefas, pasta, título nem análise geral.",
-      `Sugere apenas propriedades desta lista permitida: ${this.plugin.settings.yamlAllowedProperties}.`,
+      `Sugere apenas propriedades desta lista permitida: ${yamlProperties}.`,
+      `Não devolvas propriedades já resolvidas localmente: ${taxonomyRequest?.omittedYamlProperties.join(", ") || "nenhuma"}.`,
       "Usa valores curtos, simples e apropriados para frontmatter Markdown.",
       "Não incluas a propriedade tags no objeto yaml.",
       "Se não houver YAML útil, devolve um objeto vazio.",
-      truncationNotice,
-      "",
       "Estrutura JSON obrigatória:",
       "{",
       "  \"yaml\": {",
       "    \"propriedade\": \"valor\"",
       "  }",
       "}",
+    ];
+
+    return [
+      ...(kind === "tags" ? tagsPrompt : yamlPrompt),
+      truncationNotice,
       "",
       `Origem do contexto: ${contextSource}`,
       `Título da nota: ${noteTitle}`,
@@ -3530,13 +3586,40 @@ export class LinaSearchView extends ItemView {
     ].join("\n");
   }
 
-  private parseYamlCommandResponse(aiText: string): SuggestedYaml {
+  private parseTaxonomyCommandResponse(aiText: string): TaxonomyCommandAiResponse {
     const { json } = extrairJsonDaResposta(aiText);
-    if (!json?.yaml || typeof json.yaml !== "object" || Array.isArray(json.yaml)) {
-      return {};
-    }
+    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
+    const rawYaml = json?.yaml && typeof json.yaml === "object" && !Array.isArray(json.yaml)
+      ? json.yaml
+      : {};
+    return {
+      tags: preserveTagIdentities(rawTags).slice(0, this.plugin.settings.maxSuggestedTags ?? 8),
+      yaml: filterAllowedYamlProperties(rawYaml, this.plugin.settings.yamlAllowedProperties),
+    };
+  }
 
-    return filterAllowedYamlProperties(json.yaml, this.plugin.settings.yamlAllowedProperties);
+  private hasTaxonomyCommandSuggestions(
+    kind: TaxonomyCommandKind,
+    result: Pick<TaxonomyCommandAiResponse, "tags" | "yaml"> | undefined,
+  ): boolean {
+    return kind === "tags"
+      ? Boolean(result?.tags.length)
+      : Object.keys(result?.yaml ?? {}).length > 0;
+  }
+
+  private async renderTaxonomyCommandSuggestions(
+    kind: TaxonomyCommandKind,
+    result: Pick<TaxonomyCommandAiResponse, "tags" | "yaml"> | undefined,
+    applyTarget: AskApplyTarget,
+  ): Promise<void> {
+    if (!this.analysisResultEl || !result) return;
+    if (kind === "tags") {
+      await this.renderTagsCommandSuggestions(this.analysisResultEl, [...result.tags], applyTarget);
+      this.setStatus(this.L.tagsSuggestionsReady);
+      return;
+    }
+    await this.renderYamlCommandSuggestions(this.analysisResultEl, result.yaml, applyTarget);
+    this.setStatus(this.L.yamlSuggestionsReady);
   }
 
   private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
@@ -6794,8 +6877,9 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    if (this.contentMatchesUserExclusion(content)) {
-      this.renderUserContentExcludedBlock();
+    const privacyDecision = this.evaluateAiPrivacyGate(currentFile.path, content);
+    if (!privacyDecision.allowed) {
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
 
@@ -6820,7 +6904,13 @@ ${truncatedContent}${truncationNote}
     const prompt = options.withContext
       ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes, taxonomyRequest)
       : this.buildCurrentNoteAnalysisPrompt(title, path, content, taxonomyRequest);
-    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path,
+      content,
+      configDir: this.app.vault.configDir,
+    });
 
     if (analysisRunId !== this.analysisRunId) {
       return;
@@ -6957,16 +7047,23 @@ ${truncatedContent}${truncationNote}
           continue;
         }
 
-        if (this.contentMatchesUserExclusion(content)) {
+        const privacyDecision = this.evaluateAiPrivacyGate(file.path, content);
+        if (!privacyDecision.allowed) {
           results.push({
             file,
-            error: this.L.inboxExcludedByUserRules
+            error: this.getAiPrivacyGateMessage(privacyDecision)
           });
           continue;
         }
 
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
-        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+          policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+          rules: this.plugin.getEffectiveExclusionRules(),
+          path: file.path,
+          content,
+          configDir: this.app.vault.configDir,
+        });
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;
@@ -7112,16 +7209,23 @@ ${truncatedContent}${truncationNote}
           continue;
         }
 
-        if (this.contentMatchesUserExclusion(content)) {
+        const privacyDecision = this.evaluateAiPrivacyGate(file.path, content);
+        if (!privacyDecision.allowed) {
           results.push({
             file,
-            error: this.L.inboxExcludedByUserRules
+            error: this.getAiPrivacyGateMessage(privacyDecision)
           });
           continue;
         }
 
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content, normalizedFolderPath);
-        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+          policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+          rules: this.plugin.getEffectiveExclusionRules(),
+          path: file.path,
+          content,
+          configDir: this.app.vault.configDir,
+        });
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;

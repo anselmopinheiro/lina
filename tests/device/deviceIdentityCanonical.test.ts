@@ -1,6 +1,7 @@
 import { App } from "obsidian";
 import { describe, expect, it } from "vitest";
 import LinaPlugin from "../../main.ts";
+import { getStrings } from "../../src/i18n/strings";
 import {
   saveDeviceState,
   loadDeviceState,
@@ -68,8 +69,8 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
     expect(tab.getControlValue("deviceName")).toBe("Canonical Workstation");
 
     const pages = tab.getSettingDefinitions();
-    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
-    expect(deviceProducerPage?.displayValue).toContain("Canonical Workstation");
+    const generalPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
+    expect(generalPage?.desc).toBe(getStrings("pt-PT").settingsLandingGeneralDescription);
 
     tab.hide();
   });
@@ -115,9 +116,8 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
     expect(tab.getControlValue("deviceName")).toBe("Canonical Name B");
 
     const pages = tab.getSettingDefinitions();
-    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
-    expect(deviceProducerPage?.displayValue).toContain("Canonical Name B");
-    expect(deviceProducerPage?.displayValue).not.toContain("Legacy Name A");
+    const generalPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
+    expect(generalPage?.desc).toBe(getStrings("pt-PT").settingsLandingGeneralDescription);
 
     tab.hide();
   });
@@ -204,12 +204,11 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
 
       expect(plugin.getLocalDeviceRole()).toBe("companion");
 
-      // Attempting to update device name directly on plugin throws
-      await expect(plugin.updateDeviceName("Attempted Rename")).rejects.toThrow();
-
-      // State on disk remains unaltered
+      // The device name is local to the device: a Companion renames its own device.
+      await plugin.updateDeviceName("Renamed Companion Tablet");
       const persisted = await loadDeviceState(adapter, companionId);
-      expect(persisted?.deviceName).toBe("Companion Tablet");
+      expect(persisted?.deviceName).toBe("Renamed Companion Tablet");
+      expect(persisted?.role).toBe("companion");
 
       // Attempting to update device name via settings runtime adapter is rejected
       const host: SettingsRuntimeHost = {
@@ -235,11 +234,11 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
         getEffectiveDeviceRole: () => "companion",
       });
 
-      const res = await adapters.setLocalValue("deviceName", "Attempted Rename");
-      expect(res.ok).toBe(false);
-      expect(res.error).toBe("invalid-value");
+      const res = await adapters.setLocalValue("deviceName", "Companion Via Settings");
+      expect(res.ok).toBe(true);
+      expect((await loadDeviceState(adapter, companionId))?.deviceName).toBe("Companion Via Settings");
 
-      // Verify via LinaSettingTab that device-name is disabled for companion
+      // Verify via LinaSettingTab that device-name stays editable for companion
       const tab = new LinaSettingTab(plugin.app, plugin);
       const pages = tab.getSettingDefinitions();
       let deviceNameDef: (SettingDefinition & { id?: string }) | undefined;
@@ -252,7 +251,7 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
           }
         }
       }
-      expect(deviceNameDef?.control?.disabled).toBe(true);
+      expect(deviceNameDef?.control?.disabled).toBe(false);
       tab.hide();
     });
   });

@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-12T12:56:07.978Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-13T09:43:29.045Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -98,6 +98,7 @@ var PT_PT = {
   askNoActiveNote: "Abra uma nota antes de usar este comando.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conte\xFAdo corresponde \xE0s exclus\xF5es configuradas e n\xE3o ser\xE1 enviado \xE0 IA.",
+  aiPrivacyPolicyUnavailable: "N\xE3o foi poss\xEDvel validar as regras de exclus\xE3o. O conte\xFAdo n\xE3o foi enviado para a IA.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta \xE0 IA...",
   askContextSelection: "sele\xE7\xE3o",
@@ -487,6 +488,11 @@ var PT_PT = {
   settingsGroupSynchronization: "Sincroniza\xE7\xE3o",
   settingsGroupDiagnostics: "Sistema e Diagn\xF3stico",
   settingsGroupAdvanced: "Avan\xE7ado",
+  settingsLandingGeneralDescription: "Idioma, fun\xE7\xE3o e identidade deste dispositivo.",
+  settingsLandingSearchDescription: "Pesquisa textual, sem\xE2ntica e configura\xE7\xE3o de embeddings.",
+  settingsLandingAnalysisDescription: "Provider, modelo e comportamento do assistente.",
+  settingsLandingPrivacyDescription: "Regras de indexa\xE7\xE3o e prote\xE7\xE3o do conte\xFAdo enviado para IA.",
+  settingsLandingDiagnosticsDescription: "Estado, manuten\xE7\xE3o e ferramentas de diagn\xF3stico.",
   settingsSummaryDeviceUnconfigured: "N\xE3o configurado",
   settingsSummaryEmbeddingsEnabled: "Ativado",
   settingsSummaryEmbeddingsDisabled: "Desativado",
@@ -678,12 +684,14 @@ var PT_PT = {
   settingsDebugIndexDesc: "Mostra informa\xE7\xE3o de diagn\xF3stico sobre eventos do vault e atualiza\xE7\xE3o autom\xE1tica do \xEDndice.",
   settingsExclusionsSection: "Exclus\xF5es do \xEDndice",
   settingsExcludedFolders: "Pastas exclu\xEDdas",
-  settingsExcludedFoldersDesc: "Uma pasta por linha. As notas dentro destas pastas n\xE3o entram no \xEDndice do Lina.",
-  settingsExcludedTerms: "Termos exclu\xEDdos no caminho",
-  settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.",
-  settingsExcludedContentTerms: "Termos exclu\xEDdos no conte\xFAdo",
-  settingsExcludedContentTermsDesc: "Um termo por linha, v\xEDrgula ou ponto e v\xEDrgula. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
+  settingsExcludedFoldersDesc: "Uma pasta por linha. As notas abrangidas n\xE3o s\xE3o indexadas nem enviadas para IA.",
+  settingsExcludedTerms: "Termos bloqueados no caminho",
+  settingsExcludedTermsDesc: "Um termo por linha. As notas cujo caminho corresponda n\xE3o s\xE3o indexadas nem enviadas para IA.",
+  settingsExcludedContentTerms: "Termos bloqueados no conte\xFAdo",
+  settingsExcludedContentTermsDesc: "Um termo por linha, v\xEDrgula ou ponto e v\xEDrgula. As notas abrangidas n\xE3o s\xE3o indexadas nem enviadas para IA.",
   settingsExcludedManagedByActiveProducer: "Gerido pelo Produtor Ativo",
+  settingsCompanionExclusionsManaged: "No Companion, estas regras s\xE3o apenas de leitura e s\xE3o geridas no Producer.",
+  settingsCompanionExclusionsUnavailable: "A pol\xEDtica de exclus\xF5es sincronizada n\xE3o est\xE1 dispon\xEDvel ou n\xE3o \xE9 v\xE1lida. N\xE3o s\xE3o mostrados valores locais fict\xEDcios.",
   settingsEmbeddingManagedByProducer: "Gerido pelo Produtor Ativo",
   settingsEmbeddingDefinedByProducer: "Embeddings definidos pelo Producer",
   settingsEmbeddingNoActiveProducerDesc: "Nenhum Producer ativo definiu o contrato de embeddings.",
@@ -694,7 +702,10 @@ var PT_PT = {
   settingsEmbeddingContractUnavailable: "Indispon\xEDvel (sem contrato)",
   semanticEmbeddingsUnavailableNoContract: "A pesquisa sem\xE2ntica est\xE1 indispon\xEDvel: este dispositivo Companion n\xE3o tem um contrato de embeddings v\xE1lido do Produtor.",
   settingsSummaryNoContract: "Sem contrato",
-  settingsExclusionsNote: "As pastas .lina/ e {configDir}/ s\xE3o sempre exclu\xEDdas automaticamente.",
+  settingsPrivacyIntroTitle: "Como funcionam estas regras",
+  settingsPrivacyIntro: "Estas regras impedem que as notas abrangidas sejam indexadas pelo Lina e que o seu conte\xFAdo seja enviado para a IA. Como n\xE3o s\xE3o indexadas, tamb\xE9m n\xE3o participam na pesquisa nem nos embeddings.",
+  settingsAutomaticExclusionsNote: "As pastas .lina/ e {configDir}/ s\xE3o sempre exclu\xEDdas automaticamente.",
+  settingsExclusionsNote: "Como funcionam estas regras",
   settingsHybridSection: "Pesquisa h\xEDbrida",
   settingsTextWeight: "Peso da pesquisa textual",
   settingsTextWeightDesc: "Peso usado na pontua\xE7\xE3o final da pesquisa h\xEDbrida. Valor entre 0 e 1.",
@@ -709,16 +720,19 @@ var PT_PT = {
   settingsYamlIncludeTagsDesc: "Se ativo, o YAML sugerido inclui uma lista de tags. N\xE3o altera notas; apenas mostra sugest\xF5es.",
   settingsMaxTags: "M\xE1ximo de tags sugeridas",
   settingsMaxTagsDesc: "N\xFAmero m\xE1ximo de tags a sugerir no YAML e na lista de tags.",
-  settingsSupportSection: "Support",
-  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
-  settingsSupportLink: "Support form",
-  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
-  settingsSupportFormButton: "Open form",
-  settingsSupportEmail: "Email support",
-  settingsSupportEmailDescription: "Contact support directly by email.",
-  settingsSupportEmailCopyButton: "Copy email",
-  settingsSupportEmailButton: "Send email",
-  settingsSupportEmailCopySuccess: "Email address copied.",
+  settingsSupportSection: "Ajuda e suporte",
+  settingsSupportDescription: "Documenta\xE7\xE3o, reporte de problemas e apoio ao projeto.",
+  settingsSupportLink: "Reportar problema ou pedir ajuda",
+  settingsSupportFormDescription: "Abra o formul\xE1rio de suporte.",
+  settingsSupportFormButton: "Abrir formul\xE1rio",
+  settingsSupportEmail: "Contacto por email",
+  settingsSupportEmailDescription: "Contacte o suporte diretamente por email.",
+  settingsSupportEmailCopyButton: "Copiar email",
+  settingsSupportEmailButton: "Enviar email",
+  settingsSupportEmailCopySuccess: "Endere\xE7o de email copiado.",
+  settingsSupportProject: "Apoiar o projeto",
+  settingsSupportProjectDescription: "Contribua para o desenvolvimento do Lina.",
+  settingsSupportProjectButton: "Apoiar",
   semanticModalTitle: "Pesquisar semanticamente",
   semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
   semanticStatusLoadingEmbeddingState: "A carregar estado dos embeddings...",
@@ -1087,6 +1101,7 @@ var EN = {
   askNoActiveNote: "Open a note before using this command.",
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
+  aiPrivacyPolicyUnavailable: "The exclusion rules could not be validated. Content was not sent to AI.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
@@ -1466,15 +1481,20 @@ var EN = {
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General & Device",
+  settingsLandingGeneralDescription: "Language, role and identity for this device.",
   settingsGroupDeviceProducer: "Device & Producer",
   settingsGroupSearch: "Search & Embeddings",
+  settingsLandingSearchDescription: "Textual and semantic search, plus embedding configuration.",
   settingsGroupAnalysis: "AI Assistant",
+  settingsLandingAnalysisDescription: "Provider, model and assistant behaviour.",
   settingsGroupEmbeddings: "Semantic Search & Embeddings",
   settingsGroupExclusions: "Privacy & Exclusion Rules",
+  settingsLandingPrivacyDescription: "Indexing rules and protection for content sent to AI.",
   settingsGroupProducer: "Producer",
   settingsGroupCompanion: "Companion",
   settingsGroupSynchronization: "Synchronization",
   settingsGroupDiagnostics: "System & Diagnostics",
+  settingsLandingDiagnosticsDescription: "Status, maintenance and diagnostic tools.",
   settingsGroupAdvanced: "Advanced",
   settingsSummaryDeviceUnconfigured: "Not configured",
   settingsSummaryEmbeddingsEnabled: "Enabled",
@@ -1667,12 +1687,14 @@ var EN = {
   settingsDebugIndexDesc: "Shows diagnostic information about vault events and automatic index updates.",
   settingsExclusionsSection: "Exclusions",
   settingsExcludedFolders: "Excluded folders",
-  settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
-  settingsExcludedTerms: "Excluded path terms",
-  settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
-  settingsExcludedContentTerms: "Excluded content terms",
-  settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedFoldersDesc: "One folder per line. Matching notes are not indexed or sent to AI.",
+  settingsExcludedTerms: "Blocked path terms",
+  settingsExcludedTermsDesc: "One term per line. Notes whose path matches are not indexed or sent to AI.",
+  settingsExcludedContentTerms: "Blocked content terms",
+  settingsExcludedContentTermsDesc: "One term per line. Notes whose content matches are not indexed or sent to AI.",
   settingsExcludedManagedByActiveProducer: "Managed by the Active Producer",
+  settingsCompanionExclusionsManaged: "On Companion, these rules are read-only and managed on the Producer.",
+  settingsCompanionExclusionsUnavailable: "The synchronized exclusion policy is unavailable or invalid. Local placeholder values are not shown.",
   settingsEmbeddingManagedByProducer: "Managed by the Active Producer",
   settingsEmbeddingDefinedByProducer: "Embeddings defined by the Producer",
   settingsEmbeddingNoActiveProducerDesc: "No active Producer has defined the embeddings contract.",
@@ -1683,7 +1705,10 @@ var EN = {
   settingsEmbeddingContractUnavailable: "Unavailable (no contract)",
   semanticEmbeddingsUnavailableNoContract: "Semantic search is unavailable: this Companion device does not have a valid embedding contract from the Producer.",
   settingsSummaryNoContract: "No contract",
-  settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
+  settingsPrivacyIntroTitle: "How these rules work",
+  settingsPrivacyIntro: "These rules prevent matching notes from being indexed by Lina and their content from being sent to AI. Because they are not indexed, they also do not take part in search or embeddings.",
+  settingsAutomaticExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
+  settingsExclusionsNote: "How these rules work",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
   settingsTextWeightDesc: "Weight used in the hybrid search final score. Value between 0 and 1.",
@@ -1699,15 +1724,18 @@ var EN = {
   settingsMaxTags: "Maximum suggested tags",
   settingsMaxTagsDesc: "Maximum number of tags to suggest in YAML and the tag list.",
   settingsSupportSection: "Support",
-  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
-  settingsSupportLink: "Support form",
-  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
+  settingsSupportDescription: "Documentation, issue reporting and project support.",
+  settingsSupportLink: "Report a problem or ask for help",
+  settingsSupportFormDescription: "Open the support form.",
   settingsSupportFormButton: "Open form",
   settingsSupportEmail: "Email support",
   settingsSupportEmailDescription: "Contact support directly by email.",
   settingsSupportEmailCopyButton: "Copy email",
   settingsSupportEmailButton: "Send email",
   settingsSupportEmailCopySuccess: "Email address copied.",
+  settingsSupportProject: "Support the project",
+  settingsSupportProjectDescription: "Help sustain Lina's development.",
+  settingsSupportProjectButton: "Buy Me a Coffee",
   // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: "Search semantically",
   semanticModalPlaceholder: "Write an idea, topic or question...",
@@ -4238,10 +4266,33 @@ function createDeclarativeSettingsButtonRenderer(name, action, options = {}) {
     });
   };
 }
-function createDetachedConfigNoteRenderer(strings, configDir) {
-  const description = strings.settingsExclusionsNote.replace("{configDir}", configDir);
+function getCompanionExclusionsReadOnlyFields(strings, state) {
+  if (state.status !== "loaded") return [];
+  return [
+    [strings.settingsExcludedFolders, state.rules.excludedFolders],
+    [strings.settingsExcludedTerms, state.rules.excludedPathContains],
+    [strings.settingsExcludedContentTerms, state.rules.excludedContentContains]
+  ];
+}
+function createDetachedConfigNoteRenderer(strings, configDir, getCompanionExclusions, isCompanionDevice) {
+  const automaticExclusionsNote = strings.settingsAutomaticExclusionsNote.replace("{configDir}", configDir);
+  const description = `${strings.settingsPrivacyIntro} ${automaticExclusionsNote}`;
   return (setting, _group) => {
-    setting.setDesc(description);
+    const state = getCompanionExclusions == null ? void 0 : getCompanionExclusions();
+    if (!state) {
+      setting.setDesc((isCompanionDevice == null ? void 0 : isCompanionDevice()) ? `${description} ${strings.settingsCompanionExclusionsManaged}` : description);
+      return;
+    }
+    setting.setDesc(`${description} ${strings.settingsCompanionExclusionsManaged}`);
+    setting.settingEl.addClass("lina-settings-exclusions-readonly");
+    for (const [label, values] of getCompanionExclusionsReadOnlyFields(strings, state)) {
+      const field = setting.controlEl.createDiv({ cls: "lina-settings-readonly-exclusion" });
+      field.createDiv({ text: label, cls: "setting-item-name" });
+      const textarea = field.createEl("textarea", { cls: "lina-settings-readonly-exclusion-value" });
+      textarea.value = values.join("\n");
+      textarea.disabled = true;
+      textarea.setAttribute("aria-label", label);
+    }
   };
 }
 function createSupportActionRenderer(name, description, buttonText, url, opener = openExternalUrl) {
@@ -4274,12 +4325,6 @@ function createSettingsIntroductionRenderer(strings, version, buildTimestamp) {
     setting.descEl.createDiv({
       text: `${strings.settingsVersion}: ${version} \xB7 ${strings.settingsBuild}: ${buildTimestamp}`,
       cls: "lina-mt-8"
-    });
-    const supportLine = setting.descEl.createDiv({ cls: "lina-mt-8" });
-    supportLine.createSpan({ text: `${strings.settingsSupportText} ` });
-    supportLine.createEl("a", {
-      text: strings.settingsSupportCoffeeButton,
-      attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" }
     });
   };
 }
@@ -4397,12 +4442,12 @@ function createDeviceRoleDescriptionRenderer(optionsOrStrings, legacyRole) {
     }
   };
 }
-function createDetachedInformationalSettingDefinitions(strings, configDir) {
+function createDetachedInformationalSettingDefinitions(strings, configDir, getCompanionExclusions, isManagedByProducer) {
   return [
     {
       id: "config-dir-note",
       name: strings.settingsExclusionsNote.replace("{configDir}", configDir),
-      render: createDetachedConfigNoteRenderer(strings, configDir)
+      render: createDetachedConfigNoteRenderer(strings, configDir, getCompanionExclusions, isManagedByProducer)
     }
   ];
 }
@@ -5276,12 +5321,10 @@ function createPureDeclarativeSettingsBlueprint(strings) {
   return [
     // 1. Geral e Dispositivo
     group("general", strings.settingsGroupGeneral, [
-      item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
-      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
+      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
     ]),
     // 2. Pesquisa e Embeddings. Provider/model render as contract information on Companion.
     group("search", strings.settingsGroupSearch, [
@@ -5313,33 +5356,36 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    // 4. Producer-only work and publication controls.
-    group("producer", strings.settingsGroupProducer, [
-      item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+    // 4. Privacy and exclusions: editable on the Producer, read-only elsewhere.
+    group("privacy", strings.settingsGroupExclusions, [
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    // 5. Sistema e Diagnóstico, including Producer maintenance controls.
+    group("diagnostics", strings.settingsGroupDiagnostics, [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
       item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
-      item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
-    ]),
-    // 5. Sistema e Diagnóstico
-    group("diagnostics", strings.settingsGroupDiagnostics, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"]),
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
-    // Suporte (3 items)
+    // Suporte
     group("support-footer", strings.settingsSupportSection, [
+      item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
-      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
+      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+      item("support-project", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
     ])
   ];
 }
@@ -5860,7 +5906,7 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       return isStoredLocalValue(key, value) ? value : void 0;
     },
     async setLocalValue(key, value, requestedEffects) {
-      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel" || key === "deviceName")) {
+      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel")) {
         return { ok: false, error: "invalid-value" };
       }
       const normalized = normalizeLocalValue(key, value);
@@ -6080,6 +6126,10 @@ function createDeclarativeSettingsCandidateComposition(options) {
     embeddingsBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "embeddingsBaseUrl")
   });
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
+  const isCompanionDevice = () => {
+    var _a2, _b2, _c2, _d2, _e;
+    return ((_e = (_d2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _d2 : (_c2 = (_b2 = options.runtimeHost).getEffectiveDeviceRole) == null ? void 0 : _c2.call(_b2)) != null ? _e : options.deviceRole) === "companion";
+  };
   const staticDefinitions = [
     staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
     {
@@ -6111,13 +6161,16 @@ function createDeclarativeSettingsCandidateComposition(options) {
       visible: true,
       render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription)
     },
-    ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir).map((definition) => addDefinitionId("exclusions-note", {
-      ...definition,
-      visible: () => {
-        var _a2, _b2;
-        return ((_b2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _b2 : options.deviceRole) === "companion";
-      }
-    }))
+    ...createDetachedInformationalSettingDefinitions(
+      options.strings,
+      options.configDir,
+      // Companion: effective rules, read-only. Other roles: a single header note.
+      () => {
+        var _a2;
+        return isCompanionDevice() ? (_a2 = options.getCompanionExclusions) == null ? void 0 : _a2.call(options) : void 0;
+      },
+      isCompanionDevice
+    ).map((definition) => addDefinitionId("exclusions-note", { ...definition, visible: true }))
   ];
   const supportDefinitions = [
     {
@@ -6138,6 +6191,18 @@ function createDeclarativeSettingsCandidateComposition(options) {
       desc: options.strings.settingsSupportEmailDescription,
       visible: true,
       render: createSupportEmailRenderer(options.strings)
+    },
+    {
+      id: "support-project",
+      name: options.strings.settingsSupportProject,
+      desc: options.strings.settingsSupportProjectDescription,
+      visible: true,
+      render: createSupportActionRenderer(
+        options.strings.settingsSupportProject,
+        options.strings.settingsSupportProjectDescription,
+        options.strings.settingsSupportProjectButton,
+        BUY_ME_A_COFFEE_URL
+      )
     }
   ];
   const renderDefinitions = [
@@ -6247,14 +6312,13 @@ function createDeclarativeSettingsCandidateComposition(options) {
     let desc = definition.desc;
     if (isCompanionMode) {
       desc = `${options.strings.settingsCompanionModeActive} \u2014 ${options.strings.settingsCompanionModeDesc}`;
-    } else if (exclusionDisabled) {
-      const baseDesc = typeof definition.desc === "string" ? definition.desc : "";
-      desc = baseDesc ? `${baseDesc} \u2014 ${options.strings.settingsExcludedManagedByActiveProducer}` : options.strings.settingsExcludedManagedByActiveProducer;
     }
     const disabled = isCompanionMode || exclusionDisabled || ((_c2 = definition.control.disabled) != null ? _c2 : false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
       desc,
+      // On a Companion the effective rules are shown once, read-only, by the privacy note.
+      ...isExclusionControl(id) ? { visible: () => !isCompanionDevice() } : {},
       control: {
         ...definition.control,
         disabled
@@ -6271,11 +6335,10 @@ function createDeclarativeSettingsCandidateComposition(options) {
     });
   };
   const addLocalControl = (id, definition) => {
-    var _a2, _b2, _c2, _d2, _e, _f;
+    var _a2;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
-    const isCompanion = ((_e = (_d2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _d2 : (_c2 = (_b2 = options.runtimeHost).getEffectiveDeviceRole) == null ? void 0 : _c2.call(_b2)) != null ? _e : options.deviceRole) === "companion";
-    const disabled = isCompanion && id === "device-name" || ((_f = definition.control.disabled) != null ? _f : false);
+    const disabled = (_a2 = definition.control.disabled) != null ? _a2 : false;
     const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
@@ -6747,7 +6810,6 @@ function migrateSettings(rawSettings, context) {
 
 // src/settings.ts
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-var DEVELOPMENT_BUILD_INFO_ID = "development-build-info";
 function getProviderLabel(provider) {
   switch (provider) {
     case "ollama":
@@ -6849,15 +6911,6 @@ function getDeviceValue(key) {
   const settings = ensureCurrentDeviceSettings();
   const value = settings[key];
   return typeof value === "string" ? value : "";
-}
-function getLocalDeviceName() {
-  if (activeDeviceNameGetter) {
-    const canonicalName = activeDeviceNameGetter();
-    if (canonicalName !== void 0) {
-      return canonicalName;
-    }
-  }
-  return getDeviceValue("deviceName");
 }
 function getLocalVal(key) {
   const normalizeProvider = (value) => value ? normalizeSupportedProvider(value) : "";
@@ -7070,60 +7123,20 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     this.introductionRenderers = /* @__PURE__ */ new Map();
     this.plugin = plugin;
   }
-  getGroupSummary(groupId, strings) {
-    var _a, _b, _c;
+  getLandingDescription(groupId, strings) {
     switch (groupId) {
-      case "general": {
-        const runtime = this.plugin.getDeviceRuntimeState();
-        const deviceName = (_b = (_a = runtime.deviceName) != null ? _a : this.plugin.getDeviceName()) != null ? _b : getLocalDeviceName();
-        let roleLabel = strings.settingsSummaryDeviceUnconfigured;
-        if (runtime.assignmentState === "assigned") {
-          if (runtime.effectiveRole === "companion") {
-            roleLabel = `\u{1F4F1} ${strings.settingsDeviceCompanionTitle}`;
-          } else {
-            roleLabel = runtime.isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
-          }
-        }
-        return deviceName ? `${roleLabel} \xB7 ${deviceName}` : roleLabel;
-      }
-      case "ai-analysis": {
-        const { provider, model } = resolveEffectiveAnalysisConfig(
-          { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
-          this.plugin.settings
-        );
-        return `${provider} \xB7 ${model}`;
-      }
-      case "search": {
-        if (!this.plugin.settings.embeddingsEnabled) {
-          return `\u26AA ${strings.settingsSummaryEmbeddingsDisabled}`;
-        }
-        const resolution = this.plugin.getDeviceRoleResolution();
-        if (resolution.effectiveRole === "companion") {
-          const contract = this.plugin.getEffectiveEmbeddingContract();
-          if (!contract) {
-            return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle} (${strings.settingsSummaryNoContract})`;
-          }
-          return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
-        }
-        const { provider, model } = resolveEffectiveEmbeddingsConfig(
-          { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
-          this.plugin.settings
-        );
-        return `\u{1F7E2} ${strings.settingsSummaryEmbeddingsEnabled} \xB7 ${provider} (${model})`;
-      }
-      case "producer": {
-        const runtime = this.plugin.getDeviceRuntimeState();
-        return runtime.isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
-      }
-      case "diagnostics": {
-        const isPt = ((_c = this.plugin.settings.interfaceLanguage) != null ? _c : "pt-PT") === "pt-PT";
-        const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
-        const storage = isBinary ? isPt ? "Bin\xE1rio" : "Binary" : "JSONL";
-        const sync = this.plugin.settings.checkSyncOnStartup ? " \xB7 Sync \u2713" : "";
-        return `${storage}${sync}`;
-      }
+      case "general":
+        return strings.settingsLandingGeneralDescription;
+      case "search":
+        return strings.settingsLandingSearchDescription;
+      case "ai-analysis":
+        return strings.settingsLandingAnalysisDescription;
+      case "privacy":
+        return strings.settingsLandingPrivacyDescription;
+      case "diagnostics":
+        return strings.settingsLandingDiagnosticsDescription;
       default:
-        return "";
+        return void 0;
     }
   }
   getSettingDefinitions() {
@@ -7141,13 +7154,6 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
       );
       this.introductionRenderers.set(language, introductionRenderer);
     }
-    const buildInfoCompatibilityDefinition = {
-      id: DEVELOPMENT_BUILD_INFO_ID,
-      name: strings.settingsBuild,
-      desc: LINA_DEVELOPMENT_BUILD_TIMESTAMP,
-      searchable: false,
-      visible: false
-    };
     const introductionDefinition = {
       id: "support-introduction",
       name: strings.settingsTitle,
@@ -7162,7 +7168,6 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         const definition = "render" in item2.definition ? { ...item2.definition } : item2.definition;
         return [definition];
       });
-      if (group2.id === "general") items.push(buildInfoCompatibilityDefinition);
       if (group2.id === "support-footer") {
         return {
           type: "group",
@@ -7175,14 +7180,9 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         id: group2.id,
         name: group2.heading,
         heading: group2.heading,
-        displayValue: this.getGroupSummary(group2.id, strings),
+        desc: this.getLandingDescription(group2.id, strings),
         items
       };
-      const role = this.plugin.getDeviceRoleResolution().effectiveRole;
-      if (group2.id === "producer") {
-        page.visible = role === "producer";
-        page.desc = strings.settingsDeviceProducerDesc;
-      }
       return page;
     });
   }
@@ -7404,6 +7404,10 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
       getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract(),
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
       canEditExclusions: this.plugin.canEditExclusions(),
+      getCompanionExclusions: () => ({
+        status: this.plugin.getCanonicalExclusionPolicyStatus(),
+        rules: this.plugin.getEffectiveExclusionRules()
+      }),
       onAssignDeviceRole: async (role) => {
         const wasLegacy = this.plugin.getDeviceRoleResolution().assignmentState === "legacy-fallback";
         await this.plugin.assignDeviceRole(role);
@@ -21542,6 +21546,42 @@ function buildSidebarStatusViewModel(input) {
   };
 }
 
+// src/companion/producerStateRefresh.ts
+var PRODUCER_STATE_FILE_PATH2 = ".lina/producer-state.json";
+function isProducerStateVaultChange(file, oldPath) {
+  return getVaultEventPath(file) === PRODUCER_STATE_FILE_PATH2 || getVaultRenameOldPath(oldPath) === PRODUCER_STATE_FILE_PATH2;
+}
+var PRODUCER_STATE_STAT_POLL_INTERVAL_MS = 3e4;
+function createProducerStateChangeDetector(adapter, path = PRODUCER_STATE_FILE_PATH2) {
+  let baseline;
+  let inFlight;
+  const observe = async () => {
+    var _a, _b;
+    let signature;
+    try {
+      const stat = await adapter.stat(path);
+      signature = stat ? `${(_a = stat.mtime) != null ? _a : "?"}:${(_b = stat.size) != null ? _b : "?"}` : "missing";
+    } catch (e) {
+      return false;
+    }
+    if (baseline === void 0) {
+      baseline = signature;
+      return false;
+    }
+    if (signature === baseline) return false;
+    baseline = signature;
+    return true;
+  };
+  return {
+    check() {
+      inFlight != null ? inFlight : inFlight = observe().finally(() => {
+        inFlight = void 0;
+      });
+      return inFlight;
+    }
+  };
+}
+
 // src/search/semanticNeighborhood.ts
 function normalizedCentroid(vectors, dimensions, ordinals) {
   const total = new Float64Array(dimensions);
@@ -22126,8 +22166,27 @@ function fallbackTaxonomyRuntime(runtime, allowedProperties, maximumTags) {
   return reconcileTaxonomyRuntime(runtime, [], {}, allowedProperties, maximumTags);
 }
 
+// src/ai/privacyGate.ts
+function evaluateAiPrivacyGate(input) {
+  if (input.policyStatus !== "loaded") {
+    return { allowed: false, reason: "policy-unavailable" };
+  }
+  const pathDecision = shouldExcludePath(input.path, {
+    excludedFolders: [...input.rules.excludedFolders],
+    excludedPathContains: [...input.rules.excludedPathContains]
+  }, input.configDir);
+  if (pathDecision.excluded) {
+    return { allowed: false, reason: "path-excluded" };
+  }
+  if (input.rules.excludedContentContains.length > 0 && shouldExcludeContent(input.content, [...input.rules.excludedContentContains]).excluded) {
+    return { allowed: false, reason: "content-excluded" };
+  }
+  return { allowed: true };
+}
+
 // src/search/linaSearchView.ts
 var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
+var PRODUCER_STATE_REFRESH_DEBOUNCE_MS = 100;
 var RESERVED_LINA_COMMANDS = /* @__PURE__ */ new Set([
   "/search",
   "/ask",
@@ -22722,21 +22781,28 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     }
     return shouldExcludeContent(content, excludedContentContains).excluded;
   }
-  isAskContextAllowedForAi(contextText) {
-    if (!contextText.trim()) {
-      return true;
-    }
-    return !this.contentMatchesUserExclusion(contextText);
+  evaluateAiPrivacyGate(path, content) {
+    return evaluateAiPrivacyGate({
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path,
+      content,
+      configDir: this.app.vault.configDir
+    });
   }
-  renderAskContextBlockedByUserExclusions() {
+  getAiPrivacyGateMessage(decision) {
+    return decision.allowed || decision.reason !== "policy-unavailable" ? this.L.askExcludedByUserRules : this.L.aiPrivacyPolicyUnavailable;
+  }
+  renderAiPrivacyGateBlocked(decision) {
+    const message = this.getAiPrivacyGateMessage(decision);
     if (this.analysisResultEl) {
       this.analysisResultEl.createDiv({
-        text: this.L.askExcludedByUserRules,
+        text: message,
         attr: { style: "color: var(--text-error); padding: 8px 0;" }
       });
     }
-    this.setStatus(this.L.askExcludedByUserRules);
-    new import_obsidian28.Notice(this.L.askExcludedByUserRules);
+    this.setStatus(message);
+    new import_obsidian28.Notice(message);
   }
   getNormalizedContextPath(file) {
     return (0, import_obsidian28.normalizePath)(file.path);
@@ -22897,16 +22963,9 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     });
   }
   async filterRelatedNotesByUserContentRules(relatedNotes) {
-    if (this.getExcludedContentTerms().length === 0) {
-      return { notes: relatedNotes, excludedCount: 0 };
-    }
     const safeNotes = [];
     let excludedCount = 0;
     for (const note of relatedNotes) {
-      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
-        excludedCount++;
-        continue;
-      }
       const file = this.app.vault.getAbstractFileByPath(note.path);
       if (!(file instanceof import_obsidian28.TFile)) {
         excludedCount++;
@@ -22914,7 +22973,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       }
       try {
         const content = await this.app.vault.read(file);
-        if (this.contentMatchesUserExclusion(content)) {
+        if (!this.evaluateAiPrivacyGate(note.path, content).allowed) {
           excludedCount++;
           continue;
         }
@@ -23170,13 +23229,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     warning.addClass("lina-mb-8");
     warning.addClass("lina-fs-085");
   }
-  renderUserContentExcludedBlock() {
-    if (!this.analysisResultEl) return;
-    this.analysisResultEl.createDiv({
-      text: this.L.analysisExcludedByUserRules,
-      attr: { style: "color: var(--text-error); padding: 8px 0;" }
-    });
-  }
   getActiveTextAiProfile() {
     const { provider, model, baseUrl } = resolveEffectiveAnalysisConfig(
       {
@@ -23189,7 +23241,11 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const isLocal = isProviderEndpointLocal(provider, baseUrl);
     return { provider, model, baseUrl, isLocal };
   }
-  async generateTextWithActiveAiProfile(profile, prompt) {
+  async generateTextWithActiveAiProfile(profile, prompt, privacyContext) {
+    const privacyDecision = evaluateAiPrivacyGate(privacyContext);
+    if (!privacyDecision.allowed) {
+      return { success: false, message: this.getAiPrivacyGateMessage(privacyDecision) };
+    }
     const timeoutStr = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     const timeoutMs = parseInt(timeoutStr) * 1e3;
     return generateProviderText({
@@ -23389,6 +23445,41 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     this.unsubscribeEmbeddingWorkStatus = this.plugin.onEmbeddingWorkStatusChange((state) => {
       this.applyEmbeddingWorkStatus(state);
     });
+    const viewGeneration = this.viewGeneration;
+    this.producerStateRefreshDebouncer = createPathScopedDebouncer(
+      () => {
+        if (!this.viewOpen || viewGeneration !== this.viewGeneration) return;
+        void this.refreshState({ refreshSemanticAvailability: false });
+      },
+      PRODUCER_STATE_REFRESH_DEBOUNCE_MS,
+      {
+        setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+        clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
+      }
+    );
+    const requestProducerStateRefresh = (file, oldPath) => {
+      var _a;
+      if (!isProducerStateVaultChange(file, oldPath)) return;
+      (_a = this.producerStateRefreshDebouncer) == null ? void 0 : _a.schedule(PRODUCER_STATE_FILE_PATH2, true);
+    };
+    this.registerEvent(this.app.vault.on("create", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("modify", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("delete", requestProducerStateRefresh));
+    this.registerEvent(this.app.vault.on("rename", requestProducerStateRefresh));
+    const producerStateDetector = createProducerStateChangeDetector(this.app.vault.adapter);
+    await producerStateDetector.check();
+    const checkProducerStateByStat = () => {
+      if (!this.viewOpen || viewGeneration !== this.viewGeneration) return;
+      if (!this.containerEl.isShown()) return;
+      producerStateDetector.check().then((changed) => {
+        var _a;
+        if (changed) (_a = this.producerStateRefreshDebouncer) == null ? void 0 : _a.schedule(PRODUCER_STATE_FILE_PATH2, true);
+      }).catch(() => void 0);
+    };
+    this.registerInterval(window.setInterval(checkProducerStateByStat, PRODUCER_STATE_STAT_POLL_INTERVAL_MS));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+      if ((leaf == null ? void 0 : leaf.view) === this) checkProducerStateByStat();
+    }));
     await this.refreshState();
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       this.handleActiveFileChange(file);
@@ -23396,7 +23487,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     this.viewOpen = false;
     this.viewGeneration++;
     (_a = this.unsubscribeEmbeddingOperationState) == null ? void 0 : _a.call(this);
@@ -23405,6 +23496,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     this.unsubscribeEmbeddingWorkStatus = void 0;
     (_c = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _c.call(this);
     this.unsubscribeTextIndexRebuildProgress = void 0;
+    (_d = this.producerStateRefreshDebouncer) == null ? void 0 : _d.cancelAll();
+    this.producerStateRefreshDebouncer = void 0;
     this.lastContextSelection = void 0;
     this.contentEl.empty();
   }
@@ -24355,9 +24448,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       this.setStatus(this.L.analysisEmptyNote);
       return;
     }
-    if (!this.isAskContextAllowedForAi(askContext.text)) {
+    const privacyDecision = this.evaluateAiPrivacyGate(activeFile.path, askContext.text);
+    if (!privacyDecision.allowed) {
       this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
-      this.renderAskContextBlockedByUserExclusions();
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
     this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
@@ -24366,7 +24460,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     loadingEl.addClass("lina-fs-085");
     const activeProfile = this.getActiveTextAiProfile();
     const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, askContext.sourceLabel, askContext.text);
-    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path: activeFile.path,
+      content: askContext.text,
+      configDir: this.app.vault.configDir
+    });
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
       return;
     }
@@ -24446,66 +24546,17 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return text2.trim().split(/\s+/).filter(Boolean).length;
   }
   async runTagsCommand() {
-    var _a;
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian28.TFile)) {
-      new import_obsidian28.Notice(this.L.askNoActiveNote);
-      this.setStatus(this.L.askNoActiveNote);
-      return;
-    }
-    if (activeFile.extension !== "md") {
-      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
-      this.setStatus(this.L.analysisNonMarkdown);
-      return;
-    }
-    const commandContext = await this.resolveCommandContext(activeFile);
-    this.prepareAnalysisArea();
-    const analysisRunId = this.analysisRunId;
-    this.ensureAnalysisPanel(this.L.tagsResponseTitle, activeFile.basename);
-    if (!this.analysisResultEl) return;
-    this.analysisResultEl.empty();
-    this.analysisResultEl.addClass("lina-display-block");
-    this.currentAnalysisSourcePath = activeFile.path;
-    this.currentAnalysisScope = "single-note";
-    this.currentActiveFilePath = activeFile.path;
-    if (!commandContext.text) {
-      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
-      this.setStatus(this.L.analysisEmptyNote);
-      return;
-    }
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
-    if (!this.isAskContextAllowedForAi(commandContext.text)) {
-      this.renderAskContextBlockedByUserExclusions();
-      return;
-    }
-    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.tagsRunning });
-    loadingEl.addClass("lina-color-muted");
-    loadingEl.addClass("lina-fs-085");
-    const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildTagsCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
-    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
-    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
-      return;
-    }
-    this.analysisResultEl.empty();
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
-    if (!result2.success) {
-      const message = `${this.L.analysisGenericError}: ${result2.message}`;
-      this.analysisResultEl.createDiv({ text: message });
-      this.setStatus(message);
-      return;
-    }
-    const suggestedTags = this.parseTagsCommandResponse((_a = result2.text) != null ? _a : "");
-    if (suggestedTags.length === 0) {
-      this.analysisResultEl.createDiv({ text: this.L.tagsNoSuggestions });
-      this.setStatus(this.L.tagsNoSuggestions);
-      return;
-    }
-    await this.renderTagsCommandSuggestions(this.analysisResultEl, suggestedTags, commandContext.applyTarget);
-    this.setStatus(this.L.tagsSuggestionsReady);
+    await this.runTaxonomyCommand("tags");
   }
   async runYamlCommand() {
-    var _a;
+    await this.runTaxonomyCommand("yaml");
+  }
+  /**
+   * Uses the same local-first taxonomy runtime as single-note analysis while
+   * retaining the command's one-component presentation and apply flow.
+   */
+  async runTaxonomyCommand(kind) {
+    var _a, _b, _c, _d, _e, _f;
     const activeFile = this.app.workspace.getActiveFile();
     if (!(activeFile instanceof import_obsidian28.TFile)) {
       new import_obsidian28.Notice(this.L.askNoActiveNote);
@@ -24518,9 +24569,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       return;
     }
     const commandContext = await this.resolveCommandContext(activeFile);
+    const commandTitle = kind === "tags" ? this.L.tagsResponseTitle : this.L.yamlResponseTitle;
+    const contextSummaryTitle = kind === "tags" ? this.L.tagsContextSummaryTitle : this.L.yamlContextSummaryTitle;
+    const runningText = kind === "tags" ? this.L.tagsRunning : this.L.yamlRunning;
+    const noSuggestionsText = kind === "tags" ? this.L.tagsNoSuggestions : this.L.yamlNoSuggestions;
+    const readyText = kind === "tags" ? this.L.tagsSuggestionsReady : this.L.yamlSuggestionsReady;
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
-    this.ensureAnalysisPanel(this.L.yamlResponseTitle, activeFile.basename);
+    this.ensureAnalysisPanel(commandTitle, activeFile.basename);
     if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
@@ -24532,36 +24588,91 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       this.setStatus(this.L.analysisEmptyNote);
       return;
     }
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
-    if (!this.isAskContextAllowedForAi(commandContext.text)) {
-      this.renderAskContextBlockedByUserExclusions();
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, contextSummaryTitle);
+    const privacyDecision = this.evaluateAiPrivacyGate(activeFile.path, commandContext.text);
+    if (!privacyDecision.allowed) {
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
-    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.yamlRunning });
+    const taxonomyRuntime = await this.computeTaxonomyRuntime(activeFile.path);
+    const needsAi = kind === "tags" ? (_a = taxonomyRuntime == null ? void 0 : taxonomyRuntime.request.requestTags) != null ? _a : true : ((_b = taxonomyRuntime == null ? void 0 : taxonomyRuntime.request.requestedYamlProperties.length) != null ? _b : 1) > 0;
+    const localResult = reconcileTaxonomyRuntime(
+      taxonomyRuntime != null ? taxonomyRuntime : void 0,
+      [],
+      {},
+      this.plugin.settings.yamlAllowedProperties,
+      (_c = this.plugin.settings.maxSuggestedTags) != null ? _c : 8
+    );
+    if (!needsAi) {
+      if (!this.hasTaxonomyCommandSuggestions(kind, localResult)) {
+        this.analysisResultEl.createDiv({ text: noSuggestionsText });
+        this.setStatus(noSuggestionsText);
+        return;
+      }
+      await this.renderTaxonomyCommandSuggestions(kind, localResult, commandContext.applyTarget);
+      return;
+    }
+    const loadingEl = this.analysisResultEl.createDiv({ text: runningText });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
     const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildYamlCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
-    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const prompt = this.buildTaxonomyCommandPrompt(
+      kind,
+      activeFile.basename,
+      commandContext.sourceLabel,
+      commandContext.text,
+      taxonomyRuntime == null ? void 0 : taxonomyRuntime.request
+    );
+    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path: activeFile.path,
+      content: commandContext.text,
+      configDir: this.app.vault.configDir
+    });
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
       return;
     }
     this.analysisResultEl.empty();
-    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, contextSummaryTitle);
     if (!result2.success) {
+      const fallback = fallbackTaxonomyRuntime(
+        taxonomyRuntime != null ? taxonomyRuntime : void 0,
+        this.plugin.settings.yamlAllowedProperties,
+        (_d = this.plugin.settings.maxSuggestedTags) != null ? _d : 8
+      );
+      if (this.hasTaxonomyCommandSuggestions(kind, fallback)) {
+        await this.renderTaxonomyCommandSuggestions(kind, fallback, commandContext.applyTarget);
+        this.analysisResultEl.createDiv({
+          text: "A IA falhou; as sugest\xF5es locais de taxonomia continuam dispon\xEDveis para revis\xE3o.",
+          attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+        });
+        return;
+      }
       const message = `${this.L.analysisGenericError}: ${result2.message}`;
       this.analysisResultEl.createDiv({ text: message });
       this.setStatus(message);
       return;
     }
-    const suggestedYaml = this.parseYamlCommandResponse((_a = result2.text) != null ? _a : "");
-    if (Object.keys(suggestedYaml).length === 0) {
-      this.analysisResultEl.createDiv({ text: this.L.yamlNoSuggestions });
-      this.setStatus(this.L.yamlNoSuggestions);
+    const ai = this.parseTaxonomyCommandResponse((_e = result2.text) != null ? _e : "");
+    const reconciliation = reconcileTaxonomyRuntime(
+      taxonomyRuntime != null ? taxonomyRuntime : void 0,
+      kind === "tags" ? ai.tags : [],
+      kind === "yaml" ? ai.yaml : {},
+      this.plugin.settings.yamlAllowedProperties,
+      (_f = this.plugin.settings.maxSuggestedTags) != null ? _f : 8
+    );
+    const commandResult = reconciliation != null ? reconciliation : {
+      tags: ai.tags,
+      yaml: ai.yaml
+    };
+    if (!this.hasTaxonomyCommandSuggestions(kind, commandResult)) {
+      this.analysisResultEl.createDiv({ text: noSuggestionsText });
+      this.setStatus(noSuggestionsText);
       return;
     }
-    await this.renderYamlCommandSuggestions(this.analysisResultEl, suggestedYaml, commandContext.applyTarget);
-    this.setStatus(this.L.yamlSuggestionsReady);
+    await this.renderTaxonomyCommandSuggestions(kind, commandResult, commandContext.applyTarget);
+    this.setStatus(readyText);
   }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
@@ -24589,64 +24700,47 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       "<<<FIM_CONTEXTO>>>"
     ].join("\n");
   }
-  buildTagsCommandPrompt(noteTitle, contextSource, contextText) {
-    var _a;
+  buildTaxonomyCommandPrompt(kind, noteTitle, contextSource, contextText, taxonomyRequest) {
+    var _a, _b;
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
     const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
-    const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
-    return [
+    const tagsPrompt = [
       "Sugere apenas tags para o contexto abaixo.",
       "",
       "Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.",
       "N\xE3o sugiras YAML, links, tarefas, pasta, t\xEDtulo nem an\xE1lise geral.",
-      `Sugere no m\xE1ximo ${maxTags} tags.`,
+      `Sugere no m\xE1ximo ${(_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8} tags.`,
       "Usa tags curtas e \xFAteis para organiza\xE7\xE3o em Obsidian.",
       "Usa min\xFAsculas, sem acentos, sem #, com espa\xE7os convertidos para underscore.",
       "Evita tags gen\xE9ricas como projeto, sistema, nota, geral, texto ou conteudo.",
       "Se n\xE3o houver tags \xFAteis, devolve uma lista vazia.",
-      truncationNotice,
-      "",
+      `A taxonomia local ainda precisa de tags: ${(_b = taxonomyRequest == null ? void 0 : taxonomyRequest.requestTags) != null ? _b : true}.`,
       "Estrutura JSON obrigat\xF3ria:",
       "{",
       '  "tags": ["tag1", "tag2"]',
-      "}",
-      "",
-      `Origem do contexto: ${contextSource}`,
-      `T\xEDtulo da nota: ${noteTitle}`,
-      "",
-      "Contexto:",
-      "<<<CONTEXTO>>>",
-      truncatedContext,
-      "<<<FIM_CONTEXTO>>>"
-    ].join("\n");
-  }
-  parseTagsCommandResponse(aiText) {
-    var _a;
-    const { json } = extrairJsonDaResposta(aiText);
-    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
-    const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
-    return preserveTagIdentities(rawTags).slice(0, maxTags);
-  }
-  buildYamlCommandPrompt(noteTitle, contextSource, contextText) {
-    const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
-    const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
-    return [
+      "}"
+    ];
+    const yamlProperties = taxonomyRequest ? taxonomyRequest.requestedYamlProperties.join(", ") : this.plugin.settings.yamlAllowedProperties;
+    const yamlPrompt = [
       "Sugere apenas YAML/frontmatter para o contexto abaixo.",
       "",
       "Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.",
       "N\xE3o sugiras tags, links, tarefas, pasta, t\xEDtulo nem an\xE1lise geral.",
-      `Sugere apenas propriedades desta lista permitida: ${this.plugin.settings.yamlAllowedProperties}.`,
+      `Sugere apenas propriedades desta lista permitida: ${yamlProperties}.`,
+      `N\xE3o devolvas propriedades j\xE1 resolvidas localmente: ${(taxonomyRequest == null ? void 0 : taxonomyRequest.omittedYamlProperties.join(", ")) || "nenhuma"}.`,
       "Usa valores curtos, simples e apropriados para frontmatter Markdown.",
       "N\xE3o incluas a propriedade tags no objeto yaml.",
       "Se n\xE3o houver YAML \xFAtil, devolve um objeto vazio.",
-      truncationNotice,
-      "",
       "Estrutura JSON obrigat\xF3ria:",
       "{",
       '  "yaml": {',
       '    "propriedade": "valor"',
       "  }",
-      "}",
+      "}"
+    ];
+    return [
+      ...kind === "tags" ? tagsPrompt : yamlPrompt,
+      truncationNotice,
       "",
       `Origem do contexto: ${contextSource}`,
       `T\xEDtulo da nota: ${noteTitle}`,
@@ -24657,12 +24751,29 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       "<<<FIM_CONTEXTO>>>"
     ].join("\n");
   }
-  parseYamlCommandResponse(aiText) {
+  parseTaxonomyCommandResponse(aiText) {
+    var _a;
     const { json } = extrairJsonDaResposta(aiText);
-    if (!(json == null ? void 0 : json.yaml) || typeof json.yaml !== "object" || Array.isArray(json.yaml)) {
-      return {};
+    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
+    const rawYaml = (json == null ? void 0 : json.yaml) && typeof json.yaml === "object" && !Array.isArray(json.yaml) ? json.yaml : {};
+    return {
+      tags: preserveTagIdentities(rawTags).slice(0, (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8),
+      yaml: filterAllowedYamlProperties(rawYaml, this.plugin.settings.yamlAllowedProperties)
+    };
+  }
+  hasTaxonomyCommandSuggestions(kind, result2) {
+    var _a;
+    return kind === "tags" ? Boolean(result2 == null ? void 0 : result2.tags.length) : Object.keys((_a = result2 == null ? void 0 : result2.yaml) != null ? _a : {}).length > 0;
+  }
+  async renderTaxonomyCommandSuggestions(kind, result2, applyTarget) {
+    if (!this.analysisResultEl || !result2) return;
+    if (kind === "tags") {
+      await this.renderTagsCommandSuggestions(this.analysisResultEl, [...result2.tags], applyTarget);
+      this.setStatus(this.L.tagsSuggestionsReady);
+      return;
     }
-    return filterAllowedYamlProperties(json.yaml, this.plugin.settings.yamlAllowedProperties);
+    await this.renderYamlCommandSuggestions(this.analysisResultEl, result2.yaml, applyTarget);
+    this.setStatus(this.L.yamlSuggestionsReady);
   }
   getSelectedTextFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
@@ -27341,8 +27452,9 @@ ${this.createAnalysisCallout(analysisText)}
       });
       return;
     }
-    if (this.contentMatchesUserExclusion(content)) {
-      this.renderUserContentExcludedBlock();
+    const privacyDecision = this.evaluateAiPrivacyGate(currentFile.path, content);
+    if (!privacyDecision.allowed) {
+      this.renderAiPrivacyGateBlocked(privacyDecision);
       return;
     }
     const activeProfile = this.getActiveTextAiProfile();
@@ -27359,7 +27471,13 @@ ${this.createAnalysisCallout(analysisText)}
     this.pendingTaxonomyPlan = taxonomyRuntime ? { path: (0, import_obsidian28.normalizePath)(path), runtime: taxonomyRuntime } : null;
     const taxonomyRequest = taxonomyRuntime == null ? void 0 : taxonomyRuntime.request;
     const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes, taxonomyRequest) : this.buildCurrentNoteAnalysisPrompt(title, path, content, taxonomyRequest);
-    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    const result2 = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+      policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+      rules: this.plugin.getEffectiveExclusionRules(),
+      path,
+      content,
+      configDir: this.app.vault.configDir
+    });
     if (analysisRunId !== this.analysisRunId) {
       return;
     }
@@ -27480,15 +27598,22 @@ ${this.createAnalysisCallout(analysisText)}
           results.push({ file, error: "Nota vazia. A an\xE1lise foi ignorada." });
           continue;
         }
-        if (this.contentMatchesUserExclusion(content)) {
+        const privacyDecision = this.evaluateAiPrivacyGate(file.path, content);
+        if (!privacyDecision.allowed) {
           results.push({
             file,
-            error: this.L.inboxExcludedByUserRules
+            error: this.getAiPrivacyGateMessage(privacyDecision)
           });
           continue;
         }
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
-        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+          policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+          rules: this.plugin.getEffectiveExclusionRules(),
+          path: file.path,
+          content,
+          configDir: this.app.vault.configDir
+        });
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;
@@ -27609,15 +27734,22 @@ ${this.createAnalysisCallout(analysisText)}
           results.push({ file, error: "Nota vazia. A an\xE1lise foi ignorada." });
           continue;
         }
-        if (this.contentMatchesUserExclusion(content)) {
+        const privacyDecision = this.evaluateAiPrivacyGate(file.path, content);
+        if (!privacyDecision.allowed) {
           results.push({
             file,
-            error: this.L.inboxExcludedByUserRules
+            error: this.getAiPrivacyGateMessage(privacyDecision)
           });
           continue;
         }
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content, normalizedFolderPath);
-        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt, {
+          policyStatus: this.plugin.getCanonicalExclusionPolicyStatus(),
+          rules: this.plugin.getEffectiveExclusionRules(),
+          path: file.path,
+          content,
+          configDir: this.app.vault.configDir
+        });
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;
@@ -31104,10 +31236,6 @@ Provider calls: 0`);
    */
   async updateDeviceName(newName) {
     var _a, _b, _c, _d;
-    const role = this.getEffectiveDeviceRole();
-    if (role === "companion") {
-      throw new Error(this.L.settingsCompanionModeActive || "Companion devices cannot modify device state.");
-    }
     const deviceId = this.getDeviceId();
     const updated = await updateDeviceName(this.app.vault.adapter, deviceId, newName);
     this.localDeviceState = updated;

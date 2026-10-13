@@ -43,19 +43,17 @@ describe("experimental binary embedding settings", () => {
     }
   });
 
-  it("uses the configured Obsidian folder in the exclusion note for PT-PT, English, and fallback", () => {
-    const configDir = ".obsidian-escola";
-    const pt = getStrings("pt-PT").settingsExclusionsNote.replace("{configDir}", configDir);
-    const en = getStrings("en").settingsExclusionsNote.replace("{configDir}", configDir);
-    const fallback = getStrings().settingsExclusionsNote.replace("{configDir}", configDir);
+  it("documents the internal folders in the privacy note", () => {
+    const configDir = ".obsidian";
+    const pt = getStrings("pt-PT").settingsAutomaticExclusionsNote.replace("{configDir}", configDir);
+    const en = getStrings("en").settingsAutomaticExclusionsNote.replace("{configDir}", configDir);
+    const fallback = getStrings().settingsAutomaticExclusionsNote.replace("{configDir}", configDir);
     const rendererSource = readFileSync(resolve(process.cwd(), "src/settings/declarativeSettingRenderers.ts"), "utf8");
 
-    expect(pt).toBe("As pastas .lina/ e .obsidian-escola/ são sempre excluídas automaticamente.");
-    expect(en).toBe("The .lina/ and .obsidian-escola/ folders are always excluded automatically.");
+    expect(pt).toBe("As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.");
+    expect(en).toBe("The .lina/ and .obsidian/ folders are always excluded automatically.");
     expect(fallback).toBe(pt);
-    expect(pt).not.toContain(".obsidian/");
-    expect(en).not.toContain(".obsidian/");
-    expect(rendererSource).toContain('strings.settingsExclusionsNote.replace("{configDir}", configDir)');
+    expect(rendererSource).toContain('strings.settingsAutomaticExclusionsNote.replace("{configDir}", configDir)');
   });
 
   it("starts derived maintenance only after the canonical generation token is released", () => {

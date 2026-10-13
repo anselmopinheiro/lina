@@ -495,7 +495,7 @@ export function createSettingsRuntimeAdapters(
       return isStoredLocalValue(key, value) ? value : undefined;
     },
     async setLocalValue(key, value, requestedEffects) {
-      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel" || key === "deviceName")) {
+      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel")) {
         return { ok: false, error: "invalid-value" };
       }
       const normalized = normalizeLocalValue(key, value);

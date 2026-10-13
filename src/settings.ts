@@ -69,7 +69,6 @@ export {
 } from "./settings/declarativeGlobalSettings";
 
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-const DEVELOPMENT_BUILD_INFO_ID = "development-build-info";
 
 export type AIProvider = PureLocalProviderId;
 export type EmbeddingProvider = PureLocalProviderId;
@@ -853,61 +852,14 @@ export class LinaSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  private getGroupSummary(groupId: string, strings: UiStrings): string {
+  private getLandingDescription(groupId: string, strings: UiStrings): string | undefined {
     switch (groupId) {
-      case "general": {
-        const runtime = this.plugin.getDeviceRuntimeState();
-        const deviceName = runtime.deviceName ?? this.plugin.getDeviceName() ?? getLocalDeviceName();
-        let roleLabel = strings.settingsSummaryDeviceUnconfigured;
-        if (runtime.assignmentState === "assigned") {
-          if (runtime.effectiveRole === "companion") {
-            roleLabel = `📱 ${strings.settingsDeviceCompanionTitle}`;
-          } else {
-            roleLabel = runtime.isActiveProducer ? `🟢 ${strings.settingsDeviceProducerTitle}` : "⏸️ Standby Producer";
-          }
-        }
-        return deviceName ? `${roleLabel} · ${deviceName}` : roleLabel;
-      }
-      case "ai-analysis": {
-        const { provider, model } = resolveEffectiveAnalysisConfig(
-          { provider: getLocalAnalysisProvider(), model: getLocalAnalysisModel(), baseUrl: getLocalAnalysisBaseUrl() },
-          this.plugin.settings,
-        );
-        return `${provider} · ${model}`;
-      }
-      case "search": {
-        if (!this.plugin.settings.embeddingsEnabled) {
-          return `⚪ ${strings.settingsSummaryEmbeddingsDisabled}`;
-        }
-        const resolution = this.plugin.getDeviceRoleResolution();
-        if (resolution.effectiveRole === "companion") {
-          const contract = this.plugin.getEffectiveEmbeddingContract();
-          if (!contract) {
-            return `📱 ${strings.settingsDeviceCompanionTitle} (${strings.settingsSummaryNoContract})`;
-          }
-          return `📱 ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
-        }
-        const { provider, model } = resolveEffectiveEmbeddingsConfig(
-          { provider: getLocalEmbeddingsProvider(), model: getLocalEmbeddingsModel(), baseUrl: getLocalEmbeddingsBaseUrl() },
-          this.plugin.settings,
-        );
-        return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
-      }
-      case "producer": {
-        const runtime = this.plugin.getDeviceRuntimeState();
-        return runtime.isActiveProducer
-          ? `🟢 ${strings.settingsDeviceProducerTitle}`
-          : "⏸️ Standby Producer";
-      }
-      case "diagnostics": {
-        const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
-        const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
-        const storage = isBinary ? (isPt ? "Binário" : "Binary") : "JSONL";
-        const sync = this.plugin.settings.checkSyncOnStartup ? " · Sync ✓" : "";
-        return `${storage}${sync}`;
-      }
-      default:
-        return "";
+      case "general": return strings.settingsLandingGeneralDescription;
+      case "search": return strings.settingsLandingSearchDescription;
+      case "ai-analysis": return strings.settingsLandingAnalysisDescription;
+      case "privacy": return strings.settingsLandingPrivacyDescription;
+      case "diagnostics": return strings.settingsLandingDiagnosticsDescription;
+      default: return undefined;
     }
   }
 
@@ -925,13 +877,6 @@ export class LinaSettingTab extends PluginSettingTab {
       );
       this.introductionRenderers.set(language, introductionRenderer);
     }
-    const buildInfoCompatibilityDefinition: SettingDefinition & { id: string } = {
-      id: DEVELOPMENT_BUILD_INFO_ID,
-      name: strings.settingsBuild,
-      desc: LINA_DEVELOPMENT_BUILD_TIMESTAMP,
-      searchable: false,
-      visible: false,
-    };
     const introductionDefinition: SettingDefinition & { id: string } = {
       id: "support-introduction",
       name: strings.settingsTitle,
@@ -946,8 +891,6 @@ export class LinaSettingTab extends PluginSettingTab {
         const definition = "render" in item.definition ? { ...item.definition } : item.definition;
         return [definition];
       });
-      if (group.id === "general") items.push(buildInfoCompatibilityDefinition);
-
       if (group.id === "support-footer") {
         return {
           type: "group" as const,
@@ -962,14 +905,9 @@ export class LinaSettingTab extends PluginSettingTab {
         id: group.id,
         name: group.heading,
         heading: group.heading,
-        displayValue: this.getGroupSummary(group.id, strings),
+        desc: this.getLandingDescription(group.id, strings),
         items,
       };
-      const role = this.plugin.getDeviceRoleResolution().effectiveRole;
-      if (group.id === "producer") {
-        page.visible = role === "producer";
-        page.desc = strings.settingsDeviceProducerDesc;
-      }
       return page;
     });
   }
@@ -1208,6 +1146,10 @@ export class LinaSettingTab extends PluginSettingTab {
       getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract(),
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
       canEditExclusions: this.plugin.canEditExclusions(),
+      getCompanionExclusions: () => ({
+        status: this.plugin.getCanonicalExclusionPolicyStatus(),
+        rules: this.plugin.getEffectiveExclusionRules(),
+      }),
       onAssignDeviceRole: async (role) => {
         const wasLegacy = this.plugin.getDeviceRoleResolution().assignmentState === "legacy-fallback";
         await this.plugin.assignDeviceRole(role);

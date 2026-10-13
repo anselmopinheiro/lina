@@ -35,19 +35,22 @@ describe("C2 active settings structure and content", () => {
 
     expect(groups).toHaveLength(6);
     expect(ids).toEqual(expect.arrayContaining([
-      "support-introduction", "development-build-info",
+      "support-introduction",
       "device-description", "device-name", "analysis-credential", "test-analysis-connection",
-      "binary-status", "remove-binary-copy", "embeddings-credential", "support-link", "support-email",
+      "binary-status", "remove-binary-copy", "embeddings-credential", "support-link", "support-email", "support-project",
     ]));
     expect(groups[0].heading).toBe(getStrings("pt-PT").settingsGroupGeneral);
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupSearch)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupAnalysis)).toBeDefined();
-    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupProducer)).toBeDefined();
+    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupExclusions)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsSupportSection)).toBeDefined();
 
-    const buildInfo = groups[0].items.find((item) => (item as { id?: string }).id === "development-build-info");
-    expect(buildInfo).toMatchObject({ visible: false, searchable: false });
+    expect(groups[0].items.map((item) => (item as { id?: string }).id)).not.toContain("support-introduction");
+    const support = groups.find((group) => group.heading === getStrings("pt-PT").settingsSupportSection);
+    expect(support?.items.map((item) => (item as { id?: string }).id)).toEqual([
+      "support-introduction", "support-description", "support-link", "support-email", "support-project",
+    ]);
     expect(JSON.stringify(groups)).not.toContain("apiKey");
     tab.hide();
   });
@@ -60,26 +63,18 @@ describe("C2 active settings structure and content", () => {
     const tab = new LinaSettingTab(app, plugin);
     const groups = tab.getSettingDefinitions();
     const strings = getStrings("pt-PT");
-    const introduction = groups[0].items.find((item) => (item as { id?: string }).id === "support-introduction") as { render?: (setting: unknown, group: unknown) => void };
+    const support = groups.find((group) => group.heading === strings.settingsSupportSection);
+    const introduction = support?.items.find((item) => (item as { id?: string }).id === "support-introduction") as { render?: (setting: unknown, group: unknown) => void };
     const introductionRendered = createStaticRendererDouble();
     introduction.render?.(introductionRendered.setting, {});
 
     expect(introductionRendered.calls).toEqual({
       name: strings.settingsTitle,
       description: strings.settingsDescription,
-      elements: [
-        {
-          text: `${strings.settingsVersion}: ${plugin.manifest.version} · ${strings.settingsBuild}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`,
-          cls: "lina-mt-8",
-        },
-        { cls: "lina-mt-8" },
-        { tag: "span", text: `${strings.settingsSupportText} ` },
-        {
-          tag: "a",
-          text: strings.settingsSupportCoffeeButton,
-          attr: { href: "https://www.buymeacoffee.com/apinheiro", target: "_blank", rel: "noopener noreferrer" },
-        },
-      ],
+      elements: [{
+        text: `${strings.settingsVersion}: ${plugin.manifest.version} · ${strings.settingsBuild}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`,
+        cls: "lina-mt-8",
+      }],
     });
     expect(JSON.stringify(plugin.settings)).not.toContain(plugin.manifest.version);
     expect(JSON.stringify(plugin.settings)).not.toContain(LINA_DEVELOPMENT_BUILD_TIMESTAMP);

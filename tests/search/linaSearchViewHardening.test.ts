@@ -17,6 +17,17 @@ describe("LinaSearchView rename/mobile hardening", () => {
     expect(text).toContain("if (!this.viewOpen || !this.resultsStatusEl) return;");
   });
 
+  it("refreshes Consumer freshness only for producer-state changes and cancels queued work on close", () => {
+    const text = source();
+    expect(text).toContain("isProducerStateVaultChange");
+    expect(text).toContain('this.app.vault.on("create", requestProducerStateRefresh)');
+    expect(text).toContain('this.app.vault.on("modify", requestProducerStateRefresh)');
+    expect(text).toContain('this.app.vault.on("delete", requestProducerStateRefresh)');
+    expect(text).toContain('this.app.vault.on("rename", requestProducerStateRefresh)');
+    expect(text).toContain("this.producerStateRefreshDebouncer?.cancelAll();");
+    expect(text).toContain("void this.refreshState({ refreshSemanticAvailability: false });");
+  });
+
   it("keeps stale result opening defensive and prevents render-time file assumptions", () => {
     const text = source();
     expect(text).toContain("if (!(file instanceof TFile))");

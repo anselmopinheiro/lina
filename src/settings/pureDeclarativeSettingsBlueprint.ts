@@ -13,7 +13,7 @@ type BlueprintStrings = Pick<
   | "settingsGroupGeneral"
   | "settingsGroupSearch"
   | "settingsGroupAnalysis"
-  | "settingsGroupProducer"
+  | "settingsGroupExclusions"
   | "settingsGroupDiagnostics"
   | "settingsSupportSection"
 >;
@@ -22,12 +22,10 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
   return [
     // 1. Geral e Dispositivo
     group("general", strings.settingsGroupGeneral, [
-      item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
     ]),
 
     // 2. Pesquisa e Embeddings. Provider/model render as contract information on Companion.
@@ -62,23 +60,24 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
     ]),
 
-    // 4. Producer-only work and publication controls.
-    group("producer", strings.settingsGroupProducer, [
-      item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+    // 4. Privacy and exclusions: editable on the Producer, read-only elsewhere.
+    group("privacy", strings.settingsGroupExclusions, [
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+    ]),
+
+    // 5. Sistema e Diagnóstico, including Producer maintenance controls.
+    group("diagnostics", strings.settingsGroupDiagnostics, [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
       item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"]),
-    ]),
-
-    // 5. Sistema e Diagnóstico
-    group("diagnostics", strings.settingsGroupDiagnostics, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
@@ -86,11 +85,13 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
     ]),
 
-    // Suporte (3 items)
+    // Suporte
     group("support-footer", strings.settingsSupportSection, [
+      item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
       item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+      item("support-project", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
     ]),
   ];
 }

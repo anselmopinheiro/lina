@@ -28,8 +28,10 @@ import {
   createDetachedProviderModelSettingDefinitions,
   createSupportActionRenderer,
   createSupportEmailRenderer,
+  BUY_ME_A_COFFEE_URL,
   SUPPORT_FORM_URL,
   createDetachedStaticTextRenderer,
+  type CompanionExclusionsReadOnlyState,
   type DetachedGlobalKey,
   type DetachedGlobalValue,
   type DetachedLocalKey,
@@ -110,6 +112,7 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   getEffectiveEmbeddingContract?: () => VectorContractV1 | null;
   deviceRoleResolution?: DeviceRoleResolution;
   canEditExclusions?: boolean;
+  getCompanionExclusions?: () => CompanionExclusionsReadOnlyState;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
   onChangeDeviceRole?: () => void;
 }
@@ -317,6 +320,8 @@ export function createDeclarativeSettingsCandidateComposition(
     embeddingsBaseUrlPlaceholder: baseUrlFor(effectiveAiConfig, "embeddingsBaseUrl"),
   });
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
+  const isCompanionDevice = (): boolean =>
+    (options.getEffectiveDeviceRole?.() ?? options.runtimeHost.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion";
   const staticDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
     {
@@ -348,11 +353,13 @@ export function createDeclarativeSettingsCandidateComposition(
       visible: true,
       render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription),
     },
-    ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir)
-      .map((definition) => addDefinitionId("exclusions-note", {
-        ...definition,
-        visible: () => (options.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion",
-      })),
+    ...createDetachedInformationalSettingDefinitions(
+      options.strings,
+      options.configDir,
+      // Companion: effective rules, read-only. Other roles: a single header note.
+      () => (isCompanionDevice() ? options.getCompanionExclusions?.() : undefined),
+      isCompanionDevice,
+    ).map((definition) => addDefinitionId("exclusions-note", { ...definition, visible: true })),
   ];
   const supportDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     {
@@ -373,6 +380,18 @@ export function createDeclarativeSettingsCandidateComposition(
       desc: options.strings.settingsSupportEmailDescription,
       visible: true,
       render: createSupportEmailRenderer(options.strings),
+    },
+    {
+      id: "support-project",
+      name: options.strings.settingsSupportProject,
+      desc: options.strings.settingsSupportProjectDescription,
+      visible: true,
+      render: createSupportActionRenderer(
+        options.strings.settingsSupportProject,
+        options.strings.settingsSupportProjectDescription,
+        options.strings.settingsSupportProjectButton,
+        BUY_ME_A_COFFEE_URL,
+      ),
     },
   ];
 
@@ -495,16 +514,13 @@ export function createDeclarativeSettingsCandidateComposition(
     let desc = definition.desc;
     if (isCompanionMode) {
       desc = `${options.strings.settingsCompanionModeActive} — ${options.strings.settingsCompanionModeDesc}`;
-    } else if (exclusionDisabled) {
-      const baseDesc = typeof definition.desc === "string" ? definition.desc : "";
-      desc = baseDesc
-        ? `${baseDesc} — ${options.strings.settingsExcludedManagedByActiveProducer}`
-        : options.strings.settingsExcludedManagedByActiveProducer;
     }
     const disabled = isCompanionMode || exclusionDisabled || (definition.control.disabled ?? false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
       desc,
+      // On a Companion the effective rules are shown once, read-only, by the privacy note.
+      ...(isExclusionControl(id) ? { visible: () => !isCompanionDevice() } : {}),
       control: {
         ...definition.control,
         disabled,
@@ -523,8 +539,8 @@ export function createDeclarativeSettingsCandidateComposition(
   const addLocalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as PureLocalSettingKey;
-    const isCompanion = (options.getEffectiveDeviceRole?.() ?? options.runtimeHost.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion";
-    const disabled = (isCompanion && id === "device-name") || (definition.control.disabled ?? false);
+    // The device name is a local property of this device (its own device-state file): editable on every role.
+    const disabled = definition.control.disabled ?? false;
     const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {

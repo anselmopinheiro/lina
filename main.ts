@@ -1157,10 +1157,7 @@ export default class LinaPlugin extends Plugin {
    * Does NOT alter ownership.json.
    */
   async updateDeviceName(newName?: string): Promise<DeviceState> {
-    const role = this.getEffectiveDeviceRole();
-    if (role === "companion") {
-      throw new Error(this.L.settingsCompanionModeActive || "Companion devices cannot modify device state.");
-    }
+    // Local, device-scoped property: every role may rename its own device (writes only its own device-state file).
     const deviceId = this.getDeviceId();
     const updated = await updateDeviceName(this.app.vault.adapter, deviceId, newName);
     this.localDeviceState = updated;

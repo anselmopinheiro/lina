@@ -451,7 +451,6 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
 
       expect(folderDef).toBeDefined();
       expect(folderDef.control?.disabled).toBe(true);
-      expect(folderDef.desc).toContain("Gerido pelo Produtor Ativo");
 
       // Valores recebidos da política canónica são exibidos
       expect(tab.getControlValue("indexExcludedFolders")).toBe("shared-vault-folder/");
@@ -485,7 +484,6 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
       };
 
       expect(folderDef?.control?.disabled).toBe(true);
-      expect(folderDef?.desc).toContain("Gerido pelo Produtor Ativo");
       tab.hide();
     });
 

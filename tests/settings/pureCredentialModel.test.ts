@@ -108,7 +108,7 @@ describe("pure credential model", () => {
     expect(JSON.stringify(adapter)).not.toContain("SUPER_SECRET_SENTINEL");
   });
 
-  it("keeps 9L connection descriptors redacted and the blueprint at 49 ready items", () => {
+  it("keeps 9L connection descriptors redacted and the blueprint at 50 ready items", () => {
     const actionStrings = {
       testConnection: strings.settingsTestConnection, testEmbeddingsConnection: strings.settingsTestEmbeddingsConnection,
       testingConnection: strings.settingsTestingConnection, connectionSuccess: strings.settingsConnectionSuccess,
@@ -124,6 +124,6 @@ describe("pure credential model", () => {
     });
     expect(Object.keys(descriptors[0].inputs)).toEqual(["provider", "baseUrl", "model", "credentialAvailable", "timeout"]);
     const blueprint = assessDeclarativeSettingsParity(createPureDeclarativeSettingsBlueprint(strings));
-    expect(blueprint).toMatchObject({ totalCount: 49, readyCount: 49, unresolvedCount: 0, complete: true });
+    expect(blueprint).toMatchObject({ totalCount: 50, readyCount: 50, unresolvedCount: 0, complete: true });
   });
 });

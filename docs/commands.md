@@ -19,7 +19,7 @@ meeting notes
 - Reserved commands that are not implemented show a short "not available" message.
 - Unknown commands show a short "not recognized" message.
 - Contextual AI commands must respect configured content exclusions.
-- Contextual commands recheck the final context immediately before contacting the AI provider. If the selected text, preserved selection, or current note matches excluded content terms, nothing is sent.
+- Contextual commands recheck the final context immediately before contacting the AI provider. If the note matches an excluded folder or path term, the selected text, preserved selection or current note matches excluded content terms, or the exclusion policy cannot be validated, nothing is sent.
 - Commands must not modify notes without an explicit confirmation flow.
 - Applying an `/ask` response is blocked if the active note is no longer the note that provided the context, if the saved selection no longer matches the current content, or if the current note content matches configured exclusions.
 - Applying `/tags` or `/yaml` suggestions is blocked if the active note is no longer the note that provided the context, or if the current note content matches configured exclusions.
@@ -44,7 +44,7 @@ Context selection:
 - If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
-- If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
+- The Privacy Gate runs before the request is sent: if the note matches an excluded folder or path term, or the chosen context matches an excluded content term, or the exclusion policy cannot be validated, the request is blocked and nothing is sent to the provider.
 - The panel shows safe context metadata: source, note name, size, exclusion recheck state, and whether truncation applies. It does not show the selected or note content as a context preview.
 
 Output:
@@ -60,13 +60,15 @@ Output:
 
 Suggests tags for the current context.
 
+Suggestions use the same local-first taxonomy engine as the sidebar note analysis: the vocabulary already used by semantically related notes of the active note is the primary source, and the AI is asked only to fill what that evidence does not cover. Related-note evidence is gathered for the active note, even when you selected only part of it. When no related-note evidence is available, the AI decides alone.
+
 Context selection:
 
 - If the active Markdown editor has selected text, Lina sends only that selected text.
 - If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
-- If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
+- The Privacy Gate runs before the request is sent: if the note matches an excluded folder or path term, or the chosen context matches an excluded content term, or the exclusion policy cannot be validated, the request is blocked and nothing is sent to the provider.
 - The panel shows safe context metadata and does not show the selected or note content as a context preview.
 
 Output:
@@ -82,13 +84,15 @@ Output:
 
 Suggests YAML/frontmatter fields for the current context.
 
+Suggestions use the same local-first taxonomy engine as the sidebar note analysis (see `/tags`). `/tags` and `/yaml` are suggestion commands for the active note, not search modes.
+
 Context selection:
 
 - If the active Markdown editor has selected text, Lina sends only that selected text.
 - If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
-- If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
+- The Privacy Gate runs before the request is sent: if the note matches an excluded folder or path term, or the chosen context matches an excluded content term, or the exclusion policy cannot be validated, the request is blocked and nothing is sent to the provider.
 - The panel shows safe context metadata and does not show the selected or note content as a context preview.
 
 Output:

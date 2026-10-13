@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.2] - Alpha (unreleased)
+
+0.3.2 is a consolidation, robustness and coherence release. It does not change the Producer + Companion model.
+
+### Added
+- **Privacy Gate for AI requests:** one central check runs immediately before any vault content is sent to a text AI provider (`/ask`, `/tags`, `/yaml`, note analysis, related-note context, folder and Inbox analysis). It applies the effective exclusion rules (excluded folders, excluded path terms, excluded content terms) and **blocks the request when the exclusion policy cannot be validated** (missing or invalid). Blocked requests show a message and nothing is sent.
+- **Privacy & Exclusions settings page:** the exclusion rules (folders, path terms, content terms) have their own page instead of sharing General / Producer. Companion devices show the effective rules read-only, in a single column that fits mobile screens, with one notice that they are managed by the Producer. If the synchronized policy is missing or invalid, Lina says so instead of showing placeholder values.
+- **Local-first taxonomy engine for Tags and YAML:** tag and frontmatter suggestions use the vocabulary already used by semantically related notes in the vault and ask the AI only to fill what that evidence does not cover. Hierarchical tags (`a/b`) are preserved as written.
+
+### Changed
+- **`/tags` and `/yaml` use the same taxonomy engine as the sidebar note analysis**, instead of a separate prompt-only pipeline. They remain suggestion commands: nothing is written to a note without explicit confirmation.
+- Search and analysis panel presentation refined (analysis results, status area).
+- Semantic search runtime stabilized.
+- Embedding configuration semantics aligned with the runtime: effective provider/model/Base URL come from a single resolution; "local" is decided by the effective endpoint, not by provider name; embedding updates are always incremental.
+
+### Fixed
+- **Device name on Companion:** the local device name can now be edited on Companion devices (it is a property of the device's own state and does not depend on the Producer or on exclusion permissions).
+- **Producer freshness:** the "no Producer activity" alert is no longer shown on the active Producer itself. After a successful incremental text-index publication the Producer now records `updatedAt` and the publication time in `producer-state.json`, and a Companion re-reads the synchronized `producer-state.json` when it changes (observed by file metadata about every 30 s while the panel is visible, when the panel becomes active, and by vault events) instead of keeping an outdated "no Producer activity for more than 48 h" warning until the panel is reopened.
+- Embedding and manifest persistence hardened: crash-safe shared-manifest publication, ownership-epoch fencing of durable writes, validation and recovery of the canonical embeddings/manifest pair, and coordinated purge and publication.
+- Large canonical embedding files are no longer treated as corruption; they require a confirmed rebuild instead of blocking the Producer.
+
+### Internal
+- Producer-local SQLite store and immutable published-generation publication groundwork (M0–M6). Disabled by default and not part of the normal user workflow in this release.
+- Documentation baseline consolidated and outdated documents archived.
+
 ## [0.3.1] - 2026-09-28
 
 ### Added

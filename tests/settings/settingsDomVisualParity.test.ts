@@ -136,8 +136,8 @@ describe("settings DOM and visual parity", () => {
       const diagnostic = candidate.getDiagnosticSnapshot();
       expect(diagnostic).toMatchObject({
         groupCount: 6,
-        itemCount: 49,
-        boundDefinitionCount: 49,
+        itemCount: 50,
+        boundDefinitionCount: 50,
         incompleteIds: [],
       });
       const remove = candidate.definitions.find((definition) => definition.id === "remove-binary-copy");

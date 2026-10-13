@@ -84,6 +84,7 @@ export interface UiStrings {
   askNoActiveNote: string;
   askEmptyPrompt: string;
   askExcludedByUserRules: string;
+  aiPrivacyPolicyUnavailable: string;
   askResponseTitle: string;
   askRunning: string;
   askContextSelection: string;
@@ -514,6 +515,11 @@ export interface UiStrings {
   settingsGroupSynchronization: string;
   settingsGroupDiagnostics: string;
   settingsGroupAdvanced: string;
+  settingsLandingGeneralDescription: string;
+  settingsLandingSearchDescription: string;
+  settingsLandingAnalysisDescription: string;
+  settingsLandingPrivacyDescription: string;
+  settingsLandingDiagnosticsDescription: string;
   settingsSummaryDeviceUnconfigured: string;
   settingsSummaryEmbeddingsEnabled: string;
   settingsSummaryEmbeddingsDisabled: string;
@@ -711,6 +717,11 @@ export interface UiStrings {
   settingsExcludedContentTerms: string;
   settingsExcludedContentTermsDesc: string;
   settingsExcludedManagedByActiveProducer: string;
+  settingsCompanionExclusionsManaged: string;
+  settingsCompanionExclusionsUnavailable: string;
+  settingsPrivacyIntroTitle: string;
+  settingsPrivacyIntro: string;
+  settingsAutomaticExclusionsNote: string;
   settingsEmbeddingManagedByProducer: string;
   settingsEmbeddingDefinedByProducer: string;
   settingsEmbeddingNoActiveProducerDesc: string;
@@ -746,6 +757,9 @@ export interface UiStrings {
   settingsSupportEmailCopyButton: string;
   settingsSupportEmailButton: string;
   settingsSupportEmailCopySuccess: string;
+  settingsSupportProject: string;
+  settingsSupportProjectDescription: string;
+  settingsSupportProjectButton: string;
 
   // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: string;
@@ -1139,6 +1153,7 @@ const PT_PT: UiStrings = {
   askNoActiveNote: "Abra uma nota antes de usar este comando.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conteúdo corresponde às exclusões configuradas e não será enviado à IA.",
+  aiPrivacyPolicyUnavailable: "Não foi possível validar as regras de exclusão. O conteúdo não foi enviado para a IA.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta à IA...",
   askContextSelection: "seleção",
@@ -1549,6 +1564,11 @@ const PT_PT: UiStrings = {
   settingsGroupSynchronization: "Sincronização",
   settingsGroupDiagnostics: "Sistema e Diagnóstico",
   settingsGroupAdvanced: "Avançado",
+  settingsLandingGeneralDescription: "Idioma, função e identidade deste dispositivo.",
+  settingsLandingSearchDescription: "Pesquisa textual, semântica e configuração de embeddings.",
+  settingsLandingAnalysisDescription: "Provider, modelo e comportamento do assistente.",
+  settingsLandingPrivacyDescription: "Regras de indexação e proteção do conteúdo enviado para IA.",
+  settingsLandingDiagnosticsDescription: "Estado, manutenção e ferramentas de diagnóstico.",
   settingsSummaryDeviceUnconfigured: "Não configurado",
   settingsSummaryEmbeddingsEnabled: "Ativado",
   settingsSummaryEmbeddingsDisabled: "Desativado",
@@ -1703,12 +1723,14 @@ const PT_PT: UiStrings = {
   settingsDebugIndexDesc: "Mostra informação de diagnóstico sobre eventos do vault e atualização automática do índice.",
   settingsExclusionsSection: "Exclusões do índice",
   settingsExcludedFolders: "Pastas excluídas",
-  settingsExcludedFoldersDesc: "Uma pasta por linha. As notas dentro destas pastas não entram no índice do Lina.",
-  settingsExcludedTerms: "Termos excluídos no caminho",
-  settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.",
-  settingsExcludedContentTerms: "Termos excluídos no conteúdo",
-  settingsExcludedContentTermsDesc: "Um termo por linha, vírgula ou ponto e vírgula. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
+  settingsExcludedFoldersDesc: "Uma pasta por linha. As notas abrangidas não são indexadas nem enviadas para IA.",
+  settingsExcludedTerms: "Termos bloqueados no caminho",
+  settingsExcludedTermsDesc: "Um termo por linha. As notas cujo caminho corresponda não são indexadas nem enviadas para IA.",
+  settingsExcludedContentTerms: "Termos bloqueados no conteúdo",
+  settingsExcludedContentTermsDesc: "Um termo por linha, vírgula ou ponto e vírgula. As notas abrangidas não são indexadas nem enviadas para IA.",
   settingsExcludedManagedByActiveProducer: "Gerido pelo Produtor Ativo",
+  settingsCompanionExclusionsManaged: "No Companion, estas regras são apenas de leitura e são geridas no Producer.",
+  settingsCompanionExclusionsUnavailable: "A política de exclusões sincronizada não está disponível ou não é válida. Não são mostrados valores locais fictícios.",
   settingsEmbeddingManagedByProducer: "Gerido pelo Produtor Ativo",
   settingsEmbeddingDefinedByProducer: "Embeddings definidos pelo Producer",
   settingsEmbeddingNoActiveProducerDesc: "Nenhum Producer ativo definiu o contrato de embeddings.",
@@ -1719,7 +1741,10 @@ const PT_PT: UiStrings = {
   settingsEmbeddingContractUnavailable: "Indisponível (sem contrato)",
   semanticEmbeddingsUnavailableNoContract: "A pesquisa semântica está indisponível: este dispositivo Companion não tem um contrato de embeddings válido do Produtor.",
   settingsSummaryNoContract: "Sem contrato",
-  settingsExclusionsNote: "As pastas .lina/ e {configDir}/ são sempre excluídas automaticamente.",
+  settingsPrivacyIntroTitle: "Como funcionam estas regras",
+  settingsPrivacyIntro: "Estas regras impedem que as notas abrangidas sejam indexadas pelo Lina e que o seu conteúdo seja enviado para a IA. Como não são indexadas, também não participam na pesquisa nem nos embeddings.",
+  settingsAutomaticExclusionsNote: "As pastas .lina/ e {configDir}/ são sempre excluídas automaticamente.",
+  settingsExclusionsNote: "Como funcionam estas regras",
   settingsHybridSection: "Pesquisa híbrida",
   settingsTextWeight: "Peso da pesquisa textual",
   settingsTextWeightDesc: "Peso usado na pontuação final da pesquisa híbrida. Valor entre 0 e 1.",
@@ -1734,16 +1759,19 @@ const PT_PT: UiStrings = {
   settingsYamlIncludeTagsDesc: "Se ativo, o YAML sugerido inclui uma lista de tags. Não altera notas; apenas mostra sugestões.",
   settingsMaxTags: "Máximo de tags sugeridas",
   settingsMaxTagsDesc: "Número máximo de tags a sugerir no YAML e na lista de tags.",
-  settingsSupportSection: "Support",
-  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
-  settingsSupportLink: "Support form",
-  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
-  settingsSupportFormButton: "Open form",
-  settingsSupportEmail: "Email support",
-  settingsSupportEmailDescription: "Contact support directly by email.",
-  settingsSupportEmailCopyButton: "Copy email",
-  settingsSupportEmailButton: "Send email",
-  settingsSupportEmailCopySuccess: "Email address copied.",
+  settingsSupportSection: "Ajuda e suporte",
+  settingsSupportDescription: "Documentação, reporte de problemas e apoio ao projeto.",
+  settingsSupportLink: "Reportar problema ou pedir ajuda",
+  settingsSupportFormDescription: "Abra o formulário de suporte.",
+  settingsSupportFormButton: "Abrir formulário",
+  settingsSupportEmail: "Contacto por email",
+  settingsSupportEmailDescription: "Contacte o suporte diretamente por email.",
+  settingsSupportEmailCopyButton: "Copiar email",
+  settingsSupportEmailButton: "Enviar email",
+  settingsSupportEmailCopySuccess: "Endereço de email copiado.",
+  settingsSupportProject: "Apoiar o projeto",
+  settingsSupportProjectDescription: "Contribua para o desenvolvimento do Lina.",
+  settingsSupportProjectButton: "Apoiar",
 
   semanticModalTitle: "Pesquisar semanticamente",
   semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
@@ -2133,6 +2161,7 @@ const EN: UiStrings = {
   askNoActiveNote: "Open a note before using this command.",
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
+  aiPrivacyPolicyUnavailable: "The exclusion rules could not be validated. Content was not sent to AI.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
@@ -2533,15 +2562,20 @@ const EN: UiStrings = {
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General & Device",
+  settingsLandingGeneralDescription: "Language, role and identity for this device.",
   settingsGroupDeviceProducer: "Device & Producer",
   settingsGroupSearch: "Search & Embeddings",
+  settingsLandingSearchDescription: "Textual and semantic search, plus embedding configuration.",
   settingsGroupAnalysis: "AI Assistant",
+  settingsLandingAnalysisDescription: "Provider, model and assistant behaviour.",
   settingsGroupEmbeddings: "Semantic Search & Embeddings",
   settingsGroupExclusions: "Privacy & Exclusion Rules",
+  settingsLandingPrivacyDescription: "Indexing rules and protection for content sent to AI.",
   settingsGroupProducer: "Producer",
   settingsGroupCompanion: "Companion",
   settingsGroupSynchronization: "Synchronization",
   settingsGroupDiagnostics: "System & Diagnostics",
+  settingsLandingDiagnosticsDescription: "Status, maintenance and diagnostic tools.",
   settingsGroupAdvanced: "Advanced",
   settingsSummaryDeviceUnconfigured: "Not configured",
   settingsSummaryEmbeddingsEnabled: "Enabled",
@@ -2697,12 +2731,14 @@ const EN: UiStrings = {
   settingsDebugIndexDesc: "Shows diagnostic information about vault events and automatic index updates.",
   settingsExclusionsSection: "Exclusions",
   settingsExcludedFolders: "Excluded folders",
-  settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
-  settingsExcludedTerms: "Excluded path terms",
-  settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
-  settingsExcludedContentTerms: "Excluded content terms",
-  settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedFoldersDesc: "One folder per line. Matching notes are not indexed or sent to AI.",
+  settingsExcludedTerms: "Blocked path terms",
+  settingsExcludedTermsDesc: "One term per line. Notes whose path matches are not indexed or sent to AI.",
+  settingsExcludedContentTerms: "Blocked content terms",
+  settingsExcludedContentTermsDesc: "One term per line. Notes whose content matches are not indexed or sent to AI.",
   settingsExcludedManagedByActiveProducer: "Managed by the Active Producer",
+  settingsCompanionExclusionsManaged: "On Companion, these rules are read-only and managed on the Producer.",
+  settingsCompanionExclusionsUnavailable: "The synchronized exclusion policy is unavailable or invalid. Local placeholder values are not shown.",
   settingsEmbeddingManagedByProducer: "Managed by the Active Producer",
   settingsEmbeddingDefinedByProducer: "Embeddings defined by the Producer",
   settingsEmbeddingNoActiveProducerDesc: "No active Producer has defined the embeddings contract.",
@@ -2713,7 +2749,10 @@ const EN: UiStrings = {
   settingsEmbeddingContractUnavailable: "Unavailable (no contract)",
   semanticEmbeddingsUnavailableNoContract: "Semantic search is unavailable: this Companion device does not have a valid embedding contract from the Producer.",
   settingsSummaryNoContract: "No contract",
-  settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
+  settingsPrivacyIntroTitle: "How these rules work",
+  settingsPrivacyIntro: "These rules prevent matching notes from being indexed by Lina and their content from being sent to AI. Because they are not indexed, they also do not take part in search or embeddings.",
+  settingsAutomaticExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
+  settingsExclusionsNote: "How these rules work",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
   settingsTextWeightDesc: "Weight used in the hybrid search final score. Value between 0 and 1.",
@@ -2729,15 +2768,18 @@ const EN: UiStrings = {
   settingsMaxTags: "Maximum suggested tags",
   settingsMaxTagsDesc: "Maximum number of tags to suggest in YAML and the tag list.",
   settingsSupportSection: "Support",
-  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
-  settingsSupportLink: "Support form",
-  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
+  settingsSupportDescription: "Documentation, issue reporting and project support.",
+  settingsSupportLink: "Report a problem or ask for help",
+  settingsSupportFormDescription: "Open the support form.",
   settingsSupportFormButton: "Open form",
   settingsSupportEmail: "Email support",
   settingsSupportEmailDescription: "Contact support directly by email.",
   settingsSupportEmailCopyButton: "Copy email",
   settingsSupportEmailButton: "Send email",
   settingsSupportEmailCopySuccess: "Email address copied.",
+  settingsSupportProject: "Support the project",
+  settingsSupportProjectDescription: "Help sustain Lina's development.",
+  settingsSupportProjectButton: "Buy Me a Coffee",
 
   // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: "Search semantically",

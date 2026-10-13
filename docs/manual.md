@@ -4,7 +4,7 @@ Lina is a privacy-first note assistant and search engine for Obsidian, focused o
 
 Local text search works immediately with no AI provider or API key. AI is optional. **Ollama**, **Mistral**, and **OpenRouter** support analysis and embeddings.
 
-Current version: **0.3.1**.
+Current version: **0.3.2 (Alpha)**.
 
 ---
 
@@ -150,36 +150,30 @@ The sidebar search bar supports slash commands in English:
 
 ### 4.1 Settings Organization (Native Obsidian Pages Hub)
 
-Lina organizes its complete 50-setting catalog using Obsidian's native pages architecture (`SettingDefinitionPage`), structured around a root navigation hub:
+Lina organizes its settings using Obsidian's native pages architecture (`SettingDefinitionPage`), structured around a root navigation hub:
 
 ```text
 › Geral / General (Native Page)
   ├── Plugin identity, build, interface language, and multilingual guidance
-  └── Current device role and friendly local device name
+  └── Current device role and friendly local device name (editable on every device)
 
 › Pesquisa / Search (Native Page)
-  ├── Semantic search availability, published/inherited vector identity, and language
-  └── Hybrid result weighting
+  ├── Semantic search enablement, provider, model, endpoint, credential and connection test
+  └── Search language and hybrid result weighting
 
-› 🤖 Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
+› Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
   ├── Provider, model, endpoint, secure API credentials, timeout, and connection test
   └── Inbox and its limit, plus YAML/tag behaviour
 
-› Produtor / Producer (Native Page — conditional)
-  ├── Embedding update policy, batch, exclusion rules, and index maintenance
+› Privacidade e Exclusões / Privacy & Exclusions (Native Page)
+  └── Excluded folders, path terms and content terms: editable on the Producer, read-only on a Companion
+
+› Produtor / Producer (Native Page — Producer devices only)
+  ├── Embedding update policy, batch, and index maintenance
   └── Binary maintenance/create/remove actions, subject to existing ownership guards
 
-› Companion (Native Page — conditional)
-  └── Companion-mode context and received exclusion-policy information; contract identity remains in Pesquisa / Search
-
-› Sincronização / Synchronization (Native Page)
-  └── Provider-neutral startup verification preference
-
 › Diagnóstico / Diagnostics (Native Page)
-  └── Current device identity, binary-index warning/status, verification, and binary-read preference
-
-› Avançado / Advanced (Native Page)
-  └── Debug and other future rare technical parameters without a functional home
+  └── Startup synchronisation check, device identity, binary-index warning/status, binary-read preference, and debug
 
 Support & Contact (Root Hub Footer)
 ├── Feedback Form Link
@@ -442,23 +436,15 @@ Lina's multi-device architecture is designed around the **Desktop Producer / Mob
 #### Canonical Vault Data vs. Local Plugin Installation
 Lina strictly distinguishes between shared vault data and device-local plugin files:
 - **`.lina/` (Shared Canonical Vault Data):** Contains canonical search indices, vector embeddings, exclusion policies (`.lina/exclusions.json`), and ownership manifests (`.lina/ownership.json`). These files are designed to be synchronized across participating devices.
-- **`.lina/producer/` (Producer Operational Area):** Contains checkpoints, staging candidates, rollback backups, and other operational data. It is never consumed by Companion and is not intended for synchronization; only validated artifacts in `.lina/index/` are published. It remains inside the vault today, so its exclusion currently depends on correct external synchronization policies rather than a guaranteed private-storage boundary.
-- **Binary publication:** The binary manifest, metadata, and vector buffer are published only after validation. Their staging candidates and rollback backups remain under `.lina/producer/`, never in the Companion-facing index directory, and require the same external synchronization exclusion.
+- **`.lina/producer/` (Producer operational data):** Checkpoints, staging candidates and rollback backups used by the Producer. Companions do not consume it, but it is part of `.lina/` and is synchronised with the rest of the folder like everything else under `.lina/`.
 - **`.obsidian/plugins/lina/` (Local Device Configuration):** Contains the plugin code and `data.json`, which holds local device configuration and preferences. It is not shared configuration or a multi-device authority. **Syncing `.obsidian/plugins/lina/data.json` across devices is not recommended** to avoid whole-file write collisions.
 - **Credentials:** API keys are never written to any file; they reside exclusively in the local host's `app.secretStorage` (OS keychain).
 
 Lina is **synchronization-provider agnostic**, operating reliably across Obsidian Sync, Syncthing, iCloud, Git, or manual file sync without relying on proprietary transport mechanisms.
 
-When syncing vaults across devices via file-synchronization tools such as Syncthing, use the following recommended `.stignore` configuration:
+**Synchronise the whole `.lina` folder.** The `.lina` folder and all of its content, files and subfolders, must be synchronised between the Producer and every Companion. Do not create exclusion lists for `.lina` or any part of it: excluding it, or part of it, breaks the Producer–Companion model.
 
-```text
-/<configDir>*
-/.trash/
-/.lina/producer/
-*.tmp
-*.sync-conflict-*
-```
-*(where `<configDir>` is your vault's active config folder, default `.obsidian`)*
+If you use a tool such as Syncthing, keep your ignore rules for other things (for example the Obsidian configuration folder, the trash and temporary or conflict files) and make sure none of them match `.lina`.
 
 #### Sync Matrix Summary
 
@@ -468,6 +454,7 @@ When syncing vaults across devices via file-synchronization tools such as Syncth
 | **`.lina/exclusions.json`** | ✅ Yes | Canonical Exclusion Policy managed by Active Producer; consumed read-only on Companion. |
 | **`.lina/ownership.json`** | ✅ Yes | Coordinated Single-Active-Producer authority manifest with monotonic epoch fencing. |
 | **`.lina/producer-state.json`** | ✅ Yes | Observational publication state and multi-dimensional freshness metadata. |
+| **`.lina/` (all content)** | ✅ Yes | Synchronise the whole folder, including `index/`, `producer/`, `devices/` and the manifests. |
 | **`.lina/index/`** | ✅ Yes | Synced so Companion reuses text index & embeddings built on Active Producer. |
 | **`.lina/devices/<deviceId>.json`** | ✅ Yes (Safe) | Isolated single-writer device state files (Device X writes only to `dev-X.json`). |
 | **`<configDir>/` (`data.json`)** | Local only by Lina semantics | Local device configuration and preferences; it is not shared configuration. Physical non-synchronization depends on the user's sync policy when the config directory is included in the vault. |
@@ -475,7 +462,7 @@ When syncing vaults across devices via file-synchronization tools such as Syncth
 | **Plugin Folder** | ❌ No | Plugin should be installed on each device independently via Community Plugins. |
 
 > [!NOTE]
-> `.stignore` is optional guidance for Syncthing users, not a Lina requirement or a portable privacy guarantee. Until a future device-local storage layer is validated, `.lina/producer/` remains an operational vault area that requires correct external exclusions.
+> Lina works with any synchronisation application. Syncthing is only one example; no particular tool is required.
 
 > [!TIP]
 > Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers. Lina ignores external sync conflict files (`*.sync-conflict-*`) automatically.

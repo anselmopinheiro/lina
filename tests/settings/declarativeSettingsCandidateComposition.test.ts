@@ -167,21 +167,21 @@ function createBinaryActionRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete intent-based 6-group, 49-item blueprint while reporting 49 real definitions", () => {
+  it("keeps the five-page settings menu and 50 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
     expect(diagnostic.groupCount).toBe(6);
-    expect(diagnostic.itemCount).toBe(49);
-    expect(new Set(diagnostic.ids).size).toBe(49);
-    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0 });
-    expect(diagnostic.boundDefinitionCount).toBe(49);
+    expect(diagnostic.itemCount).toBe(50);
+    expect(new Set(diagnostic.ids).size).toBe(50);
+    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 50, readyCount: 50, unresolvedCount: 0 });
+    expect(diagnostic.boundDefinitionCount).toBe(50);
     expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual([
       "general",
       "search",
       "ai-analysis",
-      "producer",
+      "privacy",
       "diagnostics",
       "support-footer",
     ]);

@@ -975,3 +975,36 @@ Lina — Assistente para Obsidian
 .lina-m6-tests-toggle { overflow-wrap: anywhere; }
 .lina-m6-tests-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .lina-m6-tests-actions button { min-height: 32px; }
+
+/* Privacy & exclusions (Companion, read-only): one column, never wider than the viewport. */
+.setting-item.lina-settings-exclusions-readonly {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.lina-settings-exclusions-readonly .setting-item-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 100%;
+  gap: var(--size-4-3);
+}
+
+.lina-settings-exclusions-readonly .lina-settings-readonly-exclusion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-1);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.lina-settings-exclusions-readonly .lina-settings-readonly-exclusion-value {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 6em;
+  resize: vertical;
+}

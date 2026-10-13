@@ -7,34 +7,35 @@ describe("pure declarative settings blueprint", () => {
     const blueprint = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT"));
 
     expect(blueprint.map((section) => section.id)).toEqual([
-      "general", "search", "ai-analysis", "producer", "diagnostics", "support-footer",
+      "general", "search", "ai-analysis", "privacy", "diagnostics", "support-footer",
     ]);
     expect(blueprint.map((section) => section.heading)).toEqual([
       getStrings("pt-PT").settingsGroupGeneral,
       getStrings("pt-PT").settingsGroupSearch,
       getStrings("pt-PT").settingsGroupAnalysis,
-      getStrings("pt-PT").settingsGroupProducer,
+      getStrings("pt-PT").settingsGroupExclusions,
       getStrings("pt-PT").settingsGroupDiagnostics,
       getStrings("pt-PT").settingsSupportSection,
     ]);
 
     const ids = blueprint.flatMap((section) => section.children.map((node) => node.id));
-    expect(ids).toHaveLength(49);
-    expect(new Set(ids).size).toBe(49);
+    expect(ids).toHaveLength(50);
+    expect(new Set(ids).size).toBe(50);
   });
 
-  it("keeps Producer work separate from Companion information and technical settings", () => {
+  it("keeps privacy separate while consolidating maintenance and diagnostics", () => {
     const sections = createPureDeclarativeSettingsBlueprint(getStrings("en"));
     const ids = (id: string) => sections.find((section) => section.id === id)?.children.map((node) => node.id);
 
     expect(ids("general")).toEqual([
-      "support-introduction", "interface-language", "multilingual-note",
-      "device-description", "device-name", "exclusions-note",
+      "interface-language", "multilingual-note",
+      "device-description", "device-name",
     ]);
-    expect(ids("producer")).toEqual([
-      "embedding-update-mode", "embeddings-batch-size", "excluded-folders", "excluded-path-terms",
-      "excluded-content-terms", "auto-update-index-on-file-changes", "update-index-on-startup",
-      "binary-maintenance", "create-or-update-binary-copy", "remove-binary-copy",
+    expect(ids("support-footer")).toEqual([
+      "support-introduction", "support-description", "support-link", "support-email", "support-project",
+    ]);
+    expect(ids("privacy")).toEqual([
+      "exclusions-note", "excluded-folders", "excluded-path-terms", "excluded-content-terms",
     ]);
     expect(ids("search")).toContain("embeddings-base-url");
     expect(ids("search")).toContain("embeddings-credential");
@@ -44,7 +45,9 @@ describe("pure declarative settings blueprint", () => {
       "yaml-properties", "yaml-include-tags", "max-suggested-tags",
     ]);
     expect(ids("diagnostics")).toEqual([
-      "check-sync-on-startup", "binary-warning", "binary-status", "check-binary-copy", "binary-preference", "debug-index-updates",
+      "check-sync-on-startup", "embedding-update-mode", "embeddings-batch-size", "auto-update-index-on-file-changes",
+      "update-index-on-startup", "binary-maintenance", "create-or-update-binary-copy", "remove-binary-copy",
+      "binary-warning", "binary-status", "check-binary-copy", "binary-preference", "debug-index-updates",
     ]);
   });
 
@@ -53,7 +56,7 @@ describe("pure declarative settings blueprint", () => {
     const nodes = blueprint.flatMap((section) => section.children);
     const parity = assessDeclarativeSettingsParity(blueprint);
 
-    expect(parity).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0, outOfScopeCount: 0 });
+    expect(parity).toMatchObject({ complete: true, totalCount: 50, readyCount: 50, unresolvedCount: 0, outOfScopeCount: 0 });
     expect(nodes.some((node) => node.source === "pureGlobalSettingDefinitions")).toBe(true);
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);

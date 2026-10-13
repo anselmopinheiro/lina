@@ -3,6 +3,7 @@ import type { UiStrings } from "../i18n/strings";
 import type { DeviceRole } from "../device/deviceRole";
 import type { DeviceRoleResolution, DeviceRoleAssignmentState } from "../device/deviceRoleResolver";
 import type { VectorContractV1 } from "../index/vectorContract";
+import type { ExclusionPolicyRules } from "../index/exclusionPolicy";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
 import {
@@ -123,10 +124,50 @@ export type DetachedNumericBinarySettingDefinition = SettingDefinition & {
 };
 
 
-export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
-  const description = strings.settingsExclusionsNote.replace("{configDir}", configDir);
+export interface CompanionExclusionsReadOnlyState {
+  readonly status: "loaded" | "missing" | "invalid";
+  readonly rules: ExclusionPolicyRules;
+}
+
+export function getCompanionExclusionsReadOnlyFields(
+  strings: Pick<UiStrings, "settingsExcludedFolders" | "settingsExcludedTerms" | "settingsExcludedContentTerms">,
+  state: CompanionExclusionsReadOnlyState,
+): ReadonlyArray<readonly [string, readonly string[]]> {
+  if (state.status !== "loaded") return [];
+  return [
+    [strings.settingsExcludedFolders, state.rules.excludedFolders],
+    [strings.settingsExcludedTerms, state.rules.excludedPathContains],
+    [strings.settingsExcludedContentTerms, state.rules.excludedContentContains],
+  ];
+}
+
+export function createDetachedConfigNoteRenderer(
+  strings: UiStrings,
+  configDir: string,
+  getCompanionExclusions?: () => CompanionExclusionsReadOnlyState | undefined,
+  isCompanionDevice?: () => boolean,
+) {
+  const automaticExclusionsNote = strings.settingsAutomaticExclusionsNote.replace("{configDir}", configDir);
+  const description = `${strings.settingsPrivacyIntro} ${automaticExclusionsNote}`;
   return (setting: Setting, _group: SettingGroup): void => {
-    setting.setDesc(description);
+    const state = getCompanionExclusions?.();
+    if (!state) {
+      setting.setDesc(isCompanionDevice?.()
+        ? `${description} ${strings.settingsCompanionExclusionsManaged}`
+        : description);
+      return;
+    }
+
+    setting.setDesc(`${description} ${strings.settingsCompanionExclusionsManaged}`);
+    setting.settingEl.addClass("lina-settings-exclusions-readonly");
+    for (const [label, values] of getCompanionExclusionsReadOnlyFields(strings, state)) {
+      const field = setting.controlEl.createDiv({ cls: "lina-settings-readonly-exclusion" });
+      field.createDiv({ text: label, cls: "setting-item-name" });
+      const textarea = field.createEl("textarea", { cls: "lina-settings-readonly-exclusion-value" });
+      textarea.value = values.join("\n");
+      textarea.disabled = true;
+      textarea.setAttribute("aria-label", label);
+    }
   };
 }
 
@@ -177,7 +218,7 @@ export function createDetachedStaticTextRenderer(name: string, description: stri
 }
 
 export function createSettingsIntroductionRenderer(
-  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild" | "settingsSupportText" | "settingsSupportCoffeeButton">,
+  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild">,
   version: string,
   buildTimestamp: string,
 ) {
@@ -186,12 +227,6 @@ export function createSettingsIntroductionRenderer(
     setting.descEl.createDiv({
       text: `${strings.settingsVersion}: ${version} · ${strings.settingsBuild}: ${buildTimestamp}`,
       cls: "lina-mt-8",
-    });
-    const supportLine = setting.descEl.createDiv({ cls: "lina-mt-8" });
-    supportLine.createSpan({ text: `${strings.settingsSupportText} ` });
-    supportLine.createEl("a", {
-      text: strings.settingsSupportCoffeeButton,
-      attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" },
     });
   };
 }
@@ -379,12 +414,14 @@ export function createDeviceRoleDescriptionRenderer(
 export function createDetachedInformationalSettingDefinitions(
   strings: UiStrings,
   configDir: string,
+  getCompanionExclusions?: () => CompanionExclusionsReadOnlyState | undefined,
+  isManagedByProducer?: () => boolean,
 ): DetachedInformationalSettingDefinition[] {
   return [
     {
       id: "config-dir-note",
       name: strings.settingsExclusionsNote.replace("{configDir}", configDir),
-      render: createDetachedConfigNoteRenderer(strings, configDir),
+      render: createDetachedConfigNoteRenderer(strings, configDir, getCompanionExclusions, isManagedByProducer),
     },
   ];
 }

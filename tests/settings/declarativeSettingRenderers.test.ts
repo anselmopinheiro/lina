@@ -30,7 +30,6 @@ import {
   createSettingsIntroductionRenderer,
   createSupportActionRenderer,
   createSupportEmailRenderer,
-  BUY_ME_A_COFFEE_URL,
   SUPPORT_EMAIL_ADDRESS,
   SUPPORT_EMAIL_URL,
   SUPPORT_FORM_URL,
@@ -186,7 +185,7 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
 describe("detached declarative setting renderers", () => {
   it("preserves hybrid weight limits and fallbacks", () => { expect(clampDetachedWeight("-1", .7)).toBe(0); expect(clampDetachedWeight("2", .3)).toBe(1); expect(clampDetachedWeight("invalid", .7)).toBe(.7); });
 
-  it("separates the metadata and support CTA while keeping the Buy Me a Coffee link inline", () => {
+  it("keeps the landing introduction limited to product metadata", () => {
     const { calls, setting } = createButtonSettingDouble();
     const strings = getStrings("en");
     createSettingsIntroductionRenderer(strings, "0.2.1", "2026-08-21T12:00:00.000Z")(setting as never, {} as never);
@@ -199,30 +198,20 @@ describe("detached declarative setting renderers", () => {
           tag: "div",
           options: { text: "Version: 0.2.1 · Build: 2026-08-21T12:00:00.000Z", cls: "lina-mt-8" },
         },
-        { tag: "div", options: { cls: "lina-mt-8" } },
-        { tag: "span", options: { text: "If you like Lina, support the project: " } },
-        {
-          tag: "a",
-          options: {
-            text: "Buy Me a Coffee",
-            attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" },
-          },
-        },
       ],
       buttons: [],
     });
   });
 
-  it("renders the config directory note in PT-PT, English, and fallback without a hardcoded directory", () => {
+  it("renders the internal-folder privacy note using the configured vault directory", () => {
     for (const language of ["pt-PT", "en", "unknown"] as const) {
       const { calls, setting } = createSettingDouble();
       createDetachedConfigNoteRenderer(getStrings(language), ".obsidian-escola")(setting as never, {} as never);
-      expect(calls.description).toContain(".obsidian-escola");
-      expect(calls.description).not.toContain("{configDir}");
+      expect(calls.description).toContain(".lina/");
+      expect(calls.description).toContain(".obsidian-escola/");
       expect(calls.elements).toEqual([]);
     }
     const source = createDetachedConfigNoteRenderer.toString();
-    expect(source).not.toContain(".obsidian");
     expect(source).not.toContain("innerHTML");
   });
 
@@ -240,8 +229,8 @@ describe("detached declarative setting renderers", () => {
     )(form.setting as never, {} as never);
     expect(opened).toEqual([]);
     expect(form.calls).toEqual({
-      name: "Support form",
-      description: "Report a problem, ask for help, or send a suggestion.",
+      name: "Report a problem or ask for help",
+      description: "Open the support form.",
       elements: [],
       buttons: [{ label: "Open form", disabled: false, onClick: expect.any(Function) }],
     });

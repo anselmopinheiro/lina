@@ -37,7 +37,10 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 - **[README.md](../README.md)** — Visão geral e apresentação pública do plugin Lina.
 - **[CHANGELOG.md](../CHANGELOG.md)** — Registo cronológico cumulativo de todas as versões e alterações.
 - **[docs/roadmap.md](roadmap.md)** — Roadmap estratégico do produto Lina (0.3.x a 1.0.x).
-- **[docs/manual.md](manual.md)** — Manual completo de utilizador (versão atual 0.3.1).
+- **[docs/manual.md](manual.md)** — Manual completo de utilizador (versão atual 0.3.2 Alpha).
+- **[docs/help.md](help.md)** — Ajuda prática: configuração, sincronização, pesquisa, IA, exclusões e resolução de problemas.
+- **[docs/GLOSSARIO.md](GLOSSARIO.md)** — Glossário de conceitos de utilização (Producer, Companion, índices, embeddings, providers, exclusões, `.lina`).
+- **[docs/release-notes-0.3.2.md](release-notes-0.3.2.md)** — Notas de versão 0.3.2 Alpha.
 - **[docs/commands.md](commands.md)** — Especificação e regras dos slash commands (`/ask`, `/tags`, `/yaml`).
 
 ### 2.2 Arquitetura Normativa (`docs/architecture/`)
