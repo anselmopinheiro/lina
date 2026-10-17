@@ -432,6 +432,7 @@ A enumeração do vault é aceitável no Lina porque é funcionalmente necessár
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código ou arquitetura, é **obrigatória** a consulta da hierarquia documental oficial em **[docs/INDEX.md](docs/INDEX.md)**, do `AGENTS.md` e das especificações normativas relevantes em `docs/architecture/` para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
+**Estado `FROZEN`:** o desenvolvimento está congelado até autorização explícita de retoma. Ler **[docs/FREEZE-AGENTS.md](docs/FREEZE-AGENTS.md)** antes de qualquer tarefa que envolva implementação.
 
 ### Entrada contextual e slash commands
 Na vista lateral, texto sem barra deve continuar a executar pesquisa normal. Entradas começadas por `/` são comandos explícitos em inglês e não devem disparar pesquisa acidental. Slash commands que enviem conteúdo a providers de IA devem limitar o contexto ao texto selecionado ou à nota atual, respeitar exclusões configuradas e nunca modificar notas sem confirmação explícita.

@@ -42,6 +42,8 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 - **[docs/GLOSSARIO.md](GLOSSARIO.md)** — Glossário de conceitos de utilização (Producer, Companion, índices, embeddings, providers, exclusões, `.lina`).
 - **[docs/release-notes-0.3.2.md](release-notes-0.3.2.md)** — Notas de versão 0.3.2 Alpha.
 - **[docs/commands.md](commands.md)** — Especificação e regras dos slash commands (`/ask`, `/tags`, `/yaml`).
+- **[docs/FREEZE-AGENTS.md](FREEZE-AGENTS.md)** — **Estado `FROZEN`:** o que agentes podem e não podem fazer enquanto o desenvolvimento está congelado, e regra de retoma. Leitura obrigatória.
+- **[docs/FREEZE.md](FREEZE.md)** — Explicação para humanos: estado do Lina, porque o desenvolvimento parou, problema pendente e condições de retoma.
 
 ### 2.2 Arquitetura Normativa (`docs/architecture/`)
 - **[docs/architecture/LINA-PANEL-UI-UX.md](architecture/LINA-PANEL-UI-UX.md)** — Contratos de apresentação, pesquisa e análise IA do painel Lina.
