@@ -57,6 +57,7 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 - **[docs/architecture/companion-delta-search-foundation.md](architecture/companion-delta-search-foundation.md)** — Pesquisa local delta em memória no Companion com garantias estritas read-only.
 - **[docs/architecture/LINA-14-WRITE-PATH-DECISIONS-001.md](architecture/LINA-14-WRITE-PATH-DECISIONS-001.md)** — Decisões operacionais do Write Path derivadas de `EmbeddingLifecycleSnapshot`.
 - **[docs/architecture/LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md](architecture/LINA-14-EMBEDDING-LIFECYCLE-BASELINE-001.md)** — Baseline pura do ciclo de vida de embeddings (ver adenda contextual LINA-15).
+- **[docs/architecture/LINA-0.3.4-DECISAO-ROADMAP-EMBEDDINGS-001.md](architecture/LINA-0.3.4-DECISAO-ROADMAP-EMBEDDINGS-001.md)** — Decisão e roadmap da futura 0.3.4 (solução leve; M-series `DORMANT`), pendência arquitetural aberta sobre JSONL acima do limite e **desenvolvimento FROZEN até autorização explícita de retoma**.
 
 ---
 
